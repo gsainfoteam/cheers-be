@@ -17,3 +17,7 @@ logs/
 plan.md
 
 CLAUDE.md
+
+.claude/
+
+graphify-out/
