@@ -1,0 +1,18 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "import", "jest"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "env": {
+    "node": true,
+    "jest": true
+  },
+  "ignorePatterns": ["dist", "coverage", "drizzle/meta"],
+  "rules": {
+    "typescript/no-explicit-any": "off",
+    "typescript/no-extraneous-class": "off",
+    "import/no-unassigned-import": "off"
+  }
+}

@@ -1,0 +1,47 @@
+services:
+  cheers-db:
+    image: postgres:17
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 10s
+    volumes:
+      - cheers-db-data:/var/lib/postgresql/data
+    networks:
+      - cheers-network
+    env_file:
+      - .env
+    environment:
+      - TZ=Asia/Seoul
+      - PGTZ=Asia/Seoul
+    ports:
+      - "5432:5432"
+
+  cheers-backend:
+    image: cheers-backend:latest
+    restart: always
+    container_name: cheers-backend
+    networks:
+      - cheers-network
+    depends_on:
+      cheers-db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@cheers-db:5432/${POSTGRES_DB}
+      - TZ=Asia/Seoul
+    build:
+      context: .
+    ports:
+      - "3000:3000"
+
+volumes:
+  cheers-db-data:
+
+networks:
+  cheers-network:
+    driver: bridge
