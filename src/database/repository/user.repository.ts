@@ -1,7 +1,9 @@
 import { Injectable } from "@nestjs/common";
 import { and, eq, sql } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import { DatabaseService } from "@src/database/database.service";
 import { TxType } from "@src/global/types/tx.types";
+import { CheersDBError } from "@src/global/exceptions/cheers-db.error";
 import { users } from "../../../drizzle/schema/users";
 
 export type UserRow = typeof users.$inferSelect;
@@ -29,6 +31,72 @@ export class UserRepository {
       .where(and(eq(users.pk, userPk), eq(users.isDeleted, false)));
 
     return result[0] ?? null;
+  }
+
+  /*
+  INSERT INTO users (pk, type, name, email) VALUES (?1, ?2, ?3, ?4) RETURNING *;
+   */
+  // 최초 OAuth 로그인. status는 기본값 pending
+  async insert(
+    row: Pick<UserRow, "type" | "name" | "email">,
+    tx: TxType,
+  ): Promise<UserRow> {
+    const result = await tx
+      .insert(users)
+      .values({ pk: randomUUID(), ...row })
+      .returning();
+
+    if (result.length === 0) {
+      throw new CheersDBError("Failed to insert user");
+    }
+
+    return result[0];
+  }
+
+  /*
+  UPDATE users SET type = ?2, updated_at = now() WHERE pk = ?1;
+   */
+  async updateType(
+    userPk: string,
+    type: UserRow["type"],
+    tx: TxType,
+  ): Promise<void> {
+    await tx
+      .update(users)
+      .set({ type, updatedAt: new Date() })
+      .where(eq(users.pk, userPk));
+  }
+
+  /*
+  UPDATE users SET name = COALESCE(name, ?2), email = COALESCE(email, ?3), updated_at = now()
+  WHERE pk = ?1;
+   */
+  // 이름은 한 번 저장하면 수정 불가라 비어 있을 때만 OAuth 값으로 채움 (Apple은 최초 로그인에만 줌)
+  async fillProfileFromOAuth(
+    userPk: string,
+    profile: Pick<UserRow, "name" | "email">,
+    tx: TxType,
+  ): Promise<void> {
+    if (!profile.name && !profile.email) return;
+    await tx
+      .update(users)
+      .set({
+        name: sql`COALESCE(${users.name}, ${profile.name})`,
+        email: sql`COALESCE(${users.email}, ${profile.email})`,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.pk, userPk));
+  }
+
+  /*
+  UPDATE users SET is_deleted = true, name = NULL, email = NULL, updated_at = now() WHERE pk = ?1;
+   */
+  // 회원 탈퇴: soft delete + 개인정보 제거
+  async withdraw(userPk: string, tx: TxType): Promise<void> {
+    await tx
+      .update(users)
+      .set({ isDeleted: true, name: null, email: null, updatedAt: new Date() })
+      .where(eq(users.pk, userPk));
   }
 
   /*

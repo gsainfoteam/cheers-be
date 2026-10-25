@@ -4,10 +4,23 @@ import { ConfigModule } from "@nestjs/config";
 import { LoggerModule } from "@src/global/logger/logger.module";
 import { RefreshTokenRepository } from "@src/database/repository/refresh-token.repository";
 import { UserRepository } from "@src/database/repository/user.repository";
+import { UserOauthAccountRepository } from "@src/database/repository/user-oauth-account.repository";
+import { StudentRepository } from "@src/database/repository/student.repository";
+import { GraduatedRepository } from "@src/database/repository/graduated.repository";
+import { CoffeeChatContactRepository } from "@src/database/repository/coffee-chat-contact.repository";
+
+const repositories = [
+  RefreshTokenRepository,
+  UserRepository,
+  UserOauthAccountRepository,
+  StudentRepository,
+  GraduatedRepository,
+  CoffeeChatContactRepository,
+];
 
 @Module({
   imports: [ConfigModule, LoggerModule],
-  providers: [DatabaseService, RefreshTokenRepository, UserRepository],
-  exports: [DatabaseService, RefreshTokenRepository, UserRepository],
+  providers: [DatabaseService, ...repositories],
+  exports: [DatabaseService, ...repositories],
 })
 export class DatabaseModule {}
