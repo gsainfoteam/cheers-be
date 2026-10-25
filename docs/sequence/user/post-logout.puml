@@ -1,0 +1,43 @@
+@startuml post-logout
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title POST /api/v1/user/logout
+caption CRB-10 · 보낸 refresh token 폐기
+
+actor Client
+participant "AnyStatusGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "UserController" as Controller
+participant "UserService" as Service
+participant "AuthService" as AuthService
+participant "RefreshTokenRepository" as RefreshTokenRepository
+database PostgreSQL
+
+Client -> Guard: POST /api/v1/user/logout\nAuthorization: Bearer <access token>\n{ refresh_token }
+ref over Client, Guard: authenticate() — flow/auth-guards.puml\n401 Missing access token / Token expired / Invalid token
+note right of Guard: 가입 상태와 관계없이 통과 (pending · active)
+Guard -> Pipe: 통과
+alt body 검증 실패 (refresh_token 누락 · 빈 문자열)
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+Pipe -> Controller: logout(req, user)
+Controller -> Service: logout(req, userCtx)
+Service -> AuthService: logout(refresh_token, userPk)
+AuthService -> RefreshTokenRepository: deleteByOpaqueHashAndUserPk(SHA-256(refresh_token), userPk)
+RefreshTokenRepository -> PostgreSQL: DELETE refresh_token\nWHERE opaque_hash = ? AND user_pk = ?
+note right
+  다른 유저의 refresh token은 지우지 않음 (user_pk 조건).
+  이미 없는 토큰이어도 성공으로 처리
+end note
+Service --> Controller: BaseResultDto.OK
+Controller --> Client: 201 { result: "OK" }
+note right of Client: access token은 서버에 저장하지 않으므로 만료까지 유효. 클라이언트에서 버림
+
+@enduml

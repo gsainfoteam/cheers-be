@@ -7,6 +7,11 @@
 | 파일                                                           | 내용                              |
 | -------------------------------------------------------------- | --------------------------------- |
 | [flow/auth-guards.puml](flow/auth-guards.puml)                 | 공통 인증 · 가입 단계 · 유형 가드 |
+| [user/post-oauth-login.puml](user/post-oauth-login.puml)       | `POST /api/v1/user/oauth/login`   |
+| [user/post-refresh.puml](user/post-refresh.puml)               | `POST /api/v1/user/refresh`       |
+| [user/get-info.puml](user/get-info.puml)                       | `GET /api/v1/user/info`           |
+| [user/post-logout.puml](user/post-logout.puml)                 | `POST /api/v1/user/logout`        |
+| [user/post-withdraw.puml](user/post-withdraw.puml)             | `POST /api/v1/user/withdraw`      |
 | [consent/get-consent-list.puml](consent/get-consent-list.puml) | `GET /api/v1/user/consent/list`   |
 | [consent/post-consent.puml](consent/post-consent.puml)         | `POST /api/v1/user/consent`       |
 

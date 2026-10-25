@@ -1,0 +1,152 @@
+@startuml post-oauth-login
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title POST /api/v1/user/oauth/login
+caption CRB-10 · OAuth 토큰 검증, 최초 가입 / 재로그인 유형 처리, 토큰 발급
+
+actor Client
+participant "ValidationPipe" as Pipe
+participant "UserController" as Controller
+participant "UserService" as Service
+participant "OAuthService" as OAuthService
+participant "AuthService" as AuthService
+participant "UserOauthAccountRepository" as UserOauthAccountRepository
+participant "UserRepository" as UserRepository
+participant "StudentRepository" as StudentRepository
+participant "StudentEmailVerificationRepository" as StudentEmailVerificationRepository
+participant "StudentProfileAttachmentRepository" as StudentProfileAttachmentRepository
+participant "StudentProfileRepository" as StudentProfileRepository
+participant "GraduatedRepository" as GraduatedRepository
+participant "GraduatedProfileRepository" as GraduatedProfileRepository
+participant "RefreshTokenRepository" as RefreshTokenRepository
+database PostgreSQL
+participant "Google / Apple JWKS" as JWKS
+participant "Naver API" as Naver
+participant "S3"
+
+Client -> Pipe: POST /api/v1/user/oauth/login\n{ provider, type, token, nonce }
+note right of Client: 가드 없음 (Authorization 불필요)
+alt body 검증 실패 (provider · type이 허용 값이 아님, token 빈 문자열,\ngoogle / apple인데 nonce 누락 · 빈 문자열 · 256자 초과)
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+Pipe -> Controller: login(req)
+Controller -> Service: login(req)
+
+== provider 토큰 검증 (트랜잭션 밖) ==
+
+Service -> OAuthService: verify(provider, token, nonce)
+alt provider = google / apple (GoogleVerifier / AppleVerifier → IdTokenVerifier)
+  alt nonce 없음
+    OAuthService -[#red]-> Client: 401 Invalid OAuth token
+  end
+  OAuthService -> JWKS: 공개키 조회 (jose createRemoteJWKSet)
+  note right: 캐시하고, 모르는 kid가 오면 다시 받음
+  JWKS --> OAuthService: JWKS
+  OAuthService -> OAuthService: jwtVerify(서명 · iss · aud = *_CLIENT_ID · exp)\nsub 존재 · payload.nonce = SHA-256(nonce) hex
+  alt 검증 실패 (서명 · iss · aud · 만료 · sub 없음 · nonce 불일치, JWKS 조회 실패 포함)
+    OAuthService -[#red]-> Client: 401 Invalid OAuth token
+  end
+  note right of OAuthService
+    google: email_verified = true일 때만 email 사용, name 사용
+    apple: email(릴레이 주소 가능)만 사용, name은 항상 null
+  end note
+else provider = naver (NaverVerifier)
+  OAuthService -> Naver: GET https://openapi.naver.com/v1/nid/me\nAuthorization: Bearer <token> (timeout 5초)
+  Naver --> OAuthService: { resultcode, response: { id, email, name } }
+  alt HTTP 오류 · 타임아웃 · resultcode ≠ "00" · id 없음
+    OAuthService -[#red]-> Client: 401 Invalid OAuth token
+  end
+  note right of OAuthService
+    토큰이 cheers 앱에서 발급됐는지는 확인하지 않음.
+    id는 애플리케이션마다 다른 값이라 다른 앱의 토큰으로는
+    기존 계정에 로그인할 수 없음
+  end note
+end
+OAuthService --> Service: OAuthProfile { provider, sub, email, name }
+
+group transaction (DatabaseService.db.transaction)
+  Service -> UserOauthAccountRepository: findUserForLogin(provider, sub, tx)
+  UserOauthAccountRepository -> PostgreSQL: SELECT users JOIN user_oauth_account\nWHERE provider, provider_sub, is_deleted = false\nFOR UPDATE OF users
+  note right: 같은 계정의 동시 로그인 · 탈퇴와\n겹치지 않도록 유저 행을 잠금
+  PostgreSQL --> UserOauthAccountRepository: row
+  UserOauthAccountRepository --> Service: user | null
+
+  alt 계정 없음 — 최초 로그인
+    Service -> UserRepository: insert({ type, name, email }, tx)
+    UserRepository -> PostgreSQL: INSERT users (status = pending)
+    Service -> UserOauthAccountRepository: insert({ provider, sub, userPk, email }, tx)
+    UserOauthAccountRepository -> PostgreSQL: INSERT user_oauth_account ... ON CONFLICT DO NOTHING
+    alt 같은 계정으로 동시에 최초 로그인해서 다른 요청이 먼저 넣음 (행을 못 받음)
+      Service -[#red]-> Client: 409 Login already in progress
+    end
+    alt type = student
+      Service -> StudentRepository: insert(userPk, tx)
+    else type = graduated
+      Service -> GraduatedRepository: insert(userPk, tx)
+    end
+  else 계정 있음
+    Service -> UserOauthAccountRepository: updateLastLogin(provider, sub, email, tx)
+    UserOauthAccountRepository -> PostgreSQL: UPDATE user_oauth_account SET last_login_at\n(email은 받았을 때만)
+    Service -> UserRepository: fillProfileFromOAuth(pk, { name, email }, tx)
+    UserRepository -> PostgreSQL: UPDATE users SET name = COALESCE(name, ?),\nemail = COALESCE(email, ?)
+    note right: 이름은 한 번 저장하면 수정 불가라\n비어 있을 때만 채움
+
+    alt status = active 또는 요청 type = 기존 type
+      note over Service: active: 요청 type 무시 / pending + 같은 type: 이어서 진행
+    else pending + 다른 type — 새 유형으로 다시 시작 (약관 동의는 유지)
+      alt 기존 type = student
+        Service -> StudentRepository: findByUserPk(pk, tx)
+        Service -> StudentEmailVerificationRepository: deleteByStudentPk(studentPk, tx)
+        Service -> StudentProfileAttachmentRepository: deleteByStudentPk(studentPk, tx)
+        Service -> StudentProfileRepository: deleteByStudentPk(studentPk, tx)
+        Service -> StudentRepository: deleteByPk(studentPk, tx)
+      else 기존 type = graduated
+        Service -> GraduatedRepository: findByUserPk(pk, tx)
+        Service -> GraduatedProfileRepository: deleteByGraduatedPk(graduatedPk, tx)
+        Service -> GraduatedRepository: deleteByPk(graduatedPk, tx)
+        note right of Service: 지운 행의 business_card_key를 기억 (커밋 후 S3 삭제)
+      end
+      note right of Service
+        FK cascade가 없으므로 자식 행부터 삭제.
+        커피챗 요청은 active 유저만 만들 수 있어 여기서는 없음
+      end note
+      Service -> UserRepository: updateType(pk, newType, tx)
+      UserRepository -> PostgreSQL: UPDATE users SET type
+      alt 새 type = student
+        Service -> StudentRepository: insert(pk, tx)
+      else 새 type = graduated
+        Service -> GraduatedRepository: insert(pk, tx)
+      end
+      Service -> AuthService: revokeAllTokens(pk, tx)
+      AuthService -> RefreshTokenRepository: deleteByUserPk(pk, tx)
+      note right: 다른 기기의 refresh token은\n이전 유형으로 발급된 것이라 폐기
+    end
+  end
+
+  Service -> AuthService: issueTokens({ pk, type, status }, tx)
+  AuthService -> AuthService: access token 서명 (RS256, 클레임 sub · type · status)
+  AuthService -> RefreshTokenRepository: insert({ opaqueHash, userPk, expiresAt }, tx)
+  RefreshTokenRepository -> PostgreSQL: INSERT refresh_token (원문이 아닌 SHA-256 해시)
+  AuthService -> UserRepository: updateLastActiveAt(pk, tx)
+  AuthService --> Service: { accessToken, refreshToken }
+end
+note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
+
+opt 유형 변경으로 명함 key를 지웠음
+  Service -> S3: deleteFile(businessCardKey)
+  alt S3 삭제 실패
+    note over Service, S3: 로그만 남기고 계속 진행 (DB에는 이미 참조가 없음)
+  end
+end
+
+Service --> Controller: { access_token, refresh_token }
+Controller --> Client: 201 { access_token, refresh_token }
+
+@enduml
