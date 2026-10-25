@@ -9,7 +9,7 @@
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
-    "start:prod": "bun run db:migrate && bun run db:seed && bun dist/src/main.js",
+    "start:prod": "bun run db:migrate && bun dist/src/main.js",
     "lint": "oxlint --fix",
     "lint:check": "oxlint",
     "format": "oxfmt",
@@ -19,8 +19,7 @@
     "test:cov": "jest --coverage",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "bun drizzle/migrate.ts",
-    "db:seed": "bun drizzle/seed.ts"
+    "db:migrate": "bun drizzle/migrate.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1156.0",
