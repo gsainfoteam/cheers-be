@@ -46,6 +46,9 @@ describe("MailService", () => {
     expect(createTransport).toHaveBeenCalledWith({
       service: "gmail",
       auth: { user: "cheers@gmail.com", pass: "app-password" },
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 30_000,
     });
     expect(sendMail).toHaveBeenCalledWith({
       from: '"취얼스" <cheers@gmail.com>',

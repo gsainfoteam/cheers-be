@@ -36,9 +36,13 @@ export class MailService {
       return;
     }
 
+    // nodemailer 기본값(연결 2분, 유휴 소켓 10분)은 인증번호 발송에 너무 길어서 명시
     this.transporter = createTransport({
       service: "gmail",
       auth: { user, pass },
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 30_000,
     });
   }
 
