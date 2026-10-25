@@ -1,0 +1,345 @@
+import {
+  ConflictException,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from "@nestjs/common";
+import { AuthService } from "@src/auth/auth.service";
+import { UserStatus, UserType } from "@src/auth/auth.types";
+import { UserContext } from "@src/auth/context/user-context";
+import { calculateNextStep } from "@src/auth/signup-step";
+import { DatabaseService } from "@src/database/database.service";
+import {
+  CoffeeChatContactRepository,
+  CoffeeChatContactRow,
+} from "@src/database/repository/coffee-chat-contact.repository";
+import { GraduatedRepository } from "@src/database/repository/graduated.repository";
+import { StudentRepository } from "@src/database/repository/student.repository";
+import { UserOauthAccountRepository } from "@src/database/repository/user-oauth-account.repository";
+import {
+  SignupProgress,
+  UserRepository,
+  UserRow,
+} from "@src/database/repository/user.repository";
+import { FileService } from "@src/file/file.service";
+import { BaseResultDto } from "@src/global/dto/base-result.dto";
+import { TxType } from "@src/global/types/tx.types";
+import { LoginRequestDto, LoginResponseDto } from "@src/user/dto/login.dto";
+import { LogoutRequestDto } from "@src/user/dto/logout.dto";
+import {
+  RefreshRequestDto,
+  RefreshResponseDto,
+} from "@src/user/dto/refresh.dto";
+import {
+  ContactDto,
+  GraduatedInfoDto,
+  StudentInfoDto,
+  UserInfoDto,
+} from "@src/user/dto/user-info.dto";
+import { OAuthService } from "@src/user/oauth/oauth.service";
+import { OAuthProfile } from "@src/user/oauth/oauth.types";
+
+@Injectable()
+export class UserService {
+  private readonly logger = new Logger(UserService.name);
+
+  constructor(
+    private readonly dbService: DatabaseService,
+    private readonly authService: AuthService,
+    private readonly oauthService: OAuthService,
+    private readonly fileService: FileService,
+    private readonly userRepository: UserRepository,
+    private readonly userOauthAccountRepository: UserOauthAccountRepository,
+    private readonly studentRepository: StudentRepository,
+    private readonly graduatedRepository: GraduatedRepository,
+    private readonly coffeeChatContactRepository: CoffeeChatContactRepository,
+  ) {}
+
+  async login(req: LoginRequestDto): Promise<LoginResponseDto> {
+    const profile = await this.oauthService.verify(req.provider, req.token);
+
+    const { tokens, businessCardKey } = await this.dbService.db.transaction(
+      async (tx) => {
+        const existing = await this.userOauthAccountRepository.findUserForLogin(
+          profile.provider,
+          profile.sub,
+          tx,
+        );
+        if (!existing) {
+          const user = await this.signup(profile, req.type, tx);
+          return {
+            tokens: await this.authService.issueTokens(user, tx),
+            businessCardKey: null,
+          };
+        }
+
+        await this.userOauthAccountRepository.updateLastLogin(
+          profile.provider,
+          profile.sub,
+          profile.email,
+          tx,
+        );
+        await this.userRepository.fillProfileFromOAuth(
+          existing.pk,
+          { name: profile.name, email: profile.email },
+          tx,
+        );
+
+        // active: type 무시 / pending + 같은 type: 이어서 진행
+        if (existing.status === "active" || existing.type === req.type) {
+          return {
+            tokens: await this.authService.issueTokens(existing, tx),
+            businessCardKey: null,
+          };
+        }
+
+        // pending + 다른 type: 인증 · 추가 정보를 지우고 새 유형으로 다시 시작. 약관 동의는 유지
+        const removedKey = await this.changeType(existing, req.type, tx);
+        return {
+          tokens: await this.authService.issueTokens(
+            { ...existing, type: req.type },
+            tx,
+          ),
+          businessCardKey: removedKey,
+        };
+      },
+    );
+
+    // DB 정리가 끝난 뒤에 지움. 실패해도 DB에는 참조가 없으므로 로그만 남김
+    if (businessCardKey) {
+      await this.deleteFileQuietly(businessCardKey);
+    }
+
+    return {
+      access_token: tokens.accessToken,
+      refresh_token: tokens.refreshToken,
+    };
+  }
+
+  async refresh(req: RefreshRequestDto): Promise<RefreshResponseDto> {
+    const tokens = await this.authService.refresh(req.refresh_token);
+    return {
+      access_token: tokens.accessToken,
+      refresh_token: tokens.refreshToken,
+    };
+  }
+
+  async getInfo(userCtx: UserContext): Promise<UserInfoDto> {
+    // 토큰 클레임은 유형 변경 · 가입 완료 전 값일 수 있어 DB 기준으로 응답
+    const user = await this.userRepository.findByPk(userCtx.userPk);
+    if (!user) {
+      throw new UnauthorizedException("User not found");
+    }
+
+    const [progress, contact] = await Promise.all([
+      this.userRepository.findSignupProgress(user.pk, user.type),
+      this.coffeeChatContactRepository.findByUserPk(user.pk),
+    ]);
+    const contactDto = contact ? this.toContactDto(contact) : null;
+
+    const [student, graduated] = await Promise.all([
+      user.type === "student" ? this.getStudentInfo(user.pk, contactDto) : null,
+      user.type === "graduated"
+        ? this.getGraduatedInfo(user.pk, contactDto)
+        : null,
+    ]);
+    await this.authService.touchLastActive(user.pk);
+
+    return {
+      id: user.pk,
+      type: user.type,
+      status: user.status,
+      next_step: calculateNextStep(user.status, progress),
+      name: user.name,
+      email: user.email,
+      consent_required: this.isConsentRequired(user.status, progress),
+      student,
+      graduated,
+    };
+  }
+
+  async logout(
+    req: LogoutRequestDto,
+    userCtx: UserContext,
+  ): Promise<BaseResultDto> {
+    await this.authService.logout(req.refresh_token, userCtx.userPk);
+    return BaseResultDto.OK;
+  }
+
+  // 약관 동의 이력과 커피챗 기록은 남기고, 로그인 수단과 개인정보만 지움
+  async withdraw(userCtx: UserContext): Promise<BaseResultDto> {
+    const businessCardKey = await this.dbService.db.transaction(async (tx) => {
+      const user = await this.userRepository.findByPk(userCtx.userPk, tx);
+      if (!user) {
+        throw new UnauthorizedException("User not found");
+      }
+
+      await this.userOauthAccountRepository.deleteByUserPk(user.pk, tx);
+      await this.authService.revokeAllTokens(user.pk, tx);
+      await this.coffeeChatContactRepository.deleteByUserPk(user.pk, tx);
+      let key: string | null = null;
+      if (user.type === "student") {
+        await this.studentRepository.clearEmail(user.pk, tx);
+      } else {
+        key = await this.graduatedRepository.clearBusinessCard(user.pk, tx);
+      }
+      await this.userRepository.withdraw(user.pk, tx);
+      return key;
+    });
+
+    if (businessCardKey) {
+      await this.deleteFileQuietly(businessCardKey);
+    }
+    return BaseResultDto.OK;
+  }
+
+  // 최초 로그인: users(pending) + user_oauth_account + student / graduated
+  private async signup(
+    profile: OAuthProfile,
+    type: UserType,
+    tx: TxType,
+  ): Promise<UserRow> {
+    const user = await this.userRepository.insert(
+      { type, name: profile.name, email: profile.email },
+      tx,
+    );
+    const account = await this.userOauthAccountRepository.insert(
+      {
+        provider: profile.provider,
+        providerSub: profile.sub,
+        userPk: user.pk,
+        email: profile.email,
+      },
+      tx,
+    );
+    if (!account) {
+      // 같은 계정으로 동시에 최초 로그인. 이 트랜잭션은 롤백되고 다시 로그인하면 기존 유저로 들어감
+      throw new ConflictException("Login already in progress");
+    }
+    await this.insertTypeRow(user.pk, type, tx);
+    return user;
+  }
+
+  // 반환값: 지운 명함의 S3 key (커밋 후 삭제)
+  private async changeType(
+    user: UserRow,
+    type: UserType,
+    tx: TxType,
+  ): Promise<string | null> {
+    let businessCardKey: string | null = null;
+    if (user.type === "student") {
+      await this.studentRepository.deleteByUserPk(user.pk, tx);
+    } else {
+      businessCardKey = await this.graduatedRepository.deleteByUserPk(
+        user.pk,
+        tx,
+      );
+    }
+    await this.userRepository.updateType(user.pk, type, tx);
+    await this.insertTypeRow(user.pk, type, tx);
+    // 다른 기기의 refresh token은 이전 유형으로 발급된 것이라 폐기
+    await this.authService.revokeAllTokens(user.pk, tx);
+    return businessCardKey;
+  }
+
+  private async insertTypeRow(
+    userPk: string,
+    type: UserType,
+    tx: TxType,
+  ): Promise<void> {
+    if (type === "student") {
+      await this.studentRepository.insert(userPk, tx);
+    } else {
+      await this.graduatedRepository.insert(userPk, tx);
+    }
+  }
+
+  // 가입을 마친 유저에게 개정된 필수 약관 재동의를 요구할 때 true. 가입 중이면 next_step = consent로 안내.
+  // CRB-12가 약관 판정 함수를 만들면 여기만 바꾸면 됨
+  private isConsentRequired(
+    status: UserStatus,
+    progress: SignupProgress,
+  ): boolean {
+    return status === "active" && progress.hasMissingRequiredConsent;
+  }
+
+  private async getStudentInfo(
+    userPk: string,
+    contact: ContactDto | null,
+  ): Promise<StudentInfoDto | null> {
+    const info = await this.studentRepository.findInfoByUserPk(userPk);
+    if (!info) return null;
+
+    const profile = info.profile
+      ? {
+          department: {
+            id: info.profile.department.pk,
+            name: info.profile.department.name,
+          },
+          interests: info.profile.profile.interests,
+          activities: info.profile.profile.activities ?? [],
+          attachments: await Promise.all(
+            info.profile.attachments.map(async (attachment) => ({
+              kind: attachment.kind,
+              source: attachment.source,
+              // file이면 비공개 버킷의 key라 presigned URL로 내려줌
+              url:
+                attachment.source === "file"
+                  ? await this.fileService.getPresignedUrl(attachment.url)
+                  : attachment.url,
+              file_name: attachment.fileName,
+            })),
+          ),
+          contact,
+        }
+      : null;
+
+    return {
+      email: info.student.email,
+      verified: info.student.verifiedAt !== null,
+      profile,
+    };
+  }
+
+  private async getGraduatedInfo(
+    userPk: string,
+    contact: ContactDto | null,
+  ): Promise<GraduatedInfoDto | null> {
+    const info = await this.graduatedRepository.findInfoByUserPk(userPk);
+    if (!info) return null;
+
+    return {
+      verified: info.graduated.verifiedAt !== null,
+      profile: info.profile
+        ? {
+            nickname: info.profile.nickname,
+            company: info.profile.company,
+            department: info.profile.department,
+            job: info.profile.job,
+            hashtags: info.profile.hashtags ?? [],
+            links: info.profile.links ?? [],
+            contact,
+          }
+        : null,
+    };
+  }
+
+  private toContactDto(contact: CoffeeChatContactRow): ContactDto {
+    return {
+      email_enabled: contact.emailEnabled,
+      kakao_enabled: contact.kakaoEnabled,
+      email: contact.email,
+      phone: contact.phone,
+    };
+  }
+
+  private async deleteFileQuietly(key: string): Promise<void> {
+    try {
+      await this.fileService.deleteFile(key);
+    } catch (e) {
+      this.logger.error(
+        `Failed to delete file ${key}: ${(e as Error).message}`,
+      );
+    }
+  }
+}

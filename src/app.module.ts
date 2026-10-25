@@ -6,6 +6,7 @@ import { ConfigModule } from "./config/config.module";
 import { DatabaseModule } from "./database/database.module";
 import { LoggerModule } from "@src/global/logger/logger.module";
 import { AppController } from "./app.controller";
+import { UserModule } from "@src/user/user.module";
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { AppController } from "./app.controller";
       }),
       inject: [ConfigService],
     }),
+    UserModule,
   ],
   controllers: [AppController],
   providers: [],
