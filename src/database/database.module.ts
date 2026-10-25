@@ -8,6 +8,8 @@ import { UserOauthAccountRepository } from "@src/database/repository/user-oauth-
 import { StudentRepository } from "@src/database/repository/student.repository";
 import { GraduatedRepository } from "@src/database/repository/graduated.repository";
 import { CoffeeChatContactRepository } from "@src/database/repository/coffee-chat-contact.repository";
+import { ConsentRepository } from "@src/database/repository/consent.repository";
+import { UserConsentRepository } from "@src/database/repository/user-consent.repository";
 
 const repositories = [
   RefreshTokenRepository,
@@ -16,6 +18,8 @@ const repositories = [
   StudentRepository,
   GraduatedRepository,
   CoffeeChatContactRepository,
+  ConsentRepository,
+  UserConsentRepository,
 ];
 
 @Module({
