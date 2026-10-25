@@ -3,6 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { DatabaseService } from "@src/database/database.service";
 import { TxType } from "@src/global/types/tx.types";
 import { users } from "../../../drizzle/schema/users";
+import { hasMissingRequiredConsent } from "./consent.sql";
 
 export type UserRow = typeof users.$inferSelect;
 
@@ -41,9 +42,7 @@ export class UserRepository {
       .where(eq(users.pk, userPk));
   }
 
-  // 가입 중(pending)인 유저의 진행 상황. 약관 최신 버전은 type별 (created_at, version)이 가장 큰 행.
-  // 같은 트랜잭션에서 여러 버전을 넣으면 created_at(NOW())이 같으므로 version 문자열 순으로 가름
-  // (문자열 비교라 v10 < v2 — 같은 시각에 넣을 때는 v1 → v2처럼 정렬 순서가 맞는 이름을 쓸 것)
+  // 가입 중(pending)인 유저의 진행 상황. 약관 최신 버전 규칙은 consent.sql.ts
   async findSignupProgress(
     userPk: string,
     type: UserRow["type"],
@@ -78,22 +77,7 @@ export class UserRepository {
       has_profile: boolean;
     }>(sql`
       SELECT
-        EXISTS (
-          SELECT 1 FROM consent c
-          WHERE c.is_required
-            AND NOT EXISTS (
-              SELECT 1 FROM consent newer
-              WHERE newer.type = c.type
-                AND (newer.created_at, newer.version) > (c.created_at, c.version)
-            )
-            AND NOT EXISTS (
-              SELECT 1 FROM user_consent uc
-              WHERE uc.user_pk = ${userPk}
-                AND uc.consent_type = c.type
-                AND uc.consent_version = c.version
-                AND uc.revoked_at IS NULL
-            )
-        ) AS has_missing_required_consent,
+        ${hasMissingRequiredConsent(userPk)} AS has_missing_required_consent,
         ${typeProgress}
     `);
 

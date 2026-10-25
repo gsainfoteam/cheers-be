@@ -5,6 +5,7 @@ import { SlackModule } from "nestjs-slack";
 import { ConfigModule } from "./config/config.module";
 import { DatabaseModule } from "./database/database.module";
 import { LoggerModule } from "@src/global/logger/logger.module";
+import { ConsentModule } from "@src/consent/consent.module";
 import { AppController } from "./app.controller";
 
 @Module({
@@ -28,6 +29,7 @@ import { AppController } from "./app.controller";
       }),
       inject: [ConfigService],
     }),
+    ConsentModule,
   ],
   controllers: [AppController],
   providers: [],
