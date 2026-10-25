@@ -1,0 +1,93 @@
+@startuml auth-guards
+!include ../_style.iuml
+
+title 공통 흐름: 인증 · 가입 단계 · 유형 가드
+caption CRB-4 · src/auth/guard/
+
+actor Client
+participant "Guard" as Guard
+participant "AuthService" as AuthService
+participant "SignupStepService" as SignupStepService
+participant "UserRepository" as UserRepository
+database PostgreSQL
+participant "Controller" as Controller
+
+== authenticate() — 모든 인증 가드가 먼저 실행 (access-token.ts) ==
+
+Client -> Guard: 요청\nAuthorization: Bearer <access token>
+alt Bearer 형식이 아님 (헤더 없음 포함)
+  Guard -[#red]-> Client: 401 Missing access token
+end
+Guard -> AuthService: verifyAccessToken(token)
+note right: RS256 공개키 · issuer 검증
+alt 만료
+  AuthService -[#red]-> Client: 401 Token expired
+else 서명 · issuer · 형식 오류
+  AuthService -[#red]-> Client: 401 Invalid token
+end
+AuthService --> Guard: payload { sub, type, status }
+Guard -> Guard: request.user = UserContext(sub, type, status)
+note right: 토큰 클레임 기준. DB 조회 없음
+
+== AnyStatusGuard — 가입 상태와 관계없이 통과 ==
+
+Guard -> Controller: 통과
+
+== UserGuard — 가입을 마친 유저만 (일반 API) ==
+
+alt 클레임 status ≠ active
+  Guard -[#red]-> Client: 403 Signup is not completed
+end
+Guard -> Controller: 통과
+
+== SignupStepGuard + @SignupStep({ step, allowActive }) — 가입 단계 API ==
+
+note over Guard
+  @SignupStep이 없으면 Error → 500 (설정 오류).
+  authenticate()보다 먼저 확인
+end note
+Guard -> UserRepository: findByPk(userPk)
+UserRepository -> PostgreSQL: SELECT users (is_deleted = false)
+PostgreSQL --> UserRepository: row
+UserRepository --> Guard: user | null
+alt 유저 없음 (탈퇴 포함)
+  Guard -[#red]-> Client: 401 User not found
+end
+Guard -> Guard: request.user = UserContext(DB의 pk, type, status)
+note right
+  가입 중 유형 변경 · 가입 완료로
+  클레임이 DB와 어긋날 수 있어 DB 값으로 교체
+end note
+alt status = active
+  alt allowActive
+    Guard -> Controller: 통과
+  else
+    Guard -[#red]-> Client: 403 Signup is already completed
+  end
+else status = pending
+  Guard -> SignupStepService: getNextStep(user)
+  SignupStepService -> UserRepository: findSignupProgress(pk, type)
+  UserRepository -> PostgreSQL: 필수 약관 미동의 여부,\n유형별 인증(verified_at) · 추가 정보 존재 여부
+  PostgreSQL --> UserRepository: row
+  UserRepository --> SignupStepService: { hasMissingRequiredConsent, verified, hasProfile }
+  SignupStepService -> SignupStepService: calculateNextStep()
+  note right: consent → verify → profile 순서
+  SignupStepService --> Guard: nextStep
+  alt nextStep ≠ @SignupStep.step
+    Guard -[#red]-> Client: 403 Signup step mismatch: expected <nextStep>, got <step>
+  end
+  Guard -> Controller: 통과
+end
+
+== UserTypeGuard + @UserTypes(...) — 인증 가드 뒤에 사용 ==
+
+note over Guard
+  @UseGuards(UserGuard, UserTypeGuard)처럼 인증 가드 다음에 둠.
+  @UserTypes 없음 · request.user 없음은 Error → 500 (설정 오류)
+end note
+alt request.user.type이 @UserTypes에 없음
+  Guard -[#red]-> Client: 403 User type not allowed
+end
+Guard -> Controller: 통과
+
+@enduml
