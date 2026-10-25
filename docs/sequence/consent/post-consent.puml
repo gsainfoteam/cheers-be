@@ -1,0 +1,63 @@
+@startuml post-consent
+!include ../_style.iuml
+
+title POST /api/v1/user/consent
+caption CRB-12 · 가입 시 동의, 개정 약관 재동의, 선택 약관 동의 · 철회
+
+actor Client
+participant "SignupStepGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "ConsentController" as Controller
+participant "ConsentService" as Service
+participant "ConsentRepository" as ConsentRepository
+participant "UserConsentRepository" as UserConsentRepository
+database PostgreSQL
+
+Client -> Guard: POST /api/v1/user/consent\nAuthorization: Bearer <access token>\n{ consents: [{ type, version, agreed }] }
+ref over Client, Guard
+  SignupStepGuard — flow/auth-guards.puml
+  @SignupStep({ step: "consent", allowActive: true })
+  pending: next_step = consent 일 때만 / active: 항상 통과 (재동의 · 선택 약관 변경)
+  401 Missing access token / Token expired / Invalid token / User not found
+  403 Signup step mismatch
+end ref
+Guard -> Pipe: 통과
+alt body 검증 실패 (빈 배열, 21개 이상, type · version 빈 문자열, agreed 누락 등)
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+Pipe -> Controller: updateConsents(req, user)
+Controller -> Service: updateConsents(userPk, req)
+
+alt 요청에 같은 type이 두 번 이상
+  Service -[#red]-> Client: 400 Duplicate consent type
+end
+
+group transaction (DatabaseService.db.transaction)
+  Service -> ConsentRepository: findLatestWithAgreement(userPk, tx)
+  ConsentRepository -> PostgreSQL: SELECT consent (type별 최신 버전)\n+ 내 유효한 동의 여부
+  PostgreSQL --> ConsentRepository: rows
+  ConsentRepository --> Service: LatestConsent[]
+
+  alt 요청의 version이 그 type의 최신 버전이 아님 (없는 type 포함)
+    Service -[#red]-> Client: 400 Not the latest consent version: <type> <version>
+  else 최신 필수 약관 중 agreed: true로 오지 않은 것이 있음
+    Service -[#red]-> Client: 400 Required consents must be agreed: <type, ...>
+  end
+  note right of Service
+    위 검사를 통과하면 agreed: false는 선택 약관만 남음.
+    요청에 없는 선택 약관은 그대로 둠
+  end note
+
+  Service -> UserConsentRepository: insertAgreements(userPk, agreed: true 항목, tx)
+  UserConsentRepository -> PostgreSQL: INSERT user_consent ... ON CONFLICT DO NOTHING
+  note right: 이미 유효한 동의가 있는 버전은\n부분 unique index에 걸려 그대로 둠
+  Service -> UserConsentRepository: revokeByTypes(userPk, agreed: false 항목의 type, tx)
+  UserConsentRepository -> PostgreSQL: UPDATE user_consent SET revoked_at = now()\nWHERE type IN (...) AND revoked_at IS NULL
+  note right: 이전 버전에 남은 유효한 동의까지 같이 철회
+end
+note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
+
+Service --> Controller: BaseResultDto.OK
+Controller --> Client: 200 { result: "OK" }
+
+@enduml
