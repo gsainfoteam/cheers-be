@@ -52,7 +52,7 @@ export class MailService {
   async send(input: SendMailInput): Promise<MailResult> {
     if (!this.transporter) {
       this.logger.log(`[MAIL SKIPPED] to=${input.to} subject=${input.subject}`);
-      return { success: true };
+      return { success: true, skipped: true };
     }
 
     try {
