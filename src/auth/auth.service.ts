@@ -39,12 +39,30 @@ export class AuthService {
     // env에 한 줄로 넣을 수 있도록 \n 이스케이프 허용
     this.privateKey = privateKey.replace(/\\n/g, "\n");
     this.publicKey = publicKey.replace(/\\n/g, "\n");
-    this.accessTokenExpiresIn = (this.configService.get<string>(
-      "ACCESS_TOKEN_EXPIRES_IN",
-    ) ?? "6h") as StringValue;
-    this.refreshTokenExpireDays = Number(
+
+    // 가드는 DB를 보지 않고 토큰 클레임만 믿으므로, 탈퇴 · 유형 변경 · 가입 미완료 정리 후에도
+    // 기존 access token은 만료까지 통과함. 그 최대 노출 시간이 access token 수명이라 1시간으로 유지
+    const accessTokenExpiresIn =
+      this.configService.get<string>("ACCESS_TOKEN_EXPIRES_IN") ?? "1h";
+    if (!/^\d+[smhd]$/.test(accessTokenExpiresIn)) {
+      throw new Error(
+        `ACCESS_TOKEN_EXPIRES_IN must look like 30m, 1h (got "${accessTokenExpiresIn}").`,
+      );
+    }
+    this.accessTokenExpiresIn = accessTokenExpiresIn as StringValue;
+
+    const refreshTokenExpireDays = Number(
       this.configService.get<string>("REFRESH_TOKEN_EXPIRE_DAYS") ?? 30,
     );
+    if (
+      !Number.isInteger(refreshTokenExpireDays) ||
+      refreshTokenExpireDays <= 0
+    ) {
+      throw new Error(
+        "REFRESH_TOKEN_EXPIRE_DAYS must be a positive integer (number of days).",
+      );
+    }
+    this.refreshTokenExpireDays = refreshTokenExpireDays;
   }
 
   // 로그인, 토큰 갱신, 가입 완료 시 호출. 최근 접속 시각도 같이 갱신
@@ -101,13 +119,10 @@ export class AuthService {
 
   // 이미 없는 토큰이어도 성공으로 처리
   async logout(rawRefreshToken: string, userPk: string): Promise<void> {
-    await this.dbService.db.transaction(async (tx) => {
-      await this.refreshTokenRepository.deleteByOpaqueHashAndUserPk(
-        this.hashRefreshToken(rawRefreshToken),
-        userPk,
-        tx,
-      );
-    });
+    await this.refreshTokenRepository.deleteByOpaqueHashAndUserPk(
+      this.hashRefreshToken(rawRefreshToken),
+      userPk,
+    );
   }
 
   // 회원 탈퇴, 유형 변경, 가입 완료(토큰 재발급 전) 때 사용

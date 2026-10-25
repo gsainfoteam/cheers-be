@@ -74,6 +74,40 @@ describe("AuthService", () => {
     );
   });
 
+  it.each(["30", "30 minutes", "1w", "abc", ""])(
+    "throws on startup when ACCESS_TOKEN_EXPIRES_IN is %p",
+    (value) => {
+      expect(() =>
+        createService({ ...keys, ACCESS_TOKEN_EXPIRES_IN: value }),
+      ).toThrow("ACCESS_TOKEN_EXPIRES_IN must look like 30m, 1h");
+    },
+  );
+
+  it.each(["30d", "abc", "0", "-1", "1.5", ""])(
+    "throws on startup when REFRESH_TOKEN_EXPIRE_DAYS is %p",
+    (value) => {
+      expect(() =>
+        createService({ ...keys, REFRESH_TOKEN_EXPIRE_DAYS: value }),
+      ).toThrow("REFRESH_TOKEN_EXPIRE_DAYS must be a positive integer");
+    },
+  );
+
+  it("uses the configured expiry values", async () => {
+    const configured = createService({
+      ...keys,
+      ACCESS_TOKEN_EXPIRES_IN: "15m",
+      REFRESH_TOKEN_EXPIRE_DAYS: "7",
+    });
+
+    const { accessToken } = await configured.issueTokens(pendingStudent, tx);
+
+    const { iat, exp } = jwtService.decode(accessToken);
+    expect(exp - iat).toBe(15 * 60);
+    const [row] = refreshTokenRepository.insert.mock.calls[0];
+    const days = (row.expiresAt.getTime() - Date.now()) / 86_400_000;
+    expect(days).toBeCloseTo(7, 1);
+  });
+
   describe("issueTokens", () => {
     it("signs an RS256 access token with sub, type and status", async () => {
       const { accessToken } = await service.issueTokens(pendingStudent, tx);
@@ -91,7 +125,10 @@ describe("AuthService", () => {
     });
 
     it("stores only the hash of the refresh token and updates last_active_at", async () => {
-      const { refreshToken } = await service.issueTokens(pendingStudent, tx);
+      const { accessToken, refreshToken } = await service.issueTokens(
+        pendingStudent,
+        tx,
+      );
 
       const [row, usedTx] = refreshTokenRepository.insert.mock.calls[0];
       expect(usedTx).toBe(tx);
@@ -100,6 +137,9 @@ describe("AuthService", () => {
       expect(row.userPk).toBe(pendingStudent.pk);
       const days = (row.expiresAt.getTime() - Date.now()) / 86_400_000;
       expect(days).toBeCloseTo(30, 1);
+      // access token 기본 수명 1시간
+      const { iat, exp } = jwtService.decode(accessToken);
+      expect(exp - iat).toBe(60 * 60);
       expect(userRepository.updateLastActiveAt).toHaveBeenCalledWith(
         pendingStudent.pk,
         tx,
@@ -175,12 +215,12 @@ describe("AuthService", () => {
     });
   });
 
-  it("logout deletes the hashed token of the user", async () => {
+  it("logout deletes the hashed token of the user without a transaction", async () => {
     await service.logout("old-token", pendingStudent.pk);
 
     expect(
       refreshTokenRepository.deleteByOpaqueHashAndUserPk,
-    ).toHaveBeenCalledWith(sha256("old-token"), pendingStudent.pk, tx);
+    ).toHaveBeenCalledWith(sha256("old-token"), pendingStudent.pk);
   });
 
   it("revokeAllTokens deletes every token of the user", async () => {
