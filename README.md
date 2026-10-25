@@ -28,6 +28,7 @@ bun run start:dev
 - `drizzle/schema/` — 테이블 정의 (pgTable)
 - `drizzle/` — 생성된 마이그레이션 SQL, `migrate.ts`
 - `src/database/` — `DatabaseService` 및 이후 `entity/`, `repository/`
+- `docs/sequence/` — API 시퀀스 다이어그램 (PlantUML, [작성 가이드](docs/sequence/README.md))
 - `src/global/` — 로거, 필터, 인터셉터, 공통 DTO/타입
 
 ## 배포
