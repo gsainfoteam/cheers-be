@@ -70,7 +70,10 @@ describe("MailService", () => {
   it("skips sending when credentials are not set", async () => {
     const service = createService({});
 
-    await expect(service.send(input)).resolves.toEqual({ success: true });
+    await expect(service.send(input)).resolves.toEqual({
+      success: true,
+      skipped: true,
+    });
     expect(createTransport).not.toHaveBeenCalled();
     expect(sendMail).not.toHaveBeenCalled();
   });
