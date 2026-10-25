@@ -1,24 +1,34 @@
-import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { relations } from "drizzle-orm";
+import { index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { users } from "./users";
 
 /*
 CREATE TABLE "refresh_token" (
-    "opaque_hash"   text                     NOT NULL,
-    "refresh_token" text                     NOT NULL,
-    "created_at"    timestamp with time zone NOT NULL DEFAULT NOW(),
-    "updated_at"    timestamp with time zone NOT NULL DEFAULT NOW(),
-    "expires_at"    timestamp with time zone NOT NULL,
-    "user_pk"       uuid                     NULL
+    "opaque_hash" text                     NOT NULL,
+    "user_pk"     uuid                     NOT NULL REFERENCES "users" ("pk"),
+    "expires_at"  timestamp with time zone NOT NULL,
+    "created_at"  timestamp with time zone NOT NULL DEFAULT NOW()
 );
 */
-export const refreshToken = pgTable("refresh_token", {
-  opaqueHash: text("opaque_hash").primaryKey().notNull(),
-  refreshToken: text("refresh_token").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-  userPk: uuid("user_pk"),
-});
+// 원문은 저장하지 않고 해시만 저장. rotation 시 새 행 insert + 기존 행 delete
+export const refreshToken = pgTable(
+  "refresh_token",
+  {
+    opaqueHash: text("opaque_hash").primaryKey().notNull(),
+    userPk: uuid("user_pk")
+      .notNull()
+      .references(() => users.pk),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index().on(table.userPk)],
+);
+
+export const refreshTokenRelations = relations(refreshToken, ({ one }) => ({
+  user: one(users, {
+    fields: [refreshToken.userPk],
+    references: [users.pk],
+  }),
+}));

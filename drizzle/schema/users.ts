@@ -1,51 +1,69 @@
+import { sql, relations } from "drizzle-orm";
 import {
   boolean,
-  pgEnum,
+  index,
   pgTable,
   timestamp,
-  unique,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
-
-export const oauthProvider = pgEnum("oauth_provider", ["google", "apple"]);
+import { userStatus, userType } from "./enums";
+import { userOauthAccount } from "./user-oauth-account";
+import { refreshToken } from "./refresh-token";
+import { userConsent } from "./user-consent";
+import { student } from "./student";
+import { graduated } from "./graduated";
+import { coffeeChatContact } from "./coffee-chat-contact";
 
 /*
-CREATE TYPE "oauth_provider" AS ENUM ('google', 'apple');
-
 CREATE TABLE "users" (
-    "pk"            uuid                     NOT NULL,
-    "is_deleted"    boolean                  NOT NULL,
-    "provider"      oauth_provider           NOT NULL,
-    "provider_sub"  varchar(255)             NOT NULL,
-    "email"         varchar(255)             NULL,
-    "name"          varchar(64)              NULL,
-    "created_at"    timestamp with time zone NOT NULL DEFAULT NOW(),
-    "updated_at"    timestamp with time zone NOT NULL DEFAULT NOW(),
-    UNIQUE ("provider", "provider_sub")
+    "pk"             uuid                     NOT NULL,
+    "is_deleted"     boolean                  NOT NULL DEFAULT FALSE,
+    "status"         user_status              NOT NULL DEFAULT 'pending',
+    "type"           user_type                NOT NULL,
+    "created_at"     timestamp with time zone NOT NULL DEFAULT NOW(),
+    "updated_at"     timestamp with time zone NOT NULL DEFAULT NOW(),
+    "last_active_at" timestamp with time zone NOT NULL DEFAULT NOW(),
+    "name"           varchar(64)              NULL,
+    "email"          varchar(255)             NULL
 );
+CREATE INDEX ON "users" ("created_at") WHERE "status" = 'pending';
 */
 export const users = pgTable(
   "users",
   {
     pk: uuid("pk").primaryKey().notNull(),
-    isDeleted: boolean("is_deleted").notNull(),
-    provider: oauthProvider("provider").notNull(),
-    providerSub: varchar("provider_sub", { length: 255 }).notNull(),
-    // Apple 은 이메일을 숨기거나 최초 로그인 이후 제공하지 않을 수 있음
-    email: varchar("email", { length: 255 }),
-    name: varchar("name", { length: 64 }),
+    isDeleted: boolean("is_deleted").notNull().default(false),
+    status: userStatus("status").notNull().default("pending"),
+    // OAuth 로그인 요청에서 받음
+    type: userType("type").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    // 로그인 · 토큰 갱신 · 내 정보 조회 때 갱신
+    lastActiveAt: timestamp("last_active_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    // OAuth에서 받음, 없으면 추가 정보 입력에서 한 번 받음. 이후 수정 불가
+    name: varchar("name", { length: 64 }),
+    email: varchar("email", { length: 255 }),
   },
   (table) => [
-    unique("users_provider_provider_sub_unique").on(
-      table.provider,
-      table.providerSub,
-    ),
+    // 가입 미완료 계정 정리 스케줄러용 (pending 행만 들어감)
+    index("users_pending_created_at_idx")
+      .on(table.createdAt)
+      .where(sql`${table.status} = 'pending'`),
   ],
 );
+
+export const usersRelations = relations(users, ({ many, one }) => ({
+  oauthAccounts: many(userOauthAccount),
+  refreshTokens: many(refreshToken),
+  consents: many(userConsent),
+  student: one(student),
+  graduated: one(graduated),
+  coffeeChatContact: one(coffeeChatContact),
+}));
