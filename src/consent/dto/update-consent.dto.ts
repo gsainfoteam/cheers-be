@@ -1,5 +1,6 @@
 import { Type } from "class-transformer";
 import {
+  ArrayMaxSize,
   ArrayNotEmpty,
   IsArray,
   IsBoolean,
@@ -24,6 +25,8 @@ export class ConsentAgreementDto {
 export class UpdateConsentRequestDto {
   @IsArray()
   @ArrayNotEmpty()
+  // 약관 종류 수보다 넉넉하게
+  @ArrayMaxSize(20)
   @ValidateNested({ each: true })
   @Type(() => ConsentAgreementDto)
   consents: ConsentAgreementDto[];

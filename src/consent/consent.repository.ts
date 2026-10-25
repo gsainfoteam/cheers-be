@@ -1,9 +1,13 @@
 import { Injectable } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { DatabaseService } from "@src/database/database.service";
 import { TxType } from "@src/global/types/tx.types";
-import { consent } from "../../drizzle/schema/consent";
+import {
+  hasMissingRequiredConsent,
+  hasValidAgreement,
+  isLatestConsent,
+} from "@src/database/repository/consent.sql";
 import { userConsent } from "../../drizzle/schema/user-consent";
 
 export type LatestConsent = {
@@ -17,71 +21,48 @@ export type LatestConsent = {
 
 export type ConsentVersion = { type: string; version: string };
 
-// 약관 최신 버전은 type별 (created_at, version)이 가장 큰 행 (UserRepository.findSignupProgress와 같은 규칙)
+// 최신 버전 · 유효한 동의 판정은 UserRepository.findSignupProgress와 같은 조각(consent.sql.ts)을 씀
 @Injectable()
 export class ConsentRepository {
   constructor(private readonly dbService: DatabaseService) {}
 
-  /*
-  SELECT DISTINCT ON (c.type) c.type, c.version, c.is_required, c.url, uc.pk IS NOT NULL AS agreed
-  FROM consent c
-  LEFT JOIN user_consent uc
-    ON uc.consent_type = c.type AND uc.consent_version = c.version
-   AND uc.user_pk = ?1 AND uc.revoked_at IS NULL
-  ORDER BY c.type, c.created_at DESC, c.version DESC;
-   */
-  // 유효한 동의는 약관 버전당 1개(부분 unique index)라 join으로 행이 늘지 않음
+  // type별 최신 버전과 내 동의 여부
   async findLatestWithAgreement(
     userPk: string,
     tx?: TxType,
   ): Promise<LatestConsent[]> {
-    return (tx ?? this.dbService.db)
-      .selectDistinctOn([consent.type], {
-        type: consent.type,
-        version: consent.version,
-        isRequired: consent.isRequired,
-        url: consent.url,
-        agreed: sql<boolean>`${userConsent.pk} IS NOT NULL`,
-      })
-      .from(consent)
-      .leftJoin(
-        userConsent,
-        and(
-          eq(userConsent.consentType, consent.type),
-          eq(userConsent.consentVersion, consent.version),
-          eq(userConsent.userPk, userPk),
-          isNull(userConsent.revokedAt),
-        ),
-      )
-      .orderBy(consent.type, desc(consent.createdAt), desc(consent.version));
+    const result = await (tx ?? this.dbService.db).execute<{
+      type: string;
+      version: string;
+      is_required: boolean;
+      url: string;
+      agreed: boolean;
+    }>(sql`
+      SELECT c.type, c.version, c.is_required, c.url,
+        ${hasValidAgreement(userPk)} AS agreed
+      FROM consent c
+      WHERE ${isLatestConsent}
+      ORDER BY c.type
+    `);
+
+    return result.rows.map((row) => ({
+      type: row.type,
+      version: row.version,
+      isRequired: row.is_required,
+      url: row.url,
+      agreed: row.agreed,
+    }));
   }
 
-  // 필수 약관의 최신 버전 중 유효한 동의가 없는 것이 있음.
-  // UserRepository.findSignupProgress의 has_missing_required_consent와 같은 조건 — 바꿀 때는 두 곳 같이
   async hasMissingRequiredConsent(
     userPk: string,
     tx?: TxType,
   ): Promise<boolean> {
     const result = await (tx ?? this.dbService.db).execute<{
       has_missing_required_consent: boolean;
-    }>(sql`
-      SELECT EXISTS (
-        SELECT 1 FROM consent c
-        WHERE c.is_required
-          AND NOT EXISTS (
-            SELECT 1 FROM consent newer
-            WHERE newer.type = c.type
-              AND (newer.created_at, newer.version) > (c.created_at, c.version)
-          )
-          AND NOT EXISTS (
-            SELECT 1 FROM user_consent uc
-            WHERE uc.user_pk = ${userPk}
-              AND uc.consent_type = c.type
-              AND uc.consent_version = c.version
-              AND uc.revoked_at IS NULL
-          )
-      ) AS has_missing_required_consent
-    `);
+    }>(
+      sql`SELECT ${hasMissingRequiredConsent(userPk)} AS has_missing_required_consent`,
+    );
 
     return result.rows[0].has_missing_required_consent;
   }
