@@ -117,13 +117,14 @@ export class UserRepository {
   }
 
   /*
-  UPDATE users SET last_active_at = now() WHERE pk = ?1;
+  UPDATE users SET last_active_at = now() WHERE pk = ?1 AND is_deleted = false;
    */
+  // 내 정보 조회는 유저 조회와 동시에 호출하므로 탈퇴한 유저는 건드리지 않게 함
   async updateLastActiveAt(userPk: string, tx?: TxType): Promise<void> {
     await (tx ?? this.dbService.db)
       .update(users)
       .set({ lastActiveAt: new Date() })
-      .where(eq(users.pk, userPk));
+      .where(and(eq(users.pk, userPk), eq(users.isDeleted, false)));
   }
 
   // 가입 중(pending)인 유저의 진행 상황. 약관 최신 버전 규칙은 consent.sql.ts
