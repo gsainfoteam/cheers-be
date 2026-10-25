@@ -4,9 +4,17 @@ import { randomUUID } from "node:crypto";
 import { DatabaseService } from "@src/database/database.service";
 import { TxType } from "@src/global/types/tx.types";
 import { CheersDBError } from "@src/global/exceptions/cheers-db.error";
+import { GraduatedProfileRow } from "@src/database/repository/graduated-profile.repository";
 import { graduated } from "../../../drizzle/schema/graduated";
+import { graduatedProfile } from "../../../drizzle/schema/graduated-profile";
 
 export type GraduatedRow = typeof graduated.$inferSelect;
+
+export type GraduatedWithProfile = {
+  graduated: GraduatedRow;
+  // 추가 정보 입력 전이면 null
+  profile: GraduatedProfileRow | null;
+};
 
 @Injectable()
 export class GraduatedRepository {
@@ -38,6 +46,28 @@ export class GraduatedRepository {
     const result = await (tx ?? this.dbService.db)
       .select()
       .from(graduated)
+      .where(eq(graduated.userPk, userPk));
+
+    return result[0] ?? null;
+  }
+
+  /*
+  SELECT g.*, gp.* FROM graduated g
+  LEFT JOIN graduated_profile gp ON gp.graduated_pk = g.pk
+  WHERE g.user_pk = ?1;
+   */
+  // 내 정보 조회: 현업자 행과 추가 정보를 한 쿼리로
+  async findByUserPkWithProfile(
+    userPk: string,
+    tx?: TxType,
+  ): Promise<GraduatedWithProfile | null> {
+    const result = await (tx ?? this.dbService.db)
+      .select({ graduated, profile: graduatedProfile })
+      .from(graduated)
+      .leftJoin(
+        graduatedProfile,
+        eq(graduatedProfile.graduatedPk, graduated.pk),
+      )
       .where(eq(graduated.userPk, userPk));
 
     return result[0] ?? null;

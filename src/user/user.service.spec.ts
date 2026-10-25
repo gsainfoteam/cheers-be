@@ -92,13 +92,11 @@ describe("UserService", () => {
   const studentRepository = {
     insert: jest.fn(),
     findByUserPk: jest.fn(),
+    findByUserPkWithLatestProfile: jest.fn(),
     clearEmailByUserPk: jest.fn(),
     deleteByPk: jest.fn(),
   };
-  const studentProfileRepository = {
-    findLatestByStudentPk: jest.fn(),
-    deleteByStudentPk: jest.fn(),
-  };
+  const studentProfileRepository = { deleteByStudentPk: jest.fn() };
   const studentProfileAttachmentRepository = {
     findByProfilePk: jest.fn(),
     deleteByStudentPk: jest.fn(),
@@ -107,13 +105,11 @@ describe("UserService", () => {
   const graduatedRepository = {
     insert: jest.fn(),
     findByUserPk: jest.fn(),
+    findByUserPkWithProfile: jest.fn(),
     clearBusinessCardKey: jest.fn(),
     deleteByPk: jest.fn(),
   };
-  const graduatedProfileRepository = {
-    findByGraduatedPk: jest.fn(),
-    deleteByGraduatedPk: jest.fn(),
-  };
+  const graduatedProfileRepository = { deleteByGraduatedPk: jest.fn() };
   const coffeeChatContactRepository = {
     findByUserPk: jest.fn(),
     deleteByUserPk: jest.fn(),
@@ -368,11 +364,10 @@ describe("UserService", () => {
         progress({ hasMissingRequiredConsent: true }),
       );
       coffeeChatContactRepository.findByUserPk.mockResolvedValue(null);
-      graduatedRepository.findByUserPk.mockResolvedValue({
-        pk: "graduated-1",
-        verifiedAt: null,
+      graduatedRepository.findByUserPkWithProfile.mockResolvedValue({
+        graduated: { pk: "graduated-1", verifiedAt: null },
+        profile: null,
       });
-      graduatedProfileRepository.findByGraduatedPk.mockResolvedValue(null);
 
       await expect(service.getInfo(ctx("student"))).resolves.toEqual({
         id: USER_PK,
@@ -390,9 +385,11 @@ describe("UserService", () => {
         USER_PK,
         "graduated",
       );
-      expect(studentRepository.findByUserPk).not.toHaveBeenCalled();
-      expect(graduatedProfileRepository.findByGraduatedPk).toHaveBeenCalledWith(
-        "graduated-1",
+      expect(
+        studentRepository.findByUserPkWithLatestProfile,
+      ).not.toHaveBeenCalled();
+      expect(graduatedRepository.findByUserPkWithProfile).toHaveBeenCalledWith(
+        USER_PK,
       );
       expect(authService.touchLastActive).toHaveBeenCalledWith(USER_PK);
     });
@@ -410,14 +407,16 @@ describe("UserService", () => {
         email: "gildong@gm.gist.ac.kr",
         phone: null,
       });
-      studentRepository.findByUserPk.mockResolvedValue({
-        pk: "student-1",
-        email: "gildong@gm.gist.ac.kr",
-        verifiedAt: new Date(),
-      });
-      studentProfileRepository.findLatestByStudentPk.mockResolvedValue({
-        profile: { pk: "profile-2", interests: ["반도체"], activities: null },
-        department: { pk: 1, name: "전기전자컴퓨터공학부" },
+      studentRepository.findByUserPkWithLatestProfile.mockResolvedValue({
+        student: {
+          pk: "student-1",
+          email: "gildong@gm.gist.ac.kr",
+          verifiedAt: new Date(),
+        },
+        latest: {
+          profile: { pk: "profile-2", interests: ["반도체"], activities: null },
+          department: { pk: 1, name: "전기전자컴퓨터공학부" },
+        },
       });
       studentProfileAttachmentRepository.findByProfilePk.mockResolvedValue([
         {
@@ -471,8 +470,8 @@ describe("UserService", () => {
       });
       expect(fileService.getPresignedUrl).toHaveBeenCalledWith("cv/key.pdf");
       expect(
-        studentProfileRepository.findLatestByStudentPk,
-      ).toHaveBeenCalledWith("student-1");
+        studentRepository.findByUserPkWithLatestProfile,
+      ).toHaveBeenCalledWith(USER_PK);
       expect(
         studentProfileAttachmentRepository.findByProfilePk,
       ).toHaveBeenCalledWith("profile-2");
@@ -482,12 +481,10 @@ describe("UserService", () => {
       userRepository.findByPk.mockResolvedValue(userRow());
       userRepository.findSignupProgress.mockResolvedValue(progress());
       coffeeChatContactRepository.findByUserPk.mockResolvedValue(null);
-      studentRepository.findByUserPk.mockResolvedValue({
-        pk: "student-1",
-        email: null,
-        verifiedAt: null,
+      studentRepository.findByUserPkWithLatestProfile.mockResolvedValue({
+        student: { pk: "student-1", email: null, verifiedAt: null },
+        latest: null,
       });
-      studentProfileRepository.findLatestByStudentPk.mockResolvedValue(null);
 
       const info = await service.getInfo(ctx("student"));
 
@@ -509,17 +506,16 @@ describe("UserService", () => {
         progress({ hasMissingRequiredConsent: true }),
       );
       coffeeChatContactRepository.findByUserPk.mockResolvedValue(null);
-      graduatedRepository.findByUserPk.mockResolvedValue({
-        pk: "graduated-1",
-        verifiedAt: new Date(),
-      });
-      graduatedProfileRepository.findByGraduatedPk.mockResolvedValue({
-        nickname: "철수",
-        company: "인포테크",
-        department: "플랫폼개발팀",
-        job: "백엔드 개발자",
-        hashtags: null,
-        links: ["https://www.linkedin.com/in/chulsoo"],
+      graduatedRepository.findByUserPkWithProfile.mockResolvedValue({
+        graduated: { pk: "graduated-1", verifiedAt: new Date() },
+        profile: {
+          nickname: "철수",
+          company: "인포테크",
+          department: "플랫폼개발팀",
+          job: "백엔드 개발자",
+          hashtags: null,
+          links: ["https://www.linkedin.com/in/chulsoo"],
+        },
       });
 
       const info = await service.getInfo(ctx("graduated"));

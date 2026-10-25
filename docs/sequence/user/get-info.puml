@@ -19,10 +19,8 @@ participant "AuthService" as AuthService
 participant "UserRepository" as UserRepository
 participant "CoffeeChatContactRepository" as CoffeeChatContactRepository
 participant "StudentRepository" as StudentRepository
-participant "StudentProfileRepository" as StudentProfileRepository
 participant "StudentProfileAttachmentRepository" as StudentProfileAttachmentRepository
 participant "GraduatedRepository" as GraduatedRepository
-participant "GraduatedProfileRepository" as GraduatedProfileRepository
 database PostgreSQL
 participant "S3"
 
@@ -44,7 +42,7 @@ note right of Service
   이후 응답은 모두 DB의 type · status 기준
 end note
 
-par 동시에 조회
+par 동시에 조회 (유형은 위에서 앎)
   Service -> UserRepository: findSignupProgress(pk, type)
   UserRepository -> PostgreSQL: 필수 약관 미동의 여부,\n유형별 인증(verified_at) · 추가 정보 존재 여부
   PostgreSQL --> UserRepository: row
@@ -53,35 +51,31 @@ else
   Service -> CoffeeChatContactRepository: findByUserPk(pk)
   CoffeeChatContactRepository -> PostgreSQL: SELECT coffee_chat_contact
   CoffeeChatContactRepository --> Service: contact | null
+else type = student
+  Service -> StudentRepository: findByUserPkWithLatestProfile(pk)
+  StudentRepository -> PostgreSQL: SELECT student\nLEFT JOIN LATERAL (student_profile JOIN department\nORDER BY version DESC LIMIT 1)
+  note right: 현재 정보 = 가장 큰 version.\n재학생 행 · 프로필 · 학과를 한 쿼리로
+  PostgreSQL --> StudentRepository: row
+  StudentRepository --> Service: { student, latest: { profile, department } | null }
+else type = graduated
+  Service -> GraduatedRepository: findByUserPkWithProfile(pk)
+  GraduatedRepository -> PostgreSQL: SELECT graduated LEFT JOIN graduated_profile
+  PostgreSQL --> GraduatedRepository: row
+  GraduatedRepository --> Service: { graduated, profile | null }
 end
 
-alt type = student
-  Service -> StudentRepository: findByUserPk(pk)
-  StudentRepository -> PostgreSQL: SELECT student
-  StudentRepository --> Service: student
-  Service -> StudentProfileRepository: findLatestByStudentPk(studentPk)
-  StudentProfileRepository -> PostgreSQL: SELECT student_profile JOIN department\nORDER BY version DESC LIMIT 1
-  note right: 현재 정보 = 가장 큰 version
-  StudentProfileRepository --> Service: { profile, department } | null
-  opt 추가 정보가 있음
-    Service -> StudentProfileAttachmentRepository: findByProfilePk(profilePk)
-    StudentProfileAttachmentRepository -> PostgreSQL: SELECT student_profile_attachment ORDER BY sort_order
-    StudentProfileAttachmentRepository --> Service: attachments
-    loop source = file인 첨부
-      Service -> S3: getPresignedUrl(key)
-      note right: 비공개 버킷이라 presigned URL로 내려줌.\n서명은 서버에서 계산 (S3 호출 없음)
-      alt 서명 실패 (FileService가 InternalServerErrorException)
-        Service -[#red]-> Client: 500 Internal Server Error
-      end
+opt type = student이고 추가 정보가 있음
+  Service -> StudentProfileAttachmentRepository: findByProfilePk(profilePk)
+  StudentProfileAttachmentRepository -> PostgreSQL: SELECT student_profile_attachment ORDER BY sort_order
+  note right: 버전 하나에 첨부가 여러 개라 따로 조회
+  StudentProfileAttachmentRepository --> Service: attachments
+  loop source = file인 첨부
+    Service -> S3: getPresignedUrl(key)
+    note right: 비공개 버킷이라 presigned URL로 내려줌.\n서명은 서버에서 계산 (S3 호출 없음)
+    alt 서명 실패 (FileService가 InternalServerErrorException)
+      Service -[#red]-> Client: 500 Internal Server Error
     end
   end
-else type = graduated
-  Service -> GraduatedRepository: findByUserPk(pk)
-  GraduatedRepository -> PostgreSQL: SELECT graduated
-  GraduatedRepository --> Service: graduated
-  Service -> GraduatedProfileRepository: findByGraduatedPk(graduatedPk)
-  GraduatedProfileRepository -> PostgreSQL: SELECT graduated_profile
-  GraduatedProfileRepository --> Service: profile | null
 end
 
 Service -> AuthService: touchLastActive(pk)

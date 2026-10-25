@@ -14,11 +14,17 @@ import {
   CoffeeChatContactRow,
 } from "@src/database/repository/coffee-chat-contact.repository";
 import { GraduatedProfileRepository } from "@src/database/repository/graduated-profile.repository";
-import { GraduatedRepository } from "@src/database/repository/graduated.repository";
+import {
+  GraduatedRepository,
+  GraduatedWithProfile,
+} from "@src/database/repository/graduated.repository";
 import { StudentEmailVerificationRepository } from "@src/database/repository/student-email-verification.repository";
 import { StudentProfileAttachmentRepository } from "@src/database/repository/student-profile-attachment.repository";
 import { StudentProfileRepository } from "@src/database/repository/student-profile.repository";
-import { StudentRepository } from "@src/database/repository/student.repository";
+import {
+  StudentRepository,
+  StudentWithLatestProfile,
+} from "@src/database/repository/student.repository";
 import { UserOauthAccountRepository } from "@src/database/repository/user-oauth-account.repository";
 import {
   SignupProgress,
@@ -143,18 +149,25 @@ export class UserService {
       throw new UnauthorizedException("User not found");
     }
 
-    const [progress, contact] = await Promise.all([
+    // 유형은 위에서 알았으므로 유형별 정보도 같이 조회
+    const [progress, contact, studentInfo, graduatedInfo] = await Promise.all([
       this.userRepository.findSignupProgress(user.pk, user.type),
       this.coffeeChatContactRepository.findByUserPk(user.pk),
+      user.type === "student"
+        ? this.studentRepository.findByUserPkWithLatestProfile(user.pk)
+        : null,
+      user.type === "graduated"
+        ? this.graduatedRepository.findByUserPkWithProfile(user.pk)
+        : null,
     ]);
     const contactDto = contact ? this.toContactDto(contact) : null;
 
-    const [student, graduated] = await Promise.all([
-      user.type === "student" ? this.getStudentInfo(user.pk, contactDto) : null,
-      user.type === "graduated"
-        ? this.getGraduatedInfo(user.pk, contactDto)
-        : null,
-    ]);
+    const student = studentInfo
+      ? await this.toStudentInfoDto(studentInfo, contactDto)
+      : null;
+    const graduated = graduatedInfo
+      ? this.toGraduatedInfoDto(graduatedInfo, contactDto)
+      : null;
     await this.authService.touchLastActive(user.pk);
 
     return {
@@ -327,63 +340,54 @@ export class UserService {
     return status === "active" && progress.hasMissingRequiredConsent;
   }
 
-  private async getStudentInfo(
-    userPk: string,
+  private async toStudentInfoDto(
+    { student, latest }: StudentWithLatestProfile,
     contact: ContactDto | null,
-  ): Promise<StudentInfoDto | null> {
-    const student = await this.studentRepository.findByUserPk(userPk);
-    if (!student) return null;
+  ): Promise<StudentInfoDto> {
+    if (!latest) {
+      return {
+        email: student.email,
+        verified: student.verifiedAt !== null,
+        profile: null,
+      };
+    }
 
-    const latest = await this.studentProfileRepository.findLatestByStudentPk(
-      student.pk,
-    );
-    const attachments = latest
-      ? await this.studentProfileAttachmentRepository.findByProfilePk(
-          latest.profile.pk,
-        )
-      : [];
-
-    const profile = latest
-      ? {
-          department: {
-            id: latest.department.pk,
-            name: latest.department.name,
-          },
-          interests: latest.profile.interests,
-          activities: latest.profile.activities ?? [],
-          attachments: await Promise.all(
-            attachments.map(async (attachment) => ({
-              kind: attachment.kind,
-              source: attachment.source,
-              // file이면 비공개 버킷의 key라 presigned URL로 내려줌
-              url:
-                attachment.source === "file"
-                  ? await this.fileService.getPresignedUrl(attachment.url)
-                  : attachment.url,
-              file_name: attachment.fileName,
-            })),
-          ),
-          contact,
-        }
-      : null;
-
+    // 첨부는 버전 하나에 여러 개라 따로 조회
+    const attachments =
+      await this.studentProfileAttachmentRepository.findByProfilePk(
+        latest.profile.pk,
+      );
     return {
       email: student.email,
       verified: student.verifiedAt !== null,
-      profile,
+      profile: {
+        department: {
+          id: latest.department.pk,
+          name: latest.department.name,
+        },
+        interests: latest.profile.interests,
+        activities: latest.profile.activities ?? [],
+        attachments: await Promise.all(
+          attachments.map(async (attachment) => ({
+            kind: attachment.kind,
+            source: attachment.source,
+            // file이면 비공개 버킷의 key라 presigned URL로 내려줌
+            url:
+              attachment.source === "file"
+                ? await this.fileService.getPresignedUrl(attachment.url)
+                : attachment.url,
+            file_name: attachment.fileName,
+          })),
+        ),
+        contact,
+      },
     };
   }
 
-  private async getGraduatedInfo(
-    userPk: string,
+  private toGraduatedInfoDto(
+    { graduated, profile }: GraduatedWithProfile,
     contact: ContactDto | null,
-  ): Promise<GraduatedInfoDto | null> {
-    const graduated = await this.graduatedRepository.findByUserPk(userPk);
-    if (!graduated) return null;
-
-    const profile = await this.graduatedProfileRepository.findByGraduatedPk(
-      graduated.pk,
-    );
+  ): GraduatedInfoDto {
     return {
       verified: graduated.verifiedAt !== null,
       profile: profile
