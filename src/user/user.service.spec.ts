@@ -72,6 +72,7 @@ describe("UserService", () => {
   const fileService = { deleteFile: jest.fn(), getPresignedUrl: jest.fn() };
   const userRepository = {
     findByPk: jest.fn(),
+    findByPkForUpdate: jest.fn(),
     insert: jest.fn(),
     updateType: jest.fn(),
     fillProfileFromOAuth: jest.fn(),
@@ -473,9 +474,9 @@ describe("UserService", () => {
   describe("withdraw", () => {
     const ctx = new UserContext(USER_PK, "graduated", "active");
 
-    it("removes login methods and personal info, then deletes the business card", async () => {
-      userRepository.findByPk.mockResolvedValue(
-        userRow({ status: "active", type: "graduated" }),
+    it("locks the user, removes login methods and personal info, then deletes the business card", async () => {
+      userRepository.findByPkForUpdate.mockImplementation(
+        record("users.lock", userRow({ status: "active", type: "graduated" })),
       );
       userOauthAccountRepository.deleteByUserPk.mockImplementation(
         record("oauth.delete"),
@@ -493,6 +494,7 @@ describe("UserService", () => {
       await expect(service.withdraw(ctx)).resolves.toBe(BaseResultDto.OK);
 
       expect(calls).toEqual([
+        "users.lock",
         "oauth.delete",
         "revokeAll",
         "contact.delete",
@@ -507,7 +509,7 @@ describe("UserService", () => {
     });
 
     it("clears the school email of a student", async () => {
-      userRepository.findByPk.mockResolvedValue(
+      userRepository.findByPkForUpdate.mockResolvedValue(
         userRow({ status: "active", type: "student" }),
       );
 
@@ -520,7 +522,7 @@ describe("UserService", () => {
     });
 
     it("returns 401 when the user is already withdrawn", async () => {
-      userRepository.findByPk.mockResolvedValue(null);
+      userRepository.findByPkForUpdate.mockResolvedValue(null);
 
       await expect(service.withdraw(ctx)).rejects.toBeInstanceOf(
         UnauthorizedException,

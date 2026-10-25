@@ -34,6 +34,20 @@ export class UserRepository {
   }
 
   /*
+  SELECT * FROM users WHERE pk = ?1 AND is_deleted = false FOR UPDATE;
+   */
+  // 회원 탈퇴: 같은 유저의 동시 로그인 · 토큰 갱신과 겹치지 않도록 잠금
+  async findByPkForUpdate(userPk: string, tx: TxType): Promise<UserRow | null> {
+    const result = await tx
+      .select()
+      .from(users)
+      .where(and(eq(users.pk, userPk), eq(users.isDeleted, false)))
+      .for("update");
+
+    return result[0] ?? null;
+  }
+
+  /*
   INSERT INTO users (pk, type, name, email) VALUES (?1, ?2, ?3, ?4) RETURNING *;
    */
   // 최초 OAuth 로그인. status는 기본값 pending

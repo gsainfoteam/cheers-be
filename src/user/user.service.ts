@@ -170,10 +170,19 @@ export class UserService {
     return BaseResultDto.OK;
   }
 
-  // 약관 동의 이력과 커피챗 기록은 남기고, 로그인 수단과 개인정보만 지움
+  // 회원 탈퇴 (가입 중인 pending 유저도 가능).
+  // 지움: OAuth 계정, refresh token, 연락 설정(coffee_chat_contact), 명함 S3 파일 + key,
+  //       users.name / email, student.email (같은 학교 이메일로 재가입 가능하도록)
+  // 남김: 약관 동의 이력, student / graduated 행, 재학생 프로필 버전과 첨부(링크), 현업자 프로필(닉네임 · 회사 · 부서 · 직무 · 해시태그 · 링크),
+  //       커피챗 요청(공유된 연락처 shared_phone / shared_email 포함)과 알림 로그 — 상대방의 커피챗 기록이 참조함.
+  //       첨부 파일 업로드가 생기면(CRB-18) S3 파일 처리를 함께 정할 것
+  // 유저 행을 먼저 잠가서 다른 기기의 동시 로그인이 탈퇴 뒤에 토큰을 새로 만들지 않게 함
   async withdraw(userCtx: UserContext): Promise<BaseResultDto> {
     const businessCardKey = await this.dbService.db.transaction(async (tx) => {
-      const user = await this.userRepository.findByPk(userCtx.userPk, tx);
+      const user = await this.userRepository.findByPkForUpdate(
+        userCtx.userPk,
+        tx,
+      );
       if (!user) {
         throw new UnauthorizedException("User not found");
       }
