@@ -11,12 +11,15 @@ export async function authenticate(
   authService: AuthService,
 ): Promise<UserContext> {
   const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
-  const [scheme, token] = request.headers.authorization?.split(" ") ?? [];
-  if (scheme !== "Bearer" || !token) {
+  // scheme은 대소문자 무관(RFC 7235), scheme과 토큰 사이 공백 여러 개 허용
+  const match = /^Bearer\s+(\S+)\s*$/i.exec(
+    request.headers.authorization ?? "",
+  );
+  if (!match) {
     throw new UnauthorizedException("Missing access token");
   }
 
-  const payload = await authService.verifyAccessToken(token);
+  const payload = await authService.verifyAccessToken(match[1]);
   request.user = new UserContext(payload.sub, payload.type, payload.status);
   return request.user;
 }
