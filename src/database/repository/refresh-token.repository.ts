@@ -49,9 +49,9 @@ export class RefreshTokenRepository {
   async deleteByOpaqueHashAndUserPk(
     opaqueHash: string,
     userPk: string,
-    tx: TxType,
+    tx?: TxType,
   ): Promise<void> {
-    await tx
+    await (tx ?? this.dbService.db)
       .delete(refreshToken)
       .where(
         and(
@@ -74,9 +74,8 @@ export class RefreshTokenRepository {
   async deleteExpired(tx: TxType): Promise<number> {
     const result = await tx
       .delete(refreshToken)
-      .where(lt(refreshToken.expiresAt, new Date()))
-      .returning({ opaqueHash: refreshToken.opaqueHash });
+      .where(lt(refreshToken.expiresAt, new Date()));
 
-    return result.length;
+    return result.rowCount ?? 0;
   }
 }
