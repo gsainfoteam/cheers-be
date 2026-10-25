@@ -1,7 +1,8 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
 import { DatabaseService } from "@src/database/database.service";
 import { BaseResultDto } from "@src/global/dto/base-result.dto";
-import { ConsentRepository } from "./consent.repository";
+import { ConsentRepository } from "@src/database/repository/consent.repository";
+import { UserConsentRepository } from "@src/database/repository/user-consent.repository";
 import { ConsentListResponseDto } from "./dto/consent-list.dto";
 import { UpdateConsentRequestDto } from "./dto/update-consent.dto";
 
@@ -10,6 +11,7 @@ export class ConsentService {
   constructor(
     private readonly dbService: DatabaseService,
     private readonly consentRepository: ConsentRepository,
+    private readonly userConsentRepository: UserConsentRepository,
   ) {}
 
   async getList(userPk: string): Promise<ConsentListResponseDto> {
@@ -65,13 +67,13 @@ export class ConsentService {
         );
       }
 
-      await this.consentRepository.insertAgreements(
+      await this.userConsentRepository.insertAgreements(
         userPk,
         req.consents.filter((c) => c.agreed),
         tx,
       );
       // 위 검사로 agreed: false는 선택 약관만 남음
-      await this.consentRepository.revokeByTypes(
+      await this.userConsentRepository.revokeByTypes(
         userPk,
         req.consents.filter((c) => !c.agreed).map((c) => c.type),
         tx,

@@ -2,7 +2,11 @@ import { BadRequestException } from "@nestjs/common";
 import { DatabaseService } from "@src/database/database.service";
 import { BaseResultDto } from "@src/global/dto/base-result.dto";
 import { TxType } from "@src/global/types/tx.types";
-import { ConsentRepository, LatestConsent } from "./consent.repository";
+import {
+  ConsentRepository,
+  LatestConsent,
+} from "@src/database/repository/consent.repository";
+import { UserConsentRepository } from "@src/database/repository/user-consent.repository";
 import { ConsentService } from "./consent.service";
 import { ConsentAgreementDto } from "./dto/update-consent.dto";
 
@@ -47,6 +51,8 @@ describe("ConsentService", () => {
   const tx = {} as TxType;
   const consentRepository = {
     findLatestWithAgreement: jest.fn(),
+  };
+  const userConsentRepository = {
     insertAgreements: jest.fn(),
     revokeByTypes: jest.fn(),
   };
@@ -56,6 +62,7 @@ describe("ConsentService", () => {
   const service = new ConsentService(
     dbService as unknown as DatabaseService,
     consentRepository as unknown as ConsentRepository,
+    userConsentRepository as unknown as UserConsentRepository,
   );
 
   beforeEach(() => {
@@ -107,12 +114,12 @@ describe("ConsentService", () => {
         userPk,
         tx,
       );
-      expect(consentRepository.insertAgreements).toHaveBeenCalledWith(
+      expect(userConsentRepository.insertAgreements).toHaveBeenCalledWith(
         userPk,
         requiredAgreed,
         tx,
       );
-      expect(consentRepository.revokeByTypes).toHaveBeenCalledWith(
+      expect(userConsentRepository.revokeByTypes).toHaveBeenCalledWith(
         userPk,
         ["marketing"],
         tx,
@@ -122,7 +129,7 @@ describe("ConsentService", () => {
     it("leaves optional consents that are not in the request", async () => {
       await update(requiredAgreed);
 
-      expect(consentRepository.revokeByTypes).toHaveBeenCalledWith(
+      expect(userConsentRepository.revokeByTypes).toHaveBeenCalledWith(
         userPk,
         [],
         tx,
@@ -151,8 +158,8 @@ describe("ConsentService", () => {
       await expect(update(consents)).rejects.toBeInstanceOf(
         BadRequestException,
       );
-      expect(consentRepository.insertAgreements).not.toHaveBeenCalled();
-      expect(consentRepository.revokeByTypes).not.toHaveBeenCalled();
+      expect(userConsentRepository.insertAgreements).not.toHaveBeenCalled();
+      expect(userConsentRepository.revokeByTypes).not.toHaveBeenCalled();
     });
   });
 });
