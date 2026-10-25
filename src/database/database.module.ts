@@ -6,7 +6,11 @@ import { RefreshTokenRepository } from "@src/database/repository/refresh-token.r
 import { UserRepository } from "@src/database/repository/user.repository";
 import { UserOauthAccountRepository } from "@src/database/repository/user-oauth-account.repository";
 import { StudentRepository } from "@src/database/repository/student.repository";
+import { StudentProfileRepository } from "@src/database/repository/student-profile.repository";
+import { StudentProfileAttachmentRepository } from "@src/database/repository/student-profile-attachment.repository";
+import { StudentEmailVerificationRepository } from "@src/database/repository/student-email-verification.repository";
 import { GraduatedRepository } from "@src/database/repository/graduated.repository";
+import { GraduatedProfileRepository } from "@src/database/repository/graduated-profile.repository";
 import { CoffeeChatContactRepository } from "@src/database/repository/coffee-chat-contact.repository";
 import { ConsentRepository } from "@src/database/repository/consent.repository";
 import { UserConsentRepository } from "@src/database/repository/user-consent.repository";
@@ -16,7 +20,11 @@ const repositories = [
   UserRepository,
   UserOauthAccountRepository,
   StudentRepository,
+  StudentProfileRepository,
+  StudentProfileAttachmentRepository,
+  StudentEmailVerificationRepository,
   GraduatedRepository,
+  GraduatedProfileRepository,
   CoffeeChatContactRepository,
   ConsentRepository,
   UserConsentRepository,

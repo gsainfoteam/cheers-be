@@ -3,7 +3,11 @@ import { AuthService } from "@src/auth/auth.service";
 import { UserContext } from "@src/auth/context/user-context";
 import { DatabaseService } from "@src/database/database.service";
 import { CoffeeChatContactRepository } from "@src/database/repository/coffee-chat-contact.repository";
+import { GraduatedProfileRepository } from "@src/database/repository/graduated-profile.repository";
 import { GraduatedRepository } from "@src/database/repository/graduated.repository";
+import { StudentEmailVerificationRepository } from "@src/database/repository/student-email-verification.repository";
+import { StudentProfileAttachmentRepository } from "@src/database/repository/student-profile-attachment.repository";
+import { StudentProfileRepository } from "@src/database/repository/student-profile.repository";
 import { StudentRepository } from "@src/database/repository/student.repository";
 import { UserOauthAccountRepository } from "@src/database/repository/user-oauth-account.repository";
 import {
@@ -87,15 +91,28 @@ describe("UserService", () => {
   };
   const studentRepository = {
     insert: jest.fn(),
-    deleteByUserPk: jest.fn(),
-    clearEmail: jest.fn(),
-    findInfoByUserPk: jest.fn(),
+    findByUserPk: jest.fn(),
+    clearEmailByUserPk: jest.fn(),
+    deleteByPk: jest.fn(),
   };
+  const studentProfileRepository = {
+    findLatestByStudentPk: jest.fn(),
+    deleteByStudentPk: jest.fn(),
+  };
+  const studentProfileAttachmentRepository = {
+    findByProfilePk: jest.fn(),
+    deleteByStudentPk: jest.fn(),
+  };
+  const studentEmailVerificationRepository = { deleteByStudentPk: jest.fn() };
   const graduatedRepository = {
     insert: jest.fn(),
-    deleteByUserPk: jest.fn(),
-    clearBusinessCard: jest.fn(),
-    findInfoByUserPk: jest.fn(),
+    findByUserPk: jest.fn(),
+    clearBusinessCardKey: jest.fn(),
+    deleteByPk: jest.fn(),
+  };
+  const graduatedProfileRepository = {
+    findByGraduatedPk: jest.fn(),
+    deleteByGraduatedPk: jest.fn(),
   };
   const coffeeChatContactRepository = {
     findByUserPk: jest.fn(),
@@ -110,7 +127,11 @@ describe("UserService", () => {
     userRepository as unknown as UserRepository,
     userOauthAccountRepository as unknown as UserOauthAccountRepository,
     studentRepository as unknown as StudentRepository,
+    studentProfileRepository as unknown as StudentProfileRepository,
+    studentProfileAttachmentRepository as unknown as StudentProfileAttachmentRepository,
+    studentEmailVerificationRepository as unknown as StudentEmailVerificationRepository,
     graduatedRepository as unknown as GraduatedRepository,
+    graduatedProfileRepository as unknown as GraduatedProfileRepository,
     coffeeChatContactRepository as unknown as CoffeeChatContactRepository,
   );
 
@@ -205,7 +226,7 @@ describe("UserService", () => {
 
       await login("student");
 
-      expect(studentRepository.deleteByUserPk).not.toHaveBeenCalled();
+      expect(studentRepository.deleteByPk).not.toHaveBeenCalled();
       expect(userRepository.updateType).not.toHaveBeenCalled();
       expect(authService.revokeAllTokens).not.toHaveBeenCalled();
       expect(authService.issueTokens).toHaveBeenCalledWith(pending, tx);
@@ -215,8 +236,15 @@ describe("UserService", () => {
       userOauthAccountRepository.findUserForLogin.mockResolvedValue(
         userRow({ type: "graduated" }),
       );
-      graduatedRepository.deleteByUserPk.mockImplementation(
-        record("graduated.delete", "business-card/a.jpg"),
+      graduatedRepository.findByUserPk.mockResolvedValue({
+        pk: "graduated-1",
+        businessCardKey: "business-card/a.jpg",
+      });
+      graduatedProfileRepository.deleteByGraduatedPk.mockImplementation(
+        record("graduatedProfile.delete"),
+      );
+      graduatedRepository.deleteByPk.mockImplementation(
+        record("graduated.delete"),
       );
       userRepository.updateType.mockImplementation(record("users.updateType"));
       studentRepository.insert.mockImplementation(record("student.insert"));
@@ -229,6 +257,7 @@ describe("UserService", () => {
       await login("student");
 
       expect(calls).toEqual([
+        "graduatedProfile.delete",
         "graduated.delete",
         "users.updateType",
         "student.insert",
@@ -245,20 +274,46 @@ describe("UserService", () => {
         expect.objectContaining({ pk: USER_PK, type: "student" }),
         tx,
       );
+      expect(
+        graduatedProfileRepository.deleteByGraduatedPk,
+      ).toHaveBeenCalledWith("graduated-1", tx);
+      expect(graduatedRepository.deleteByPk).toHaveBeenCalledWith(
+        "graduated-1",
+        tx,
+      );
       expect(fileService.deleteFile).toHaveBeenCalledWith(
         "business-card/a.jpg",
       );
     });
 
-    it("restarts a pending student as graduated without touching S3", async () => {
+    it("restarts a pending student as graduated, deleting student rows children-first without touching S3", async () => {
       userOauthAccountRepository.findUserForLogin.mockResolvedValue(
         userRow({ type: "student" }),
       );
+      studentRepository.findByUserPk.mockResolvedValue({ pk: "student-1" });
+      studentEmailVerificationRepository.deleteByStudentPk.mockImplementation(
+        record("verification.delete"),
+      );
+      studentProfileAttachmentRepository.deleteByStudentPk.mockImplementation(
+        record("attachment.delete"),
+      );
+      studentProfileRepository.deleteByStudentPk.mockImplementation(
+        record("profile.delete"),
+      );
+      studentRepository.deleteByPk.mockImplementation(record("student.delete"));
+      graduatedRepository.insert.mockImplementation(record("graduated.insert"));
 
       await login("graduated");
 
-      expect(studentRepository.deleteByUserPk).toHaveBeenCalledWith(
-        USER_PK,
+      expect(calls).toEqual([
+        "verification.delete",
+        "attachment.delete",
+        "profile.delete",
+        "student.delete",
+        "graduated.insert",
+      ]);
+      expect(studentRepository.deleteByPk).toHaveBeenCalledWith(
+        "student-1",
         tx,
       );
       expect(graduatedRepository.insert).toHaveBeenCalledWith(USER_PK, tx);
@@ -269,9 +324,10 @@ describe("UserService", () => {
       userOauthAccountRepository.findUserForLogin.mockResolvedValue(
         userRow({ type: "graduated" }),
       );
-      graduatedRepository.deleteByUserPk.mockResolvedValue(
-        "business-card/a.jpg",
-      );
+      graduatedRepository.findByUserPk.mockResolvedValue({
+        pk: "graduated-1",
+        businessCardKey: "business-card/a.jpg",
+      });
       fileService.deleteFile.mockRejectedValue(new Error("S3 down"));
 
       await expect(login("student")).resolves.toEqual({
@@ -312,10 +368,11 @@ describe("UserService", () => {
         progress({ hasMissingRequiredConsent: true }),
       );
       coffeeChatContactRepository.findByUserPk.mockResolvedValue(null);
-      graduatedRepository.findInfoByUserPk.mockResolvedValue({
-        graduated: { verifiedAt: null },
-        profile: null,
+      graduatedRepository.findByUserPk.mockResolvedValue({
+        pk: "graduated-1",
+        verifiedAt: null,
       });
+      graduatedProfileRepository.findByGraduatedPk.mockResolvedValue(null);
 
       await expect(service.getInfo(ctx("student"))).resolves.toEqual({
         id: USER_PK,
@@ -333,7 +390,10 @@ describe("UserService", () => {
         USER_PK,
         "graduated",
       );
-      expect(studentRepository.findInfoByUserPk).not.toHaveBeenCalled();
+      expect(studentRepository.findByUserPk).not.toHaveBeenCalled();
+      expect(graduatedProfileRepository.findByGraduatedPk).toHaveBeenCalledWith(
+        "graduated-1",
+      );
       expect(authService.touchLastActive).toHaveBeenCalledWith(USER_PK);
     });
 
@@ -350,27 +410,29 @@ describe("UserService", () => {
         email: "gildong@gm.gist.ac.kr",
         phone: null,
       });
-      studentRepository.findInfoByUserPk.mockResolvedValue({
-        student: { email: "gildong@gm.gist.ac.kr", verifiedAt: new Date() },
-        profile: {
-          profile: { interests: ["반도체"], activities: null },
-          department: { pk: 1, name: "전기전자컴퓨터공학부" },
-          attachments: [
-            {
-              kind: "portfolio",
-              source: "link",
-              url: "https://portfolio.example.com",
-              fileName: null,
-            },
-            {
-              kind: "cv",
-              source: "file",
-              url: "cv/key.pdf",
-              fileName: "이력서.pdf",
-            },
-          ],
-        },
+      studentRepository.findByUserPk.mockResolvedValue({
+        pk: "student-1",
+        email: "gildong@gm.gist.ac.kr",
+        verifiedAt: new Date(),
       });
+      studentProfileRepository.findLatestByStudentPk.mockResolvedValue({
+        profile: { pk: "profile-2", interests: ["반도체"], activities: null },
+        department: { pk: 1, name: "전기전자컴퓨터공학부" },
+      });
+      studentProfileAttachmentRepository.findByProfilePk.mockResolvedValue([
+        {
+          kind: "portfolio",
+          source: "link",
+          url: "https://portfolio.example.com",
+          fileName: null,
+        },
+        {
+          kind: "cv",
+          source: "file",
+          url: "cv/key.pdf",
+          fileName: "이력서.pdf",
+        },
+      ]);
       fileService.getPresignedUrl.mockResolvedValue("https://s3/presigned");
 
       const info = await service.getInfo(ctx("student"));
@@ -408,6 +470,35 @@ describe("UserService", () => {
         },
       });
       expect(fileService.getPresignedUrl).toHaveBeenCalledWith("cv/key.pdf");
+      expect(
+        studentProfileRepository.findLatestByStudentPk,
+      ).toHaveBeenCalledWith("student-1");
+      expect(
+        studentProfileAttachmentRepository.findByProfilePk,
+      ).toHaveBeenCalledWith("profile-2");
+    });
+
+    it("returns a null profile for a student who has not entered one yet", async () => {
+      userRepository.findByPk.mockResolvedValue(userRow());
+      userRepository.findSignupProgress.mockResolvedValue(progress());
+      coffeeChatContactRepository.findByUserPk.mockResolvedValue(null);
+      studentRepository.findByUserPk.mockResolvedValue({
+        pk: "student-1",
+        email: null,
+        verifiedAt: null,
+      });
+      studentProfileRepository.findLatestByStudentPk.mockResolvedValue(null);
+
+      const info = await service.getInfo(ctx("student"));
+
+      expect(info.student).toEqual({
+        email: null,
+        verified: false,
+        profile: null,
+      });
+      expect(
+        studentProfileAttachmentRepository.findByProfilePk,
+      ).not.toHaveBeenCalled();
     });
 
     it("flags consent_required for an active user missing a revised required consent", async () => {
@@ -418,16 +509,17 @@ describe("UserService", () => {
         progress({ hasMissingRequiredConsent: true }),
       );
       coffeeChatContactRepository.findByUserPk.mockResolvedValue(null);
-      graduatedRepository.findInfoByUserPk.mockResolvedValue({
-        graduated: { verifiedAt: new Date() },
-        profile: {
-          nickname: "철수",
-          company: "인포테크",
-          department: "플랫폼개발팀",
-          job: "백엔드 개발자",
-          hashtags: null,
-          links: ["https://www.linkedin.com/in/chulsoo"],
-        },
+      graduatedRepository.findByUserPk.mockResolvedValue({
+        pk: "graduated-1",
+        verifiedAt: new Date(),
+      });
+      graduatedProfileRepository.findByGraduatedPk.mockResolvedValue({
+        nickname: "철수",
+        company: "인포테크",
+        department: "플랫폼개발팀",
+        job: "백엔드 개발자",
+        hashtags: null,
+        links: ["https://www.linkedin.com/in/chulsoo"],
       });
 
       const info = await service.getInfo(ctx("graduated"));
@@ -485,8 +577,12 @@ describe("UserService", () => {
       coffeeChatContactRepository.deleteByUserPk.mockImplementation(
         record("contact.delete"),
       );
-      graduatedRepository.clearBusinessCard.mockImplementation(
-        record("graduated.clearBusinessCard", "business-card/a.jpg"),
+      graduatedRepository.findByUserPk.mockResolvedValue({
+        pk: "graduated-1",
+        businessCardKey: "business-card/a.jpg",
+      });
+      graduatedRepository.clearBusinessCardKey.mockImplementation(
+        record("graduated.clearBusinessCardKey"),
       );
       userRepository.withdraw.mockImplementation(record("users.withdraw"));
       fileService.deleteFile.mockImplementation(record("s3.delete"));
@@ -498,14 +594,34 @@ describe("UserService", () => {
         "oauth.delete",
         "revokeAll",
         "contact.delete",
-        "graduated.clearBusinessCard",
+        "graduated.clearBusinessCardKey",
         "users.withdraw",
         "s3.delete",
       ]);
+      expect(graduatedRepository.clearBusinessCardKey).toHaveBeenCalledWith(
+        "graduated-1",
+        tx,
+      );
       expect(fileService.deleteFile).toHaveBeenCalledWith(
         "business-card/a.jpg",
       );
-      expect(studentRepository.clearEmail).not.toHaveBeenCalled();
+      expect(studentRepository.clearEmailByUserPk).not.toHaveBeenCalled();
+    });
+
+    it("skips S3 for a graduated user without a business card", async () => {
+      userRepository.findByPkForUpdate.mockResolvedValue(
+        userRow({ status: "pending", type: "graduated" }),
+      );
+      graduatedRepository.findByUserPk.mockResolvedValue({
+        pk: "graduated-1",
+        businessCardKey: null,
+      });
+
+      await expect(service.withdraw(ctx)).resolves.toBe(BaseResultDto.OK);
+
+      expect(graduatedRepository.clearBusinessCardKey).not.toHaveBeenCalled();
+      expect(fileService.deleteFile).not.toHaveBeenCalled();
+      expect(userRepository.withdraw).toHaveBeenCalledWith(USER_PK, tx);
     });
 
     it("clears the school email of a student", async () => {
@@ -515,8 +631,11 @@ describe("UserService", () => {
 
       await service.withdraw(ctx);
 
-      expect(studentRepository.clearEmail).toHaveBeenCalledWith(USER_PK, tx);
-      expect(graduatedRepository.clearBusinessCard).not.toHaveBeenCalled();
+      expect(studentRepository.clearEmailByUserPk).toHaveBeenCalledWith(
+        USER_PK,
+        tx,
+      );
+      expect(graduatedRepository.findByUserPk).not.toHaveBeenCalled();
       expect(userRepository.withdraw).toHaveBeenCalledWith(USER_PK, tx);
       expect(fileService.deleteFile).not.toHaveBeenCalled();
     });

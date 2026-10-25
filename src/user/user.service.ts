@@ -13,7 +13,11 @@ import {
   CoffeeChatContactRepository,
   CoffeeChatContactRow,
 } from "@src/database/repository/coffee-chat-contact.repository";
+import { GraduatedProfileRepository } from "@src/database/repository/graduated-profile.repository";
 import { GraduatedRepository } from "@src/database/repository/graduated.repository";
+import { StudentEmailVerificationRepository } from "@src/database/repository/student-email-verification.repository";
+import { StudentProfileAttachmentRepository } from "@src/database/repository/student-profile-attachment.repository";
+import { StudentProfileRepository } from "@src/database/repository/student-profile.repository";
 import { StudentRepository } from "@src/database/repository/student.repository";
 import { UserOauthAccountRepository } from "@src/database/repository/user-oauth-account.repository";
 import {
@@ -51,7 +55,11 @@ export class UserService {
     private readonly userRepository: UserRepository,
     private readonly userOauthAccountRepository: UserOauthAccountRepository,
     private readonly studentRepository: StudentRepository,
+    private readonly studentProfileRepository: StudentProfileRepository,
+    private readonly studentProfileAttachmentRepository: StudentProfileAttachmentRepository,
+    private readonly studentEmailVerificationRepository: StudentEmailVerificationRepository,
     private readonly graduatedRepository: GraduatedRepository,
+    private readonly graduatedProfileRepository: GraduatedProfileRepository,
     private readonly coffeeChatContactRepository: CoffeeChatContactRepository,
   ) {}
 
@@ -192,9 +200,16 @@ export class UserService {
       await this.coffeeChatContactRepository.deleteByUserPk(user.pk, tx);
       let key: string | null = null;
       if (user.type === "student") {
-        await this.studentRepository.clearEmail(user.pk, tx);
+        await this.studentRepository.clearEmailByUserPk(user.pk, tx);
       } else {
-        key = await this.graduatedRepository.clearBusinessCard(user.pk, tx);
+        const graduated = await this.graduatedRepository.findByUserPk(
+          user.pk,
+          tx,
+        );
+        if (graduated?.businessCardKey) {
+          await this.graduatedRepository.clearBusinessCardKey(graduated.pk, tx);
+          key = graduated.businessCardKey;
+        }
       }
       await this.userRepository.withdraw(user.pk, tx);
       return key;
@@ -241,18 +256,46 @@ export class UserService {
   ): Promise<string | null> {
     let businessCardKey: string | null = null;
     if (user.type === "student") {
-      await this.studentRepository.deleteByUserPk(user.pk, tx);
+      await this.deleteStudent(user.pk, tx);
     } else {
-      businessCardKey = await this.graduatedRepository.deleteByUserPk(
-        user.pk,
-        tx,
-      );
+      businessCardKey = await this.deleteGraduated(user.pk, tx);
     }
     await this.userRepository.updateType(user.pk, type, tx);
     await this.insertTypeRow(user.pk, type, tx);
     // 다른 기기의 refresh token은 이전 유형으로 발급된 것이라 폐기
     await this.authService.revokeAllTokens(user.pk, tx);
     return businessCardKey;
+  }
+
+  // FK cascade가 없으므로 자식부터 삭제.
+  // 커피챗 요청은 가입을 마친(active) 재학생만 만들 수 있어 가입 중 유형 변경에서는 없음
+  private async deleteStudent(userPk: string, tx: TxType): Promise<void> {
+    const student = await this.studentRepository.findByUserPk(userPk, tx);
+    if (!student) return;
+
+    await this.studentEmailVerificationRepository.deleteByStudentPk(
+      student.pk,
+      tx,
+    );
+    await this.studentProfileAttachmentRepository.deleteByStudentPk(
+      student.pk,
+      tx,
+    );
+    await this.studentProfileRepository.deleteByStudentPk(student.pk, tx);
+    await this.studentRepository.deleteByPk(student.pk, tx);
+  }
+
+  // 반환값: 지운 명함의 S3 key. 커피챗 요청은 active 현업자만 받을 수 있어 여기서는 없음
+  private async deleteGraduated(
+    userPk: string,
+    tx: TxType,
+  ): Promise<string | null> {
+    const graduated = await this.graduatedRepository.findByUserPk(userPk, tx);
+    if (!graduated) return null;
+
+    await this.graduatedProfileRepository.deleteByGraduatedPk(graduated.pk, tx);
+    await this.graduatedRepository.deleteByPk(graduated.pk, tx);
+    return graduated.businessCardKey;
   }
 
   private async insertTypeRow(
@@ -280,19 +323,28 @@ export class UserService {
     userPk: string,
     contact: ContactDto | null,
   ): Promise<StudentInfoDto | null> {
-    const info = await this.studentRepository.findInfoByUserPk(userPk);
-    if (!info) return null;
+    const student = await this.studentRepository.findByUserPk(userPk);
+    if (!student) return null;
 
-    const profile = info.profile
+    const latest = await this.studentProfileRepository.findLatestByStudentPk(
+      student.pk,
+    );
+    const attachments = latest
+      ? await this.studentProfileAttachmentRepository.findByProfilePk(
+          latest.profile.pk,
+        )
+      : [];
+
+    const profile = latest
       ? {
           department: {
-            id: info.profile.department.pk,
-            name: info.profile.department.name,
+            id: latest.department.pk,
+            name: latest.department.name,
           },
-          interests: info.profile.profile.interests,
-          activities: info.profile.profile.activities ?? [],
+          interests: latest.profile.interests,
+          activities: latest.profile.activities ?? [],
           attachments: await Promise.all(
-            info.profile.attachments.map(async (attachment) => ({
+            attachments.map(async (attachment) => ({
               kind: attachment.kind,
               source: attachment.source,
               // file이면 비공개 버킷의 key라 presigned URL로 내려줌
@@ -308,8 +360,8 @@ export class UserService {
       : null;
 
     return {
-      email: info.student.email,
-      verified: info.student.verifiedAt !== null,
+      email: student.email,
+      verified: student.verifiedAt !== null,
       profile,
     };
   }
@@ -318,19 +370,22 @@ export class UserService {
     userPk: string,
     contact: ContactDto | null,
   ): Promise<GraduatedInfoDto | null> {
-    const info = await this.graduatedRepository.findInfoByUserPk(userPk);
-    if (!info) return null;
+    const graduated = await this.graduatedRepository.findByUserPk(userPk);
+    if (!graduated) return null;
 
+    const profile = await this.graduatedProfileRepository.findByGraduatedPk(
+      graduated.pk,
+    );
     return {
-      verified: info.graduated.verifiedAt !== null,
-      profile: info.profile
+      verified: graduated.verifiedAt !== null,
+      profile: profile
         ? {
-            nickname: info.profile.nickname,
-            company: info.profile.company,
-            department: info.profile.department,
-            job: info.profile.job,
-            hashtags: info.profile.hashtags ?? [],
-            links: info.profile.links ?? [],
+            nickname: profile.nickname,
+            company: profile.company,
+            department: profile.department,
+            job: profile.job,
+            hashtags: profile.hashtags ?? [],
+            links: profile.links ?? [],
             contact,
           }
         : null,
