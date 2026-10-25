@@ -37,7 +37,9 @@ export class UserRepository {
   /*
   SELECT * FROM users WHERE pk = ?1 AND is_deleted = false FOR UPDATE;
    */
-  // 회원 탈퇴: 같은 유저의 동시 로그인 · 토큰 갱신과 겹치지 않도록 잠금
+  // 회원 탈퇴: 같은 유저의 동시 로그인과 겹치지 않도록 잠금 (로그인도 유저 행을 FOR UPDATE로 잠금).
+  // 토큰 갱신은 잠그지 않아 탈퇴와 동시에 refresh하면 refresh token 행이 남을 수 있지만,
+  // 갱신 때 탈퇴한 유저를 찾지 못해 401이므로 그 토큰으로는 더 쓸 수 없음
   async findByPkForUpdate(userPk: string, tx: TxType): Promise<UserRow | null> {
     const result = await tx
       .select()

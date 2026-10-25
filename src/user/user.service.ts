@@ -180,7 +180,7 @@ export class UserService {
 
   // 회원 탈퇴 (가입 중인 pending 유저도 가능).
   // 지움: OAuth 계정, refresh token, 연락 설정(coffee_chat_contact), 명함 S3 파일 + key,
-  //       users.name / email, student.email (같은 학교 이메일로 재가입 가능하도록)
+  //       users.name / email, student.email (같은 학교 이메일로 재가입 가능하도록)과 진행 중인 학교 이메일 인증 요청
   // 남김: 약관 동의 이력, student / graduated 행, 재학생 프로필 버전과 첨부(링크), 현업자 프로필(닉네임 · 회사 · 부서 · 직무 · 해시태그 · 링크),
   //       커피챗 요청(공유된 연락처 shared_phone / shared_email 포함)과 알림 로그 — 상대방의 커피챗 기록이 참조함.
   //       첨부 파일 업로드가 생기면(CRB-18) S3 파일 처리를 함께 정할 것
@@ -200,7 +200,15 @@ export class UserService {
       await this.coffeeChatContactRepository.deleteByUserPk(user.pk, tx);
       let key: string | null = null;
       if (user.type === "student") {
-        await this.studentRepository.clearEmailByUserPk(user.pk, tx);
+        const student = await this.studentRepository.findByUserPk(user.pk, tx);
+        if (student) {
+          // 진행 중인 인증 요청에도 입력한 gist 이메일이 남아 있어 같이 지움
+          await this.studentEmailVerificationRepository.deleteByStudentPk(
+            student.pk,
+            tx,
+          );
+          await this.studentRepository.clearEmailByUserPk(user.pk, tx);
+        }
       } else {
         const graduated = await this.graduatedRepository.findByUserPk(
           user.pk,

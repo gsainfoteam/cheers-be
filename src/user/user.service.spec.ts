@@ -624,13 +624,17 @@ describe("UserService", () => {
       expect(userRepository.withdraw).toHaveBeenCalledWith(USER_PK, tx);
     });
 
-    it("clears the school email of a student", async () => {
+    it("clears the school email of a student, including a pending verification", async () => {
       userRepository.findByPkForUpdate.mockResolvedValue(
         userRow({ status: "active", type: "student" }),
       );
+      studentRepository.findByUserPk.mockResolvedValue({ pk: "student-1" });
 
       await service.withdraw(ctx);
 
+      expect(
+        studentEmailVerificationRepository.deleteByStudentPk,
+      ).toHaveBeenCalledWith("student-1", tx);
       expect(studentRepository.clearEmailByUserPk).toHaveBeenCalledWith(
         USER_PK,
         tx,
