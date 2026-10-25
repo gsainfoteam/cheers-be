@@ -5,6 +5,7 @@ import { MailResult } from "@src/mail/mail.types";
 import { AlimtalkService } from "./alimtalk.service";
 import { AlimtalkResult } from "./alimtalk.types";
 import { NotificationLogRepository } from "./notification-log.repository";
+import { maskRecipient } from "./notification.utils";
 import {
   NotificationChannel,
   NotificationEvent,
@@ -25,6 +26,9 @@ export class NotificationService {
   /**
    * 넘겨받은 채널마다 발송하고 결과를 notification_log에 남깁니다.
    * 채널끼리 독립적이며, 한 채널이 실패해도 다른 채널은 발송합니다. throw하지 않습니다.
+   *
+   * 주의: 로그는 트랜잭션 밖 connection에서 insert되고 coffee_chat_request에 FK가 있으므로,
+   * 요청을 만든 트랜잭션이 commit된 뒤에 호출해야 합니다. 트랜잭션 안에서 부르면 발송은 되지만 로그 insert가 FK 위반으로 실패합니다.
    */
   async notify<E extends NotificationEvent>(
     input: NotifyInput<E>,
@@ -54,9 +58,16 @@ export class NotificationService {
 
   /**
    * 발송 결과를 기다리지 않고 바로 반환합니다.
+   *
+   * 주의: 요청을 만든 트랜잭션이 commit된 뒤에 호출해야 합니다 (notify 참고).
    */
   notifyAsync<E extends NotificationEvent>(input: NotifyInput<E>): void {
-    void this.notify(input);
+    this.notify(input).catch((error) => {
+      this.logger.error(
+        `Unexpected error while notifying (event: ${input.event}, coffee_chat_request: ${input.coffeeChatRequestPk})`,
+        error,
+      );
+    });
   }
 
   private async record(
@@ -69,8 +80,11 @@ export class NotificationService {
     if (result.skipped) return;
 
     if (!result.success) {
+      // 수신자는 마스킹해서 남김 (발송사 에러 문구에 원문이 섞여 있을 수 있음)
+      const masked = maskRecipient(recipient);
+      const error = result.error?.replaceAll(recipient, masked);
       this.alert(
-        `Failed to send ${channel} to ${recipient} (event: ${input.event}, coffee_chat_request: ${input.coffeeChatRequestPk}): ${result.error}`,
+        `Failed to send ${channel} to ${masked} (event: ${input.event}, coffee_chat_request: ${input.coffeeChatRequestPk}): ${error}`,
       );
     }
 

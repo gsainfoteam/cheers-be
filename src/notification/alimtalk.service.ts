@@ -7,6 +7,7 @@ import {
   SendAlimtalkInput,
 } from "./alimtalk.types";
 import { NotificationEvent } from "./notification.types";
+import { maskRecipient } from "./notification.utils";
 
 const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
 
@@ -46,6 +47,14 @@ interface SolapiSendResponse {
   messageList?: SolapiMessageResult[];
   errorCode?: string;
   errorMessage?: string;
+}
+
+function parseJson(text: string): SolapiSendResponse | null {
+  try {
+    return JSON.parse(text) as SolapiSendResponse;
+  } catch {
+    return null;
+  }
 }
 
 @Injectable()
@@ -101,7 +110,9 @@ export class AlimtalkService {
     input: SendAlimtalkInput<E>,
   ): Promise<AlimtalkResult> {
     if (!this.config) {
-      this.logger.log(`[ALIMTALK SKIPPED] to=${input.to} event=${input.event}`);
+      this.logger.log(
+        `[ALIMTALK SKIPPED] to=${maskRecipient(input.to)} event=${input.event}`,
+      );
       return { success: true, skipped: true };
     }
 
@@ -136,13 +147,21 @@ export class AlimtalkService {
         signal: AbortSignal.timeout(10_000),
       });
 
-      const body = (await response.json()) as SolapiSendResponse;
+      // 게이트웨이가 HTML 에러 페이지를 줄 수 있어서 상태 코드를 먼저 보고 JSON은 실패해도 진행
+      const body = parseJson(await response.text());
 
       if (!response.ok) {
         return {
           success: false,
           error:
-            `${response.status} ${body.errorCode ?? ""} ${body.errorMessage ?? ""}`.trim(),
+            `${response.status} ${body?.errorCode ?? ""} ${body?.errorMessage ?? ""}`.trim(),
+        };
+      }
+
+      if (!body) {
+        return {
+          success: false,
+          error: `${response.status} invalid response body`,
         };
       }
 

@@ -1,3 +1,4 @@
+import { Logger } from "@nestjs/common";
 import { SlackService } from "nestjs-slack";
 import { MailService } from "@src/mail/mail.service";
 import { SendMailInput } from "@src/mail/mail.types";
@@ -108,6 +109,29 @@ describe("NotificationService", () => {
     });
   });
 
+  it("masks the recipient in the slack alert", async () => {
+    mailSend.mockResolvedValue({
+      success: false,
+      error: "550 gildong@gm.gist.ac.kr does not exist",
+    });
+    alimtalkSend.mockResolvedValue({ success: false, error: "3040 failed" });
+
+    await service.notify(input);
+
+    const messages = sendText.mock.calls.map(([text]) => text).join("\n");
+    expect(messages).toContain("gi***@gm.gist.ac.kr");
+    expect(messages).toContain("010****5678");
+    expect(messages).not.toContain("gildong@gm.gist.ac.kr");
+    expect(messages).not.toContain("01012345678");
+    // notification_log에는 원문을 남김
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: "email",
+        recipient: "gildong@gm.gist.ac.kr",
+      }),
+    );
+  });
+
   it("sends only the channels that are given", async () => {
     mailSend.mockResolvedValue({ success: true, messageId: "<id@gmail.com>" });
 
@@ -146,5 +170,23 @@ describe("NotificationService", () => {
     await flushPromises();
 
     expect(insert).toHaveBeenCalledTimes(2);
+  });
+
+  it("notifyAsync catches unexpected rejections", async () => {
+    const error = jest.spyOn(Logger.prototype, "error").mockImplementation();
+    const unhandled = jest.fn();
+    process.on("unhandledRejection", unhandled);
+    mailSend.mockRejectedValue(new Error("unexpected"));
+
+    service.notifyAsync({ ...input, alimtalk: undefined });
+    await flushPromises();
+
+    expect(unhandled).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining("Unexpected error while notifying"),
+      expect.any(Error),
+    );
+    process.off("unhandledRejection", unhandled);
+    error.mockRestore();
   });
 });

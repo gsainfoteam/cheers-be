@@ -1,3 +1,4 @@
+import { Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { createHmac } from "node:crypto";
 import { AlimtalkService } from "./alimtalk.service";
@@ -22,8 +23,11 @@ const config = {
   KAKAO_TEMPLATE_CONTACT_SHARED: "TPL-SHARED",
 };
 
+const textResponse = (text: string, ok = true, status = 200) =>
+  ({ ok, status, text: () => Promise.resolve(text) }) as Response;
+
 const jsonResponse = (body: unknown, ok = true, status = 200) =>
-  ({ ok, status, json: () => Promise.resolve(body) }) as Response;
+  textResponse(JSON.stringify(body), ok, status);
 
 describe("AlimtalkService", () => {
   const fetchMock = jest.fn();
@@ -155,6 +159,28 @@ describe("AlimtalkService", () => {
     });
   });
 
+  it("keeps the status code when the error body is not json", async () => {
+    fetchMock.mockResolvedValue(
+      textResponse("<html>502 Bad Gateway</html>", false, 502),
+    );
+    const service = createService(config);
+
+    await expect(service.send(input)).resolves.toEqual({
+      success: false,
+      error: "502",
+    });
+  });
+
+  it("returns failure when a 2xx body is not json", async () => {
+    fetchMock.mockResolvedValue(textResponse("<html></html>"));
+    const service = createService(config);
+
+    await expect(service.send(input)).resolves.toEqual({
+      success: false,
+      error: "200 invalid response body",
+    });
+  });
+
   it("returns failure instead of throwing when the request fails", async () => {
     fetchMock.mockRejectedValue(new Error("The operation was aborted"));
     const service = createService(config);
@@ -173,5 +199,17 @@ describe("AlimtalkService", () => {
       skipped: true,
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("masks the phone number in the skip log", async () => {
+    const log = jest.spyOn(Logger.prototype, "log").mockImplementation();
+    const service = createService({});
+
+    await service.send(input);
+
+    expect(log).toHaveBeenCalledWith(
+      "[ALIMTALK SKIPPED] to=010****5678 event=contact_shared",
+    );
+    log.mockRestore();
   });
 });
