@@ -25,8 +25,8 @@ export class AppleVerifier implements OAuthVerifier {
 
   // Apple ID token에는 이름이 없음 (최초 인증 때 redirect의 user 값으로만 옴) → 추가 정보 입력에서 받음.
   // 이메일은 숨기기를 고르면 릴레이 주소
-  async verify(token: string): Promise<OAuthProfile> {
-    const payload = await this.idTokenVerifier.verify(token);
+  async verify(token: string, nonce?: string): Promise<OAuthProfile> {
+    const payload = await this.idTokenVerifier.verify(token, nonce);
     return {
       provider: "apple",
       sub: payload.sub,

@@ -1,4 +1,10 @@
-import { IsIn, IsNotEmpty, IsString } from "class-validator";
+import {
+  IsIn,
+  IsNotEmpty,
+  IsString,
+  MaxLength,
+  ValidateIf,
+} from "class-validator";
 import { UserType } from "@src/auth/auth.types";
 import { OAuthProvider } from "@src/user/oauth/oauth.types";
 
@@ -14,6 +20,13 @@ export class LoginRequestDto {
   @IsString()
   @IsNotEmpty()
   token: string;
+
+  // google / apple만 필수: 로그인 시작 때 만든 nonce 원문. provider에는 SHA-256(hex)을 넘김
+  @ValidateIf((o: LoginRequestDto) => o.provider !== "naver")
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(256)
+  nonce?: string;
 }
 
 export class LoginResponseDto {

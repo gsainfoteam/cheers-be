@@ -56,7 +56,11 @@ export class UserService {
   ) {}
 
   async login(req: LoginRequestDto): Promise<LoginResponseDto> {
-    const profile = await this.oauthService.verify(req.provider, req.token);
+    const profile = await this.oauthService.verify(
+      req.provider,
+      req.token,
+      req.nonce,
+    );
 
     const { tokens, businessCardKey } = await this.dbService.db.transaction(
       async (tx) => {

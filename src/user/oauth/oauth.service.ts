@@ -24,8 +24,12 @@ export class OAuthService {
     };
   }
 
-  // google / apple: ID token, naver: access token
-  verify(provider: OAuthProvider, token: string): Promise<OAuthProfile> {
-    return this.verifiers[provider].verify(token);
+  // google / apple: ID token + nonce 원문, naver: access token
+  verify(
+    provider: OAuthProvider,
+    token: string,
+    nonce?: string,
+  ): Promise<OAuthProfile> {
+    return this.verifiers[provider].verify(token, nonce);
   }
 }

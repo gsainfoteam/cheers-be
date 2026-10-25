@@ -1,6 +1,7 @@
 import { UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { jwtVerify } from "jose";
+import { createHash } from "node:crypto";
 import { AppleVerifier } from "./apple.verifier";
 import { GoogleVerifier } from "./google.verifier";
 import { NaverVerifier } from "./naver.verifier";
@@ -16,6 +17,10 @@ const mockedJwtVerify = jwtVerify as jest.Mock;
 const config = (env: Record<string, string | undefined>) =>
   ({ get: (key: string) => env[key] }) as unknown as ConfigService;
 
+// 클라이언트가 보관하는 원문과, provider에 넘겨 ID token에 들어오는 SHA-256(hex)
+const NONCE = "raw-nonce";
+const NONCE_HASH = createHash("sha256").update(NONCE).digest("hex");
+
 describe("GoogleVerifier", () => {
   beforeEach(() => mockedJwtVerify.mockReset());
 
@@ -27,13 +32,19 @@ describe("GoogleVerifier", () => {
 
   it("verifies iss / aud against every configured client ID", async () => {
     mockedJwtVerify.mockResolvedValue({
-      payload: { sub: "g-1", email: "a@gmail.com", name: "홍길동" },
+      payload: {
+        sub: "g-1",
+        email: "a@gmail.com",
+        email_verified: true,
+        name: "홍길동",
+        nonce: NONCE_HASH,
+      },
     });
     const verifier = new GoogleVerifier(
       config({ GOOGLE_CLIENT_ID: "web-id, app-id" }),
     );
 
-    await expect(verifier.verify("id-token")).resolves.toEqual({
+    await expect(verifier.verify("id-token", NONCE)).resolves.toEqual({
       provider: "google",
       sub: "g-1",
       email: "a@gmail.com",
@@ -45,22 +56,68 @@ describe("GoogleVerifier", () => {
     });
   });
 
+  it("drops an email that Google has not verified", async () => {
+    mockedJwtVerify.mockResolvedValue({
+      payload: {
+        sub: "g-1",
+        email: "a@example.com",
+        email_verified: false,
+        nonce: NONCE_HASH,
+      },
+    });
+    const verifier = new GoogleVerifier(config({ GOOGLE_CLIENT_ID: "web-id" }));
+
+    await expect(verifier.verify("id-token", NONCE)).resolves.toMatchObject({
+      sub: "g-1",
+      email: null,
+    });
+  });
+
+  it("returns 401 without calling jose when the nonce is missing", async () => {
+    const verifier = new GoogleVerifier(config({ GOOGLE_CLIENT_ID: "web-id" }));
+
+    await expect(verifier.verify("id-token")).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+    expect(mockedJwtVerify).not.toHaveBeenCalled();
+  });
+
+  it("returns 401 when the token's nonce does not match (leaked token replay)", async () => {
+    mockedJwtVerify.mockResolvedValue({
+      payload: { sub: "g-1", nonce: NONCE_HASH },
+    });
+    const verifier = new GoogleVerifier(config({ GOOGLE_CLIENT_ID: "web-id" }));
+
+    await expect(
+      verifier.verify("id-token", "attacker-nonce"),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it("returns 401 when the token has no nonce claim", async () => {
+    mockedJwtVerify.mockResolvedValue({ payload: { sub: "g-1" } });
+    const verifier = new GoogleVerifier(config({ GOOGLE_CLIENT_ID: "web-id" }));
+
+    await expect(verifier.verify("id-token", NONCE)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+  });
+
   it("returns 401 when jose rejects the token (signature, aud, iss, exp)", async () => {
     mockedJwtVerify.mockRejectedValue(
       new Error('unexpected "aud" claim value'),
     );
     const verifier = new GoogleVerifier(config({ GOOGLE_CLIENT_ID: "web-id" }));
 
-    await expect(verifier.verify("bad")).rejects.toBeInstanceOf(
+    await expect(verifier.verify("bad", NONCE)).rejects.toBeInstanceOf(
       UnauthorizedException,
     );
   });
 
   it("returns 401 when sub is missing", async () => {
-    mockedJwtVerify.mockResolvedValue({ payload: {} });
+    mockedJwtVerify.mockResolvedValue({ payload: { nonce: NONCE_HASH } });
     const verifier = new GoogleVerifier(config({ GOOGLE_CLIENT_ID: "web-id" }));
 
-    await expect(verifier.verify("no-sub")).rejects.toBeInstanceOf(
+    await expect(verifier.verify("no-sub", NONCE)).rejects.toBeInstanceOf(
       UnauthorizedException,
     );
   });
@@ -77,13 +134,18 @@ describe("AppleVerifier", () => {
 
   it("uses Apple issuer and never returns a name", async () => {
     mockedJwtVerify.mockResolvedValue({
-      payload: { sub: "a-1", email: "x@privaterelay.appleid.com", name: "x" },
+      payload: {
+        sub: "a-1",
+        email: "x@privaterelay.appleid.com",
+        name: "x",
+        nonce: NONCE_HASH,
+      },
     });
     const verifier = new AppleVerifier(
       config({ APPLE_CLIENT_ID: "kr.gistory.cheers" }),
     );
 
-    await expect(verifier.verify("id-token")).resolves.toEqual({
+    await expect(verifier.verify("id-token", NONCE)).resolves.toEqual({
       provider: "apple",
       sub: "a-1",
       email: "x@privaterelay.appleid.com",

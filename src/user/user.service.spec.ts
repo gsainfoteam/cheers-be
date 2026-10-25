@@ -125,7 +125,12 @@ describe("UserService", () => {
 
   describe("login", () => {
     const login = (type: "student" | "graduated") =>
-      service.login({ provider: "google", type, token: "id-token" });
+      service.login({
+        provider: "google",
+        type,
+        token: "id-token",
+        nonce: "raw-nonce",
+      });
 
     it("creates a pending user, oauth account and type row on first login", async () => {
       const created = userRow({ type: "graduated", name: "홍길동" });
@@ -138,7 +143,11 @@ describe("UserService", () => {
         refresh_token: "refresh",
       });
 
-      expect(oauthService.verify).toHaveBeenCalledWith("google", "id-token");
+      expect(oauthService.verify).toHaveBeenCalledWith(
+        "google",
+        "id-token",
+        "raw-nonce",
+      );
       expect(userRepository.insert).toHaveBeenCalledWith(
         { type: "graduated", name: "홍길동", email: "a@gmail.com" },
         tx,

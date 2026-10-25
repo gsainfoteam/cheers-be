@@ -23,12 +23,16 @@ export class GoogleVerifier implements OAuthVerifier {
     );
   }
 
-  async verify(token: string): Promise<OAuthProfile> {
-    const payload = await this.idTokenVerifier.verify(token);
+  async verify(token: string, nonce?: string): Promise<OAuthProfile> {
+    const payload = await this.idTokenVerifier.verify(token, nonce);
     return {
       provider: "google",
       sub: payload.sub,
-      email: typeof payload.email === "string" ? payload.email : null,
+      // 소유 확인이 안 된 이메일은 저장하지 않음
+      email:
+        typeof payload.email === "string" && payload.email_verified === true
+          ? payload.email
+          : null,
       name: typeof payload.name === "string" ? payload.name : null,
     };
   }

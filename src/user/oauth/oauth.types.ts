@@ -11,8 +11,8 @@ export type OAuthProfile = {
 };
 
 export interface OAuthVerifier {
-  // 검증에 실패하면 UnauthorizedException
-  verify(token: string): Promise<OAuthProfile>;
+  // 검증에 실패하면 UnauthorizedException. nonce는 ID token을 쓰는 google / apple만 사용
+  verify(token: string, nonce?: string): Promise<OAuthProfile>;
 }
 
 // env에 쉼표로 여러 client ID를 넣을 수 있음 (웹 / 앱 client 분리 대비)
