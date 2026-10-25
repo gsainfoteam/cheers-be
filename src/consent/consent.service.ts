@@ -1,7 +1,6 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
 import { DatabaseService } from "@src/database/database.service";
 import { BaseResultDto } from "@src/global/dto/base-result.dto";
-import { TxType } from "@src/global/types/tx.types";
 import { ConsentRepository } from "./consent.repository";
 import { ConsentListResponseDto } from "./dto/consent-list.dto";
 import { UpdateConsentRequestDto } from "./dto/update-consent.dto";
@@ -80,10 +79,5 @@ export class ConsentService {
     });
 
     return BaseResultDto.OK;
-  }
-
-  // 내 정보의 consent_required: 새로 개정된 필수 약관에 다시 동의해야 하면 true
-  async isConsentRequired(userPk: string, tx?: TxType): Promise<boolean> {
-    return this.consentRepository.hasMissingRequiredConsent(userPk, tx);
   }
 }

@@ -4,7 +4,6 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { DatabaseService } from "@src/database/database.service";
 import { TxType } from "@src/global/types/tx.types";
 import {
-  hasMissingRequiredConsent,
   hasValidAgreement,
   isLatestConsent,
 } from "@src/database/repository/consent.sql";
@@ -52,19 +51,6 @@ export class ConsentRepository {
       url: row.url,
       agreed: row.agreed,
     }));
-  }
-
-  async hasMissingRequiredConsent(
-    userPk: string,
-    tx?: TxType,
-  ): Promise<boolean> {
-    const result = await (tx ?? this.dbService.db).execute<{
-      has_missing_required_consent: boolean;
-    }>(
-      sql`SELECT ${hasMissingRequiredConsent(userPk)} AS has_missing_required_consent`,
-    );
-
-    return result.rows[0].has_missing_required_consent;
   }
 
   /*

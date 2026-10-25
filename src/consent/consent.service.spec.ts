@@ -47,7 +47,6 @@ describe("ConsentService", () => {
   const tx = {} as TxType;
   const consentRepository = {
     findLatestWithAgreement: jest.fn(),
-    hasMissingRequiredConsent: jest.fn(),
     insertAgreements: jest.fn(),
     revokeByTypes: jest.fn(),
   };
@@ -155,15 +154,5 @@ describe("ConsentService", () => {
       expect(consentRepository.insertAgreements).not.toHaveBeenCalled();
       expect(consentRepository.revokeByTypes).not.toHaveBeenCalled();
     });
-  });
-
-  it("isConsentRequired delegates to the repository", async () => {
-    consentRepository.hasMissingRequiredConsent.mockResolvedValue(true);
-
-    await expect(service.isConsentRequired(userPk, tx)).resolves.toBe(true);
-    expect(consentRepository.hasMissingRequiredConsent).toHaveBeenCalledWith(
-      userPk,
-      tx,
-    );
   });
 });
