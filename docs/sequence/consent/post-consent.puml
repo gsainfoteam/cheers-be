@@ -1,5 +1,12 @@
 @startuml post-consent
-!include ../_style.iuml
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
 
 title POST /api/v1/user/consent
 caption CRB-12 · 가입 시 동의, 개정 약관 재동의, 선택 약관 동의 · 철회

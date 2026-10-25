@@ -1,5 +1,12 @@
 @startuml get-consent-list
-!include ../_style.iuml
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
 
 title GET /api/v1/user/consent/list
 caption CRB-12 · 최신 약관 목록과 내 동의 여부

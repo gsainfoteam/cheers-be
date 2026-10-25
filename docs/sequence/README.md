@@ -49,15 +49,23 @@ docker run --rm -v "$PWD/docs/sequence:/data" plantuml/plantuml -checkonly "/dat
   - 예: `POST /api/v1/user/consent` → `consent/post-consent.puml`, `GET /api/v1/user/info` → `user/get-info.puml`
 - 여러 API에 걸친 큰 흐름은 `flow/<name>.puml`
   - 예: 회원가입(로그인 → 약관 동의 → 인증 → 추가 정보 입력)은 가입 API들이 들어올 때 `flow/signup.puml`로 추가. API 하나하나의 내부는 각 API 파일에 두고, 플로우 파일은 API 사이의 순서 · 분기(`next_step`)만 그림
-- 모든 파일은 첫 줄 다음에 `!include ../_style.iuml`
 
 ## 작성 규칙
 
 ### 머리말
 
+파일마다 아래 스타일 블록을 그대로 복사해 씁니다 (파일 하나만 열어도 렌더링되도록 `!include` 없이). 스타일을 바꿀 때는 모든 파일을 같이 바꿉니다.
+
 ```plantuml
 @startuml post-consent
-!include ../_style.iuml
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
 
 title POST /api/v1/user/consent
 caption CRB-12 · 한 줄 설명

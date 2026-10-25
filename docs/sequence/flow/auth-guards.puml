@@ -1,5 +1,12 @@
 @startuml auth-guards
-!include ../_style.iuml
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
 
 title 공통 흐름: 인증 · 가입 단계 · 유형 가드
 caption CRB-4 · src/auth/guard/
