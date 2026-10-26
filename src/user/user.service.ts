@@ -1,7 +1,6 @@
 import {
   ConflictException,
   Injectable,
-  Logger,
   UnauthorizedException,
 } from "@nestjs/common";
 import { AuthService } from "@src/auth/auth.service";
@@ -51,8 +50,6 @@ import { OAuthProfile } from "@src/user/oauth/oauth.types";
 
 @Injectable()
 export class UserService {
-  private readonly logger = new Logger(UserService.name);
-
   constructor(
     private readonly dbService: DatabaseService,
     private readonly authService: AuthService,
@@ -129,7 +126,7 @@ export class UserService {
 
     // DB 정리가 끝난 뒤에 지움. 실패해도 DB에는 참조가 없으므로 로그만 남김
     if (businessCardKey) {
-      await this.deleteFileQuietly(businessCardKey);
+      await this.fileService.deleteFileQuietly(businessCardKey);
     }
 
     return {
@@ -379,15 +376,5 @@ export class UserService {
       email: contact.email,
       phone: contact.phone,
     };
-  }
-
-  private async deleteFileQuietly(key: string): Promise<void> {
-    try {
-      await this.fileService.deleteFile(key);
-    } catch (e) {
-      this.logger.error(
-        `Failed to delete file ${key}: ${(e as Error).message}`,
-      );
-    }
   }
 }

@@ -156,13 +156,7 @@ export class WithdrawalService {
 
     // DB 정리가 끝난 뒤에 지움. 실패해도 DB에는 참조가 없으므로 로그만 남김
     if (result.businessCardKey) {
-      try {
-        await this.fileService.deleteFile(result.businessCardKey);
-      } catch (e) {
-        this.logger.error(
-          `Failed to delete file ${result.businessCardKey}: ${(e as Error).message}`,
-        );
-      }
+      await this.fileService.deleteFileQuietly(result.businessCardKey);
     }
     return true;
   }

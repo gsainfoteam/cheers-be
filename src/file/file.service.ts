@@ -169,6 +169,21 @@ export class FileService {
     });
   }
 
+  /**
+   * this method deletes a file and only logs when it fails
+   * use it after the DB no longer refers to the file (orphans are cleaned up by CRB-41)
+   * @param key string
+   */
+  async deleteFileQuietly(key: string): Promise<void> {
+    try {
+      await this.deleteFile(key);
+    } catch (e) {
+      this.logger.error(
+        `Failed to delete file ${key}: ${(e as Error).message}`,
+      );
+    }
+  }
+
   async deleteFiles(keys: string[]): Promise<void> {
     await Promise.all(keys.map((key) => this.deleteFile(key)));
   }
