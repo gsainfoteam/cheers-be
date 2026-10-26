@@ -1,0 +1,95 @@
+@startuml post-verify-code
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title POST /api/v1/user/student/verify/code
+caption CRB-31 · 인증코드 확인. 성공 시 student.email · verified_at 기록, 5회 틀리면 무효
+
+actor Client
+participant "SignupStepGuard\nUserTypeGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "StudentController" as Controller
+participant "StudentVerificationService" as Service
+participant "StudentRepository" as StudentRepository
+participant "StudentEmailVerificationRepository" as VerificationRepository
+database PostgreSQL
+
+Client -> Guard: POST /api/v1/user/student/verify/code\nAuthorization: Bearer <access token>\n{ code }
+ref over Client, Guard
+  SignupStepGuard → UserTypeGuard — flow/auth-guards.puml
+  @SignupStep({ step: "verify" }) — pending 이고 next_step = verify 일 때만 (active 불가)
+  @UserTypes("student")
+  401 Missing access token / Token expired / Invalid token / User not found
+  403 Signup is already completed / Signup step mismatch / User type not allowed
+end ref
+Guard -> Pipe: 통과
+alt body 검증 실패 (code 누락 · 숫자 6자리 아님)
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+Pipe -> Controller: verifyCode(req, user)
+Controller -> Service: verifyCode(userPk, code)
+
+group transaction (DatabaseService.db.transaction)
+  Service -> StudentRepository: findByUserPkForUpdate(userPk, tx)
+  StudentRepository -> PostgreSQL: SELECT student WHERE user_pk = ? FOR UPDATE
+  note right: 동시에 여러 번 확인해도\n시도 횟수가 정확히 쌓이도록 직렬화
+  PostgreSQL --> StudentRepository: row
+  StudentRepository --> Service: student
+
+  Service -> VerificationRepository: findByStudentPk(studentPk, tx)
+  VerificationRepository -> PostgreSQL: SELECT student_email_verification WHERE student_pk = ?
+  PostgreSQL --> VerificationRepository: row
+  VerificationRepository --> Service: verification | null
+
+  alt 요청 없음 또는 attempt_count >= 5
+    note over Service: 결과 = NOT_FOUND
+  else expires_at <= now
+    note over Service: 결과 = EXPIRED\n(행은 만료 인증번호 정리 스케줄러가 지움, CRB-29)
+  else 코드 불일치 (timingSafeEqual)
+    Service -> VerificationRepository: incrementAttemptCount(studentPk, tx)
+    VerificationRepository -> PostgreSQL: UPDATE student_email_verification\nSET attempt_count = attempt_count + 1 RETURNING attempt_count
+    note right
+      5번째 실패여도 행은 지우지 않음
+      → 이후 확인은 404, 재전송 60초 대기도 유지
+    end note
+    note over Service: 결과 = WRONG, remaining = 5 - attempt_count
+  else 코드 일치
+    Service -> StudentRepository: markVerified(studentPk, email, tx)
+    StudentRepository -> PostgreSQL: UPDATE student SET email = ?, verified_at = now(), updated_at = now()
+    alt student.email UNIQUE 위반 (23505: 다른 계정이 같은 이메일을 방금 인증)
+      StudentRepository -[#red]-> Client: 409 Email already verified by another account
+      note right: 이 경우만 트랜잭션 rollback
+    end
+    Service -> VerificationRepository: deleteByStudentPk(studentPk, tx)
+    VerificationRepository -> PostgreSQL: DELETE student_email_verification WHERE student_pk = ?
+    note over Service: 결과 = OK
+  end
+end
+note over Service, PostgreSQL
+  틀린 횟수가 커밋되도록 트랜잭션 안에서는 결과만 정하고
+  404 · 410 · 400 예외는 커밋 뒤에 던짐
+end note
+
+alt NOT_FOUND
+  Service -[#red]-> Client: 404 No verification in progress
+else EXPIRED
+  Service -[#red]-> Client: 410 Verification code expired
+else WRONG
+  Service -[#red]-> Client: 400 Invalid verification code\n{ statusCode, message, remaining_attempts }
+  note right of Service
+    AllExceptionsFilter가 HttpException 응답 객체의
+    추가 필드(remaining_attempts)를 같이 내보냄
+  end note
+end
+
+Service --> Controller: BaseResultDto.OK
+Controller --> Client: 201 { result: "OK" }
+note right of Client: 다음 단계는 next_step = profile\n(GET /api/v1/user/info 로 확인)
+
+@enduml

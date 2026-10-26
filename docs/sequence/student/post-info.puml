@@ -1,0 +1,139 @@
+@startuml post-info
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title POST /api/v1/user/student/info
+caption CRB-31 · 재학생 추가 정보 저장 · 수정 (바뀌었을 때만 새 버전), 연락 설정, 가입 완료 시 토큰 재발급
+
+actor Client
+participant "SignupStepGuard\nUserTypeGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "StudentController" as Controller
+participant "StudentService" as Service
+participant "UserRepository" as UserRepository
+participant "StudentRepository" as StudentRepository
+participant "DepartmentRepository" as DepartmentRepository
+participant "StudentProfileRepository" as ProfileRepository
+participant "StudentProfileAttachmentRepository" as AttachmentRepository
+participant "CoffeeChatContactRepository" as ContactRepository
+participant "AuthService" as AuthService
+database PostgreSQL
+
+Client -> Guard: POST /api/v1/user/student/info\nAuthorization: Bearer <access token>\n{ name?, department_id, interests, activities?, attachments?, contact }
+ref over Client, Guard
+  SignupStepGuard → UserTypeGuard — flow/auth-guards.puml
+  @SignupStep({ step: "profile", allowActive: true })
+  pending: next_step = profile 일 때만 / active: 항상 통과 (마이페이지 수정)
+  @UserTypes("student")
+  401 Missing access token / Token expired / Invalid token / User not found
+  403 Signup step mismatch / User type not allowed
+end ref
+Guard -> Pipe: 통과
+alt body 검증 실패
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+note right of Pipe
+  name 1~64자 / department_id 정수
+  interests 1~20개, 각 1~50자, 중복 불가 / activities 0~20개, 각 1~50자
+  attachments 최대 10개: kind cv | portfolio, source = link 만 (file 은 CRB-38),
+    url http(s) 2048자 이하
+  contact: email_enabled · kakao_enabled boolean, email 형식,
+    phone 은 "-" · 공백 제거 후 01로 시작하는 10~11자리
+end note
+Pipe -> Controller: saveInfo(req, user)
+Controller -> Service: saveInfo(userPk, req)
+
+alt contact.email_enabled = false 이고 kakao_enabled = false
+  Service -[#red]-> Client: 400 At least one contact method is required
+else email_enabled 인데 contact.email 없음
+  Service -[#red]-> Client: 400 Contact email is required
+else kakao_enabled 인데 contact.phone 없음
+  Service -[#red]-> Client: 400 Contact phone is required
+end
+note right of Service: 재학생은 "희망하지 않음"(둘 다 false)을 고를 수 없음
+
+group transaction (DatabaseService.db.transaction)
+  Service -> UserRepository: findByPkForUpdate(userPk, tx)
+  UserRepository -> PostgreSQL: SELECT users WHERE pk = ? AND is_deleted = false\nAND withdraw_requested_at IS NULL FOR UPDATE
+  PostgreSQL --> UserRepository: row
+  UserRepository --> Service: user | null
+  alt 유저 없음 (가드 통과 직후 탈퇴 요청)
+    Service -[#red]-> Client: 401 User not found
+  end
+  note right of Service
+    같은 유저의 동시 저장을 직렬화해서 같은 version 을 두 번 insert 하지 않게 하고,
+    가입 완료(pending → active) 여부를 잠근 행 기준으로 판단
+  end note
+  alt user.name = null 이고 요청에 name 없음
+    Service -[#red]-> Client: 400 Name is required
+  end
+
+  Service -> StudentRepository: findByUserPkWithLatestProfile(userPk, tx)
+  StudentRepository -> PostgreSQL: SELECT student + 가장 큰 version 의 student_profile\n+ 학과 + 첨부(sort_order 순)
+  PostgreSQL --> StudentRepository: row
+  StudentRepository --> Service: { student, latest | null }
+
+  Service -> DepartmentRepository: findByPkAndEmailDomain(department_id, student.email 의 @ 뒤, tx)
+  DepartmentRepository -> PostgreSQL: SELECT d.* FROM department d JOIN school s ON s.pk = d.school_pk\nWHERE d.pk = ? AND s.email_domain = ?
+  PostgreSQL --> DepartmentRepository: row
+  DepartmentRepository --> Service: department | null
+  alt 없는 학과이거나 다른 학교의 학과
+    Service -[#red]-> Client: 400 Department does not belong to your school
+  end
+
+  alt latest = null (첫 저장) 또는 학과 · interests · activities · attachments 중 하나라도 다름
+    note right of Service
+      비교 기준: interests · attachments 는 순서까지 같아야 같음,
+      activities 는 없음 = 빈 배열, attachment 는 kind · source · url · file_name
+    end note
+    Service -> ProfileRepository: insert({ studentPk, version: (latest?.version ?? 0) + 1,\ndepartmentPk, interests, activities }, tx)
+    ProfileRepository -> PostgreSQL: INSERT student_profile RETURNING pk
+    note right: UNIQUE (student_pk, version)
+    opt attachments 있음
+      Service -> AttachmentRepository: insertMany(profilePk, attachments, tx)
+      AttachmentRepository -> PostgreSQL: INSERT student_profile_attachment\n(sort_order = 배열 순서)
+    end
+  else 바뀐 내용 없음
+    note over Service: 새 버전을 만들지 않음
+  end
+  note right of Service: 이전 버전은 커피챗 요청이 참조하므로 수정 · 삭제하지 않음
+
+  Service -> ContactRepository: upsert(userPk, { emailEnabled, kakaoEnabled, email, phone }, tx)
+  ContactRepository -> PostgreSQL: INSERT coffee_chat_contact ...\nON CONFLICT (user_pk) DO UPDATE SET ..., updated_at = now()
+  note right: 연락 설정은 버전 관리 안 함.\nCHECK(kakao → phone, email → email)
+
+  opt user.name = null
+    Service -> UserRepository: fillName(userPk, name, tx)
+    UserRepository -> PostgreSQL: UPDATE users SET name = COALESCE(name, ?)
+    note right: 한 번 저장한 이름은 수정 불가 (이후 보낸 name 은 무시)
+  end
+
+  opt user.status = pending (이번 호출로 가입 완료)
+    Service -> UserRepository: activate(userPk, tx)
+    UserRepository -> PostgreSQL: UPDATE users SET status = 'active', updated_at = now()
+    Service -> AuthService: issueTokens({ ...user, status: "active" }, tx)
+    AuthService -> PostgreSQL: INSERT refresh_token, UPDATE users.last_active_at
+    AuthService --> Service: { accessToken, refreshToken }
+    note right of AuthService
+      기존 refresh token 은 폐기하지 않음 (갱신 때 DB 의 status 로
+      클레임을 다시 만듦). 클라이언트는 새 토큰으로 교체
+    end note
+  end
+end
+note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
+
+alt 가입 완료
+  Service --> Controller: { result: "OK", access_token, refresh_token }
+  Controller --> Client: 201 { result: "OK", access_token, refresh_token }
+else 마이페이지 수정 (이미 active)
+  Service --> Controller: BaseResultDto.OK
+  Controller --> Client: 201 { result: "OK" }
+end
+
+@enduml

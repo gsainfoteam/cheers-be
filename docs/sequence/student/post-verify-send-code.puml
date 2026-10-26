@@ -1,0 +1,99 @@
+@startuml post-verify-send-code
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title POST /api/v1/user/student/verify/send-code
+caption CRB-31 · gist 이메일로 6자리 인증코드 전송 (재전송도 같은 API, 이전 코드 무효)
+
+actor Client
+participant "SignupStepGuard\nUserTypeGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "StudentController" as Controller
+participant "StudentVerificationService" as Service
+participant "SchoolRepository" as SchoolRepository
+participant "StudentRepository" as StudentRepository
+participant "StudentEmailVerificationRepository" as VerificationRepository
+database PostgreSQL
+participant "MailService" as MailService
+participant "SMTP"
+
+Client -> Guard: POST /api/v1/user/student/verify/send-code\nAuthorization: Bearer <access token>\n{ email }
+ref over Client, Guard
+  SignupStepGuard → UserTypeGuard — flow/auth-guards.puml
+  @SignupStep({ step: "verify" }) — pending 이고 next_step = verify 일 때만 (active 불가)
+  @UserTypes("student")
+  401 Missing access token / Token expired / Invalid token / User not found
+  403 Signup is already completed / Signup step mismatch / User type not allowed
+end ref
+Guard -> Pipe: 통과
+alt body 검증 실패 (email 누락 · 이메일 형식 아님 · 255자 초과)
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+Pipe -> Controller: sendCode(req, user)
+Controller -> Service: sendCode(userPk, email)
+
+note right of Service: email은 trim + 소문자로 정규화, 도메인 = @ 뒤
+Service -> SchoolRepository: findByEmailDomain(domain)
+SchoolRepository -> PostgreSQL: SELECT school WHERE email_domain = ?
+PostgreSQL --> SchoolRepository: row
+SchoolRepository --> Service: school | null
+alt 등록된 학교 도메인이 아님 (서브도메인 · 대소문자 차이 없이 정확히 일치해야 함)
+  Service -[#red]-> Client: 400 Email domain not allowed
+end
+
+group transaction (DatabaseService.db.transaction)
+  Service -> StudentRepository: findByUserPkForUpdate(userPk, tx)
+  StudentRepository -> PostgreSQL: SELECT student WHERE user_pk = ? FOR UPDATE
+  note right: 같은 학생의 동시 전송을 직렬화\n(쿨다운 검사와 upsert 사이에 끼어들지 않게)
+  PostgreSQL --> StudentRepository: row
+  StudentRepository --> Service: student
+
+  Service -> VerificationRepository: findByStudentPk(studentPk, tx)
+  VerificationRepository -> PostgreSQL: SELECT student_email_verification WHERE student_pk = ?
+  PostgreSQL --> VerificationRepository: row
+  VerificationRepository --> Service: verification | null
+  alt 진행 중인 요청의 created_at + 60초 > now
+    Service -[#red]-> Client: 429 Resend is not available yet
+  end
+  note right of Service
+    시도 횟수를 다 쓴(5회) 요청 · 만료된 요청도
+    created_at 기준 60초가 지나야 다시 보낼 수 있음
+  end note
+
+  Service -> StudentRepository: existsByEmail(email, 내 studentPk 제외, tx)
+  StudentRepository -> PostgreSQL: SELECT 1 FROM student WHERE email = ? AND pk <> ?
+  PostgreSQL --> StudentRepository: row?
+  StudentRepository --> Service: boolean
+  alt 다른 계정이 이미 인증한 이메일
+    Service -[#red]-> Client: 409 Email already verified by another account
+  end
+  note right of Service
+    탈퇴 유예기간 중인 계정도 student.email을 갖고 있어 409.
+    유예기간이 끝나 탈퇴 처리되면 student.email = NULL 로 풀림
+  end note
+
+  Service -> Service: code = crypto.randomInt(0, 1_000_000)\n6자리 0 채움
+  Service -> VerificationRepository: upsert(studentPk, { email, code,\nattempt_count: 0, created_at: now, expires_at: now + 5분 }, tx)
+  VerificationRepository -> PostgreSQL: INSERT student_email_verification ...\nON CONFLICT (student_pk) DO UPDATE
+  note right: 학생당 진행 중인 요청 1개.\n덮어쓰므로 이전 코드는 무효
+end
+note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
+
+Service ->> MailService: sendAsync(buildVerificationCodeMail(email, code, 5))
+note right of MailService
+  커밋 뒤에 호출, 응답을 기다리지 않음.
+  실패하면 MailService가 로그 + Slack 알림
+  (사용자는 60초 뒤 재전송)
+end note
+MailService ->> SMTP: sendMail
+
+Service --> Controller: { expiresAt, resendAvailableAt = created_at + 60초 }
+Controller --> Client: 201 { expires_at, resend_available_at }
+
+@enduml
