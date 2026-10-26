@@ -18,10 +18,12 @@ import {
 import { UserRepository } from "@src/database/repository/user.repository";
 import { DepartmentListResponseDto } from "./dto/departments.dto";
 import {
-  SaveStudentInfoRequestDto,
-  SaveStudentInfoResponseDto,
-  StudentContactRequestDto,
-} from "./dto/save-student-info.dto";
+  assertContactValues,
+  ContactRequestDto,
+  toContactRow,
+} from "@src/user/dto/contact-request.dto";
+import { SignupCompleteResponseDto } from "@src/user/dto/signup-complete.dto";
+import { SaveStudentInfoRequestDto } from "./dto/save-student-info.dto";
 import { emailDomain } from "./student.utils";
 
 type ProfileValues = {
@@ -64,7 +66,7 @@ export class StudentService {
   async saveInfo(
     userPk: string,
     req: SaveStudentInfoRequestDto,
-  ): Promise<SaveStudentInfoResponseDto> {
+  ): Promise<SignupCompleteResponseDto> {
     validateContact(req.contact);
 
     const values: ProfileValues = {
@@ -126,15 +128,9 @@ export class StudentService {
         );
       }
 
-      // 연락 설정은 버전 관리하지 않음. 끈 방법의 email / phone은 보내도 저장하지 않음 (null)
+      // 연락 설정은 버전 관리하지 않음. 끈 방법의 email / phone은 저장하지 않음 (null)
       await this.coffeeChatContactRepository.upsert(
-        {
-          userPk,
-          emailEnabled: req.contact.email_enabled,
-          kakaoEnabled: req.contact.kakao_enabled,
-          email: req.contact.email_enabled ? (req.contact.email ?? null) : null,
-          phone: req.contact.kakao_enabled ? (req.contact.phone ?? null) : null,
-        },
+        toContactRow(userPk, req.contact),
         tx,
       );
 
@@ -159,17 +155,12 @@ export class StudentService {
   }
 }
 
-// 재학생은 "희망하지 않음"(둘 다 false)을 고를 수 없음
-const validateContact = (contact: StudentContactRequestDto): void => {
+// 재학생은 "희망하지 않음"(둘 다 false)을 고를 수 없음. 고른 방법의 값 검사는 공용
+const validateContact = (contact: ContactRequestDto): void => {
   if (!contact.email_enabled && !contact.kakao_enabled) {
     throw new BadRequestException("At least one contact method is required");
   }
-  if (contact.email_enabled && !contact.email) {
-    throw new BadRequestException("Contact email is required");
-  }
-  if (contact.kakao_enabled && !contact.phone) {
-    throw new BadRequestException("Contact phone is required");
-  }
+  assertContactValues(contact);
 };
 
 // 순서까지 같아야 같은 값. activities가 null인 이전 버전은 빈 배열로 봄

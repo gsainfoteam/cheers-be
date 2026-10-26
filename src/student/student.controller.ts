@@ -7,10 +7,8 @@ import { SignupStepGuard } from "@src/auth/guard/signup-step.guard";
 import { UserTypeGuard } from "@src/auth/guard/user-type.guard";
 import { BaseResultDto } from "@src/global/dto/base-result.dto";
 import { DepartmentListResponseDto } from "./dto/departments.dto";
-import {
-  SaveStudentInfoRequestDto,
-  SaveStudentInfoResponseDto,
-} from "./dto/save-student-info.dto";
+import { SignupCompleteResponseDto } from "@src/user/dto/signup-complete.dto";
+import { SaveStudentInfoRequestDto } from "./dto/save-student-info.dto";
 import { SendCodeRequestDto, SendCodeResponseDto } from "./dto/send-code.dto";
 import { VerifyCodeRequestDto } from "./dto/verify-code.dto";
 import { StudentVerificationService } from "./student-verification.service";
@@ -57,7 +55,7 @@ export class StudentController {
   async saveInfo(
     @Body() req: SaveStudentInfoRequestDto,
     @CurrentUser() user: UserContext,
-  ): Promise<SaveStudentInfoResponseDto> {
+  ): Promise<SignupCompleteResponseDto> {
     return this.studentService.saveInfo(user.userPk, req);
   }
 }

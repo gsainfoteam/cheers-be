@@ -4,8 +4,6 @@ import {
   ArrayNotEmpty,
   ArrayUnique,
   IsArray,
-  IsBoolean,
-  IsEmail,
   IsIn,
   IsInt,
   IsNotEmpty,
@@ -13,11 +11,10 @@ import {
   IsOptional,
   IsString,
   IsUrl,
-  Matches,
   MaxLength,
   ValidateNested,
 } from "class-validator";
-import { BaseResultDto } from "@src/global/dto/base-result.dto";
+import { ContactRequestDto } from "@src/user/dto/contact-request.dto";
 
 const trim = ({ value }: { value: unknown }) =>
   typeof value === "string" ? value.trim() : value;
@@ -34,29 +31,6 @@ export class StudentAttachmentRequestDto {
   @IsUrl({ protocols: ["http", "https"], require_protocol: true })
   @MaxLength(2048)
   url: string;
-}
-
-// 둘 다 false("희망하지 않음")는 재학생에게 허용하지 않음 (서비스에서 검사)
-export class StudentContactRequestDto {
-  @IsBoolean()
-  email_enabled: boolean;
-
-  @IsBoolean()
-  kakao_enabled: boolean;
-
-  @IsOptional()
-  @Transform(trim)
-  @IsEmail()
-  @MaxLength(255)
-  email?: string | null;
-
-  // "-" · 공백을 빼고 저장
-  @IsOptional()
-  @Transform(({ value }: { value: unknown }) =>
-    typeof value === "string" ? value.replace(/[\s-]/g, "") : value,
-  )
-  @Matches(/^01\d{8,9}$/, { message: "phone must be a mobile phone number" })
-  phone?: string | null;
 }
 
 export class SaveStudentInfoRequestDto {
@@ -97,12 +71,7 @@ export class SaveStudentInfoRequestDto {
 
   @IsObject()
   @ValidateNested()
-  @Type(() => StudentContactRequestDto)
-  contact: StudentContactRequestDto;
-}
-
-export class SaveStudentInfoResponseDto extends BaseResultDto {
-  // 이번 호출로 가입이 완료됐을 때만
-  access_token?: string;
-  refresh_token?: string;
+  // 둘 다 false("희망하지 않음")는 재학생에게 허용하지 않음 (서비스에서 검사)
+  @Type(() => ContactRequestDto)
+  contact: ContactRequestDto;
 }
