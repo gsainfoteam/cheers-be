@@ -35,7 +35,7 @@ Controller -> Service: getSentDetail(userPk, id)
 
 group transaction (DatabaseService.db.transaction)
   Service -> CoffeeChatRequestRepository: findSentByPk(id, userPk, tx)
-  CoffeeChatRequestRepository -> PostgreSQL: SELECT r.*, g.pk, gp.nickname, gp.company, gp.job, u.name,\nisActiveAccountAs("u") AS graduated_active\nFROM coffee_chat_request r\nJOIN student s ON s.pk = r.student_pk AND s.user_pk = ?\nJOIN graduated g JOIN graduated_profile gp JOIN users u ON u.pk = g.user_pk\nWHERE r.pk = ?
+  CoffeeChatRequestRepository -> PostgreSQL: SELECT r.*, g.pk, gp.nickname, gp.company, gp.job, u.name,\nisActiveAccount AS graduated_active\nFROM coffee_chat_request r\nJOIN student s ON s.pk = r.student_pk AND s.user_pk = ?\nJOIN graduated_profile gp\nJOIN graduated g JOIN users u ON u.pk = g.user_pk\nWHERE r.pk = ?
   note right: 내가 보낸 요청만 (다른 재학생의 요청은 없는 것으로 봄)
   CoffeeChatRequestRepository --> Service: row | null
   alt 요청 없음 또는 내가 보낸 요청이 아님
