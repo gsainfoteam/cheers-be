@@ -74,7 +74,10 @@ describe("UserService", () => {
     touchLastActive: jest.fn(),
   };
   const oauthService = { verify: jest.fn() };
-  const fileService = { deleteFile: jest.fn(), getPresignedUrl: jest.fn() };
+  const fileService = {
+    deleteFileQuietly: jest.fn(),
+    getPresignedUrl: jest.fn(),
+  };
   const userRepository = {
     findByPk: jest.fn(),
     insert: jest.fn(),
@@ -269,7 +272,7 @@ describe("UserService", () => {
       authService.issueTokens.mockImplementation(
         record("issueTokens", { accessToken: "a", refreshToken: "r" }),
       );
-      fileService.deleteFile.mockImplementation(record("s3.delete"));
+      fileService.deleteFileQuietly.mockImplementation(record("s3.delete"));
 
       await login("student");
 
@@ -298,7 +301,7 @@ describe("UserService", () => {
         "graduated-1",
         tx,
       );
-      expect(fileService.deleteFile).toHaveBeenCalledWith(
+      expect(fileService.deleteFileQuietly).toHaveBeenCalledWith(
         "business-card/a.jpg",
       );
     });
@@ -334,23 +337,7 @@ describe("UserService", () => {
         tx,
       );
       expect(graduatedRepository.insert).toHaveBeenCalledWith(USER_PK, tx);
-      expect(fileService.deleteFile).not.toHaveBeenCalled();
-    });
-
-    it("still logs in when deleting the old business card fails", async () => {
-      userOauthAccountRepository.findUserForLogin.mockResolvedValue(
-        userRow({ type: "graduated" }),
-      );
-      graduatedRepository.findByUserPk.mockResolvedValue({
-        pk: "graduated-1",
-        businessCardKey: "business-card/a.jpg",
-      });
-      fileService.deleteFile.mockRejectedValue(new Error("S3 down"));
-
-      await expect(login("student")).resolves.toEqual({
-        access_token: "access",
-        refresh_token: "refresh",
-      });
+      expect(fileService.deleteFileQuietly).not.toHaveBeenCalled();
     });
 
     it("does not touch the DB when the OAuth token is invalid", async () => {

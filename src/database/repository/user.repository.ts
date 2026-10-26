@@ -136,6 +136,31 @@ export class UserRepository {
   }
 
   /*
+  UPDATE users SET name = COALESCE(name, ?2), updated_at = now() WHERE pk = ?1;
+   */
+  // 추가 정보 입력: OAuth에서 이름을 못 받았을 때 한 번만 저장. 이미 있으면 그대로
+  async fillName(userPk: string, name: string, tx: TxType): Promise<void> {
+    await tx
+      .update(users)
+      .set({
+        name: sql`COALESCE(${users.name}, ${name})`,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.pk, userPk));
+  }
+
+  /*
+  UPDATE users SET status = 'active', updated_at = now() WHERE pk = ?1;
+   */
+  // 가입 완료 (추가 정보 입력). 호출한 쪽에서 새 status로 토큰을 재발급
+  async activate(userPk: string, tx: TxType): Promise<void> {
+    await tx
+      .update(users)
+      .set({ status: "active", updatedAt: new Date() })
+      .where(eq(users.pk, userPk));
+  }
+
+  /*
   UPDATE users SET withdraw_requested_at = now(), updated_at = now() WHERE pk = ?1;
    */
   // 탈퇴 요청: 유예기간 시작

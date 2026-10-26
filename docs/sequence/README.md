@@ -4,24 +4,26 @@
 
 ## 목록
 
-| 파일                                                                               | 내용                                         |
-| ---------------------------------------------------------------------------------- | -------------------------------------------- |
-| [flow/auth-guards.puml](flow/auth-guards.puml)                                     | 공통 인증 · 가입 단계 · 유형 가드            |
-| [flow/withdrawal-purge.puml](flow/withdrawal-purge.puml)                           | 스케줄러: 탈퇴 유예기간 만료 처리            |
-| [flow/file-upload.puml](flow/file-upload.puml)                                     | 파일 업로드 · 확정 · 조회 · 삭제             |
-| [user/post-oauth-login.puml](user/post-oauth-login.puml)                           | `POST /api/v1/user/oauth/login`              |
-| [user/post-refresh.puml](user/post-refresh.puml)                                   | `POST /api/v1/user/refresh`                  |
-| [user/get-info.puml](user/get-info.puml)                                           | `GET /api/v1/user/info`                      |
-| [user/post-logout.puml](user/post-logout.puml)                                     | `POST /api/v1/user/logout`                   |
-| [user/post-withdraw.puml](user/post-withdraw.puml)                                 | `POST /api/v1/user/withdraw`                 |
-| [consent/get-consent-list.puml](consent/get-consent-list.puml)                     | `GET /api/v1/user/consent/list`              |
-| [consent/post-consent.puml](consent/post-consent.puml)                             | `POST /api/v1/user/consent`                  |
-| [file/post-business-card-upload-url.puml](file/post-business-card-upload-url.puml) | `POST /api/v1/file/business-card/upload-url` |
-| [file/post-attachment-upload-url.puml](file/post-attachment-upload-url.puml)       | `POST /api/v1/file/attachment/upload-url`    |
-| [cheers/get-cheers.puml](cheers/get-cheers.puml)                                   | `GET /api/v1/cheers`                         |
-| [cheers/post-cheers-request.puml](cheers/post-cheers-request.puml)                 | `POST /api/v1/cheers/request`                |
-| [cheers/get-cheers-sent.puml](cheers/get-cheers-sent.puml)                         | `GET /api/v1/cheers/sent`                    |
-| [cheers/get-cheers-sent-id.puml](cheers/get-cheers-sent-id.puml)                   | `GET /api/v1/cheers/sent/{id}`               |
+| 파일                                                                                 | 내용                                               |
+| ------------------------------------------------------------------------------------ | -------------------------------------------------- |
+| [flow/auth-guards.puml](flow/auth-guards.puml)                                       | 공통 인증 · 가입 단계 · 유형 가드                  |
+| [flow/withdrawal-purge.puml](flow/withdrawal-purge.puml)                             | 스케줄러: 탈퇴 유예기간 만료 처리                  |
+| [flow/file-upload.puml](flow/file-upload.puml)                                       | 파일 업로드 · 확정 · 조회 · 삭제                   |
+| [user/post-oauth-login.puml](user/post-oauth-login.puml)                             | `POST /api/v1/user/oauth/login`                    |
+| [user/post-refresh.puml](user/post-refresh.puml)                                     | `POST /api/v1/user/refresh`                        |
+| [user/get-info.puml](user/get-info.puml)                                             | `GET /api/v1/user/info`                            |
+| [user/post-logout.puml](user/post-logout.puml)                                       | `POST /api/v1/user/logout`                         |
+| [user/post-withdraw.puml](user/post-withdraw.puml)                                   | `POST /api/v1/user/withdraw`                       |
+| [consent/get-consent-list.puml](consent/get-consent-list.puml)                       | `GET /api/v1/user/consent/list`                    |
+| [consent/post-consent.puml](consent/post-consent.puml)                               | `POST /api/v1/user/consent`                        |
+| [file/post-business-card-upload-url.puml](file/post-business-card-upload-url.puml)   | `POST /api/v1/file/business-card/upload-url`       |
+| [file/post-attachment-upload-url.puml](file/post-attachment-upload-url.puml)         | `POST /api/v1/file/attachment/upload-url`          |
+| [graduated/post-verify-business-card.puml](graduated/post-verify-business-card.puml) | `POST /api/v1/user/graduated/verify/business-card` |
+| [graduated/post-info.puml](graduated/post-info.puml)                                 | `POST /api/v1/user/graduated/info`                 |
+| [cheers/get-cheers.puml](cheers/get-cheers.puml)                                     | `GET /api/v1/cheers`                               |
+| [cheers/post-cheers-request.puml](cheers/post-cheers-request.puml)                   | `POST /api/v1/cheers/request`                      |
+| [cheers/get-cheers-sent.puml](cheers/get-cheers-sent.puml)                           | `GET /api/v1/cheers/sent`                          |
+| [cheers/get-cheers-sent-id.puml](cheers/get-cheers-sent-id.puml)                     | `GET /api/v1/cheers/sent/{id}`                     |
 
 ## 보기
 
