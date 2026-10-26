@@ -8,6 +8,7 @@ import { LoggerModule } from "@src/global/logger/logger.module";
 import { ConsentModule } from "@src/consent/consent.module";
 import { FileModule } from "@src/file/file.module";
 import { AppController } from "./app.controller";
+import { UserModule } from "@src/user/user.module";
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { AppController } from "./app.controller";
       }),
       inject: [ConfigService],
     }),
+    UserModule,
     ConsentModule,
     FileModule,
   ],

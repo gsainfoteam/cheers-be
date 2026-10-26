@@ -65,6 +65,6 @@ end
 note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
 
 Service --> Controller: BaseResultDto.OK
-Controller --> Client: 200 { result: "OK" }
+Controller --> Client: 201 { result: "OK" }
 
 @enduml

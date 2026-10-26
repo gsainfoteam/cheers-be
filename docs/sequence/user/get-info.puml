@@ -1,0 +1,101 @@
+@startuml get-info
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/v1/user/info
+caption CRB-10 · 내 정보, 가입 다음 단계(next_step), 재동의 필요 여부, 유형별 정보
+
+actor Client
+participant "AnyStatusGuard" as Guard
+participant "UserController" as Controller
+participant "UserService" as Service
+participant "AuthService" as AuthService
+participant "UserRepository" as UserRepository
+participant "CoffeeChatContactRepository" as CoffeeChatContactRepository
+participant "StudentRepository" as StudentRepository
+participant "GraduatedRepository" as GraduatedRepository
+database PostgreSQL
+participant "S3"
+
+Client -> Guard: GET /api/v1/user/info\nAuthorization: Bearer <access token>
+ref over Client, Guard: authenticate() — flow/auth-guards.puml\n401 Missing access token / Token expired / Invalid token
+note right of Guard: 가입 상태와 관계없이 통과 (pending · active)
+Guard -> Controller: getInfo(user)
+Controller -> Service: getInfo(userCtx)
+
+par 동시에 조회 — 유형이 필요한 조회는 토큰 클레임의 type(claimType)으로
+  Service -> UserRepository: findByPk(userPk)
+  UserRepository -> PostgreSQL: SELECT users (is_deleted = false\nAND withdraw_requested_at IS NULL)
+  UserRepository --> Service: user | null
+else
+  Service -> CoffeeChatContactRepository: findByUserPk(userPk)
+  CoffeeChatContactRepository -> PostgreSQL: SELECT coffee_chat_contact
+  CoffeeChatContactRepository --> Service: contact | null
+else
+  Service -> UserRepository: findSignupProgress(userPk, claimType)
+  UserRepository -> PostgreSQL: 필수 약관 미동의 여부,\n유형별 인증(verified_at) · 추가 정보 존재 여부
+  UserRepository --> Service: { hasMissingRequiredConsent, verified, hasProfile }
+else claimType = student
+  Service -> StudentRepository: findByUserPkWithLatestProfile(userPk)
+  StudentRepository -> PostgreSQL: SELECT student\nLEFT JOIN LATERAL (student_profile JOIN department,\n첨부는 json_agg ORDER BY sort_order,\nORDER BY version DESC LIMIT 1)
+  note right: 현재 정보 = 가장 큰 version.\n재학생 행 · 프로필 · 학과 · 첨부를 한 쿼리로
+  StudentRepository --> Service: { student, latest: { profile, department, attachments } | null }
+else claimType = graduated
+  Service -> GraduatedRepository: findByUserPkWithProfile(userPk)
+  GraduatedRepository -> PostgreSQL: SELECT graduated LEFT JOIN graduated_profile
+  GraduatedRepository --> Service: { graduated, profile | null }
+else
+  Service -> AuthService: touchLastActive(userPk)
+  AuthService -> UserRepository: updateLastActiveAt(userPk)
+  UserRepository -> PostgreSQL: UPDATE users SET last_active_at = now()\nWHERE is_deleted = false
+  note right: 유저 조회와 동시에 실행되므로\n탈퇴한 유저는 건드리지 않게 조건을 둠
+end
+note right of Service: 트랜잭션 없음 (조회 + 최근 접속 시각 갱신만)
+
+alt 유저 없음 (탈퇴 · 탈퇴 유예기간 중)
+  Service -[#red]-> Client: 401 User not found
+end
+
+opt DB의 type ≠ claimType
+  note over Service
+    다른 기기에서 가입 중 유형을 바꾼 뒤 남은 access token (최대 access token 수명).
+    응답은 DB의 type · status 기준이어야 하므로 유형이 필요한 조회만 다시 함
+  end note
+  par DB type으로 다시 조회
+    Service -> UserRepository: findSignupProgress(userPk, user.type)
+    UserRepository -> PostgreSQL: 필수 약관 미동의 여부, 인증 · 추가 정보 존재 여부
+  else
+    Service -> StudentRepository: findByUserPkWithLatestProfile(userPk)
+    note right: user.type = student일 때
+  else
+    Service -> GraduatedRepository: findByUserPkWithProfile(userPk)
+    note right: user.type = graduated일 때
+  end
+end
+
+opt type = student이고 추가 정보가 있음
+  loop source = file인 첨부
+    Service -> S3: getPresignedUrl(key)
+    note right: 비공개 버킷이라 presigned URL로 내려줌.\n서명은 서버에서 계산 (S3 호출 없음)
+    alt 서명 실패 (FileService가 InternalServerErrorException)
+      Service -[#red]-> Client: 500 Internal Server Error
+    end
+  end
+end
+
+Service -> Service: next_step = calculateNextStep(status, progress)\nconsent_required = active && hasMissingRequiredConsent
+note right of Service
+  pending: next_step으로 안내 (consent → verify → profile), consent_required = false
+  active: next_step = null, 개정된 필수 약관에 동의하지 않았으면 consent_required = true
+  null 배열(activities, hashtags, links)은 []로 응답
+end note
+Service --> Controller: UserInfoDto
+Controller --> Client: 200 { id, type, status, next_step, name, email,\nconsent_required, student, graduated }
+
+@enduml

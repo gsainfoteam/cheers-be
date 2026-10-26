@@ -7,11 +7,17 @@
 | 파일                                                                               | 내용                                         |
 | ---------------------------------------------------------------------------------- | -------------------------------------------- |
 | [flow/auth-guards.puml](flow/auth-guards.puml)                                     | 공통 인증 · 가입 단계 · 유형 가드            |
+| [flow/withdrawal-purge.puml](flow/withdrawal-purge.puml)                           | 스케줄러: 탈퇴 유예기간 만료 처리            |
+| [flow/file-upload.puml](flow/file-upload.puml)                                     | 파일 업로드 · 확정 · 조회 · 삭제             |
+| [user/post-oauth-login.puml](user/post-oauth-login.puml)                           | `POST /api/v1/user/oauth/login`              |
+| [user/post-refresh.puml](user/post-refresh.puml)                                   | `POST /api/v1/user/refresh`                  |
+| [user/get-info.puml](user/get-info.puml)                                           | `GET /api/v1/user/info`                      |
+| [user/post-logout.puml](user/post-logout.puml)                                     | `POST /api/v1/user/logout`                   |
+| [user/post-withdraw.puml](user/post-withdraw.puml)                                 | `POST /api/v1/user/withdraw`                 |
 | [consent/get-consent-list.puml](consent/get-consent-list.puml)                     | `GET /api/v1/user/consent/list`              |
 | [consent/post-consent.puml](consent/post-consent.puml)                             | `POST /api/v1/user/consent`                  |
 | [file/post-business-card-upload-url.puml](file/post-business-card-upload-url.puml) | `POST /api/v1/file/business-card/upload-url` |
 | [file/post-attachment-upload-url.puml](file/post-attachment-upload-url.puml)       | `POST /api/v1/file/attachment/upload-url`    |
-| [flow/file-upload.puml](flow/file-upload.puml)                                     | 파일 업로드 · 확정 · 조회 · 삭제             |
 
 ## 보기
 

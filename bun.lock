@@ -17,6 +17,7 @@
         "class-validator": "^0.15.1",
         "dotenv": "^17.4.2",
         "drizzle-orm": "^0.45.4",
+        "jose": "^5",
         "nest-winston": "^1.10.2",
         "nestjs-slack": "^2.0.0",
         "nodemailer": "^10.2.1",
@@ -1101,6 +1102,8 @@
     "jest-watcher": ["jest-watcher@29.7.0", "", { "dependencies": { "@jest/test-result": "^29.7.0", "@jest/types": "^29.6.3", "@types/node": "*", "ansi-escapes": "^4.2.1", "chalk": "^4.0.0", "emittery": "^0.13.1", "jest-util": "^29.7.0", "string-length": "^4.0.1" } }, "sha512-49Fg7WXkU3Vl2h6LbLtMQ/HyB6rXSIX7SqvBLQmssRBGN9I0PNvPmAmCWSOY6SOvrjhI/F7/bGAv9RtnsPA03g=="],
 
     "jest-worker": ["jest-worker@27.5.1", "", { "dependencies": { "@types/node": "*", "merge-stream": "^2.0.0", "supports-color": "^8.0.0" } }, "sha512-7vuh85V5cdDofPyxn58nrPjBktZo0u9x1g8WtjQol+jZDaE+fhN+cIvTj11GndBnMnyfrUOG1sZQxCdjKh+DKg=="],
+
+    "jose": ["jose@5.10.0", "", {}, "sha512-s+3Al/p9g32Iq+oqXxkW//7jk2Vig6FF1CFqzVXoTUXt2qz89YWbL+OwS17NFYEvxC35n0FKeGO2LGYSxeM2Gg=="],
 
     "js-tokens": ["js-tokens@4.0.0", "", {}, "sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ=="],
 
