@@ -23,7 +23,7 @@ CREATE TABLE "coffee_chat_contact" (
 );
 */
 // 커피챗 연락수단 (재학생 · 현업자 공통)
-// 희망하지 않음 = 두 플래그 모두 false, phone / email 은 유지
+// 희망하지 않음 = 두 플래그 모두 false. 끈 연락 방법의 phone / email 은 null로 지움
 export const coffeeChatContact = pgTable(
   "coffee_chat_contact",
   {

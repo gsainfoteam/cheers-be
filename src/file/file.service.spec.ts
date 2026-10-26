@@ -52,6 +52,23 @@ describe("FileService", () => {
     expect(keys).toEqual(["a.jpg", "b.png"]);
   });
 
+  it("deleteFileQuietly deletes the file", async () => {
+    await service.deleteFileQuietly("business-card/a.jpg");
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect((send.mock.calls[0][0] as DeleteObjectCommand).input.Key).toBe(
+      "business-card/a.jpg",
+    );
+  });
+
+  it("deleteFileQuietly does not throw when S3 fails", async () => {
+    send.mockRejectedValue(new Error("S3 down"));
+
+    await expect(
+      service.deleteFileQuietly("business-card/a.jpg"),
+    ).resolves.toBeUndefined();
+  });
+
   it("creates a presigned URL with the default expiry", async () => {
     (getSignedUrl as jest.Mock).mockResolvedValue("https://signed");
 

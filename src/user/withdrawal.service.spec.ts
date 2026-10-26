@@ -49,7 +49,7 @@ describe("WithdrawalService", () => {
     db: { transaction: (fn: (tx: TxType) => unknown) => fn(tx) },
   };
   const authService = { revokeAllTokens: jest.fn() };
-  const fileService = { deleteFile: jest.fn() };
+  const fileService = { deleteFileQuietly: jest.fn() };
   const userRepository = {
     findByPkForUpdate: jest.fn(),
     requestWithdrawal: jest.fn(),
@@ -120,7 +120,7 @@ describe("WithdrawalService", () => {
       );
       expect(userRepository.withdraw).not.toHaveBeenCalled();
       expect(userOauthAccountRepository.deleteByUserPk).not.toHaveBeenCalled();
-      expect(fileService.deleteFile).not.toHaveBeenCalled();
+      expect(fileService.deleteFileQuietly).not.toHaveBeenCalled();
     });
 
     it("returns 401 when the user already withdrew or requested withdrawal", async () => {
@@ -202,7 +202,7 @@ describe("WithdrawalService", () => {
         record("graduated.clearBusinessCardKey"),
       );
       userRepository.withdraw.mockImplementation(record("users.withdraw"));
-      fileService.deleteFile.mockImplementation(record("s3.delete"));
+      fileService.deleteFileQuietly.mockImplementation(record("s3.delete"));
 
       await expect(createService().purgeExpired(now)).resolves.toBe(1);
 
@@ -224,7 +224,7 @@ describe("WithdrawalService", () => {
         "graduated-1",
         tx,
       );
-      expect(fileService.deleteFile).toHaveBeenCalledWith(
+      expect(fileService.deleteFileQuietly).toHaveBeenCalledWith(
         "business-card/a.jpg",
       );
       // 다음 조회에서는 이번 실행에서 시도한 유저를 뺌
@@ -256,7 +256,7 @@ describe("WithdrawalService", () => {
       );
       expect(graduatedRepository.findByUserPk).not.toHaveBeenCalled();
       expect(userRepository.withdraw).toHaveBeenCalledWith(USER_PK, tx);
-      expect(fileService.deleteFile).not.toHaveBeenCalled();
+      expect(fileService.deleteFileQuietly).not.toHaveBeenCalled();
     });
 
     it("skips a user locked by another instance or whose withdrawal was just canceled", async () => {
@@ -289,20 +289,6 @@ describe("WithdrawalService", () => {
         100,
         [USER_PK, otherPk],
       );
-    });
-
-    it("still counts the user when deleting the business card from S3 fails", async () => {
-      userRepository.findWithdrawalDuePks
-        .mockResolvedValueOnce([USER_PK])
-        .mockResolvedValueOnce([]);
-      userRepository.lockWithdrawalDue.mockResolvedValue(userRow());
-      graduatedRepository.findByUserPk.mockResolvedValue({
-        pk: "graduated-1",
-        businessCardKey: "business-card/a.jpg",
-      });
-      fileService.deleteFile.mockRejectedValue(new Error("S3 down"));
-
-      await expect(createService().purgeExpired(now)).resolves.toBe(1);
     });
   });
 });
