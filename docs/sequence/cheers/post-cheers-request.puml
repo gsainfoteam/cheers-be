@@ -1,0 +1,106 @@
+@startuml post-cheers-request
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title POST /api/v1/cheers/request
+caption CRB-37 · 재학생 → 현업자 커피챗 요청 저장 + 현업자 연락 설정으로 비동기 알림
+
+actor Client
+participant "UserGuard\n+ UserTypeGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "CheersStudentController" as Controller
+participant "CheersStudentService" as Service
+participant "StudentRepository" as StudentRepository
+participant "GraduatedCardRepository" as GraduatedCardRepository
+participant "CoffeeChatRequestRepository" as CoffeeChatRequestRepository
+participant "NotificationService" as NotificationService
+database PostgreSQL
+participant "SMTP"
+participant "Solapi"
+participant "Slack"
+
+Client -> Guard: POST /api/v1/cheers/request\nAuthorization: Bearer <access token>\n{ graduated_id, message }
+ref over Client, Guard
+  UserGuard, UserTypeGuard — flow/auth-guards.puml
+  @UserTypes(["student"]). 가입을 마친(active) 재학생만
+  401 Missing access token / Token expired / Invalid token
+  403 Signup is not completed / User type not allowed (현업자)
+end ref
+Guard -> Pipe: 통과
+alt body 검증 실패 (graduated_id가 UUID가 아님,\nmessage가 trim 후 비었거나 1000자 초과)
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+Pipe -> Controller: createRequest(req, user)
+Controller -> Service: createRequest(userPk, req)
+
+group transaction (DatabaseService.db.transaction)
+  Service -> StudentRepository: findByUserPkWithLatestProfile(userPk, tx)
+  StudentRepository -> PostgreSQL: SELECT student\nLEFT JOIN LATERAL (student_profile ...\nORDER BY version DESC LIMIT 1)
+  StudentRepository --> Service: { student, latest } | null
+  alt 재학생 행 또는 추가 정보(latest)가 없음
+    Service -[#red]-> Client: 403 Student profile not found
+    note right: active 재학생은 항상 있으므로 방어 코드
+  end
+
+  Service -> GraduatedCardRepository: findRequestTarget(graduated_id, tx)
+  GraduatedCardRepository -> PostgreSQL: SELECT g.pk, u.name, c.*\nFROM graduated g JOIN users u JOIN graduated_profile gp\nLEFT JOIN coffee_chat_contact c\nWHERE g.pk = ? AND u.type = 'graduated' AND u.status = 'active'\nAND isActiveAccount
+  note right: 목록과 같은 조건.\n탈퇴 · 탈퇴 유예기간 중 · 가입 미완료 현업자는 없는 것으로 봄
+  GraduatedCardRepository --> Service: { graduatedPk, name, contact | null } | null
+  alt 현업자 없음
+    Service -[#red]-> Client: 404 Graduated not found
+  else contact 없음, 또는 kakao_enabled · email_enabled 모두 false ("희망하지 않음")
+    Service -[#red]-> Client: 409 Graduated does not accept coffee chat requests
+  end
+
+  Service -> CoffeeChatRequestRepository: insert({ graduatedPk, studentPk,\nstudentProfilePk: latest.profile.pk, message }, tx)
+  CoffeeChatRequestRepository -> PostgreSQL: INSERT coffee_chat_request RETURNING *
+  note right
+    요청 당시의 재학생 정보 버전을 저장.
+    복합 FK (student_profile_pk, student_pk) → 본인 버전만 들어감.
+    같은 현업자에게 여러 번 요청 가능 (중복 검사 없음)
+  end note
+  CoffeeChatRequestRepository --> Service: request
+end
+note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
+
+== 커밋 뒤 ==
+
+Service -> Service: 켜진 채널만 담음\nemail_enabled → buildCoffeeChatRequestedMail(contact.email, name,\n  link = WEB_BASE_URL/cheers/received/<id>)\nkakao_enabled → { to: contact.phone,\n  variables: { recipientName: name, coffeeChatRequestPk } }
+note right of Service
+  WEB_BASE_URL: production에서 비어 있으면 서버 시작 실패,
+  로컬에서 비어 있으면 링크 없이 발송.
+  name이 null이면 "현업자"로 대체
+end note
+Service ->> NotificationService: notifyAsync({ coffeeChatRequestPk, event: "coffee_chat_requested", email?, alimtalk? })
+note right
+  응답을 기다리지 않음. 로그 insert가 트랜잭션 밖 connection에서
+  coffee_chat_request FK를 참조하므로 반드시 커밋 뒤 호출
+end note
+Service --> Controller: { id, created_at }
+Controller --> Client: 201 { id, created_at }
+
+== 비동기 알림 (NotificationService.notify) ==
+
+par 채널별 독립 발송
+  NotificationService -> SMTP: MailService.send
+  SMTP --> NotificationService: MailResult
+else
+  NotificationService -> Solapi: AlimtalkService.send (템플릿 coffee_chat_requested)
+  Solapi --> NotificationService: AlimtalkResult
+end
+alt 실제 발송 안 함 (로컬 메일 · 솔라피 키 미설정 → skipped)
+  note over NotificationService: notification_log 기록 안 함
+else 발송 시도함
+  NotificationService -> PostgreSQL: INSERT notification_log\n(event = coffee_chat_requested, channel, status sent | failed, recipient)
+  opt 발송 실패 또는 로그 insert 실패
+    NotificationService ->> Slack: [NOTIFICATION ERROR] (수신자 마스킹)
+  end
+end
+
+@enduml
