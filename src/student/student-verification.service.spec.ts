@@ -1,10 +1,13 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   GoneException,
   HttpStatus,
   NotFoundException,
 } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { createHmac } from "node:crypto";
 import { DatabaseService } from "@src/database/database.service";
 import { SchoolRepository } from "@src/database/repository/school.repository";
 import {
@@ -24,6 +27,13 @@ const userPk = "690c15dc-0000-4000-8000-000000000001";
 const email = "gildong@gm.gist.ac.kr";
 const now = new Date("2026-10-25T12:00:00.000Z");
 
+// 서비스와 같은 방식으로 HMAC 키를 파생 (JWT_PRIVATE_KEY = "test-jwt-key")
+const hashKey = createHmac("sha256", "test-jwt-key")
+  .update("student-email-verification-code")
+  .digest();
+const hash = (code: string) =>
+  createHmac("sha256", hashKey).update(code).digest("hex");
+
 const student: StudentRow = {
   pk: "student-pk",
   userPk,
@@ -38,7 +48,7 @@ const verification = (
 ): StudentEmailVerificationRow => ({
   studentPk: student.pk,
   attemptCount: 0,
-  code: "482913",
+  code: hash("482913"),
   expiresAt: new Date(now.getTime() + 5 * 60 * 1000),
   createdAt: now,
   email,
@@ -72,7 +82,12 @@ describe("StudentVerificationService", () => {
     incrementAttemptCount: jest.fn(),
     deleteByStudentPk: jest.fn(),
   };
+  const configService = {
+    get: (key: string) =>
+      key === "JWT_PRIVATE_KEY" ? "test-jwt-key" : undefined,
+  };
   const service = new StudentVerificationService(
+    configService as unknown as ConfigService,
     dbService as unknown as DatabaseService,
     mailService as unknown as MailService,
     schoolRepository as unknown as SchoolRepository,
@@ -99,7 +114,7 @@ describe("StudentVerificationService", () => {
   });
 
   describe("sendCode", () => {
-    it("upserts a fresh 6-digit code and mails it after commit", async () => {
+    it("stores only the HMAC of a fresh 6-digit code and mails the code after commit", async () => {
       await expect(service.sendCode(userPk, email)).resolves.toEqual({
         expires_at: new Date("2026-10-25T12:05:00.000Z"),
         resend_available_at: new Date("2026-10-25T12:01:00.000Z"),
@@ -123,16 +138,17 @@ describe("StudentVerificationService", () => {
       expect(row).toEqual({
         studentPk: student.pk,
         email,
-        code: expect.stringMatching(/^\d{6}$/) as string,
+        code: expect.stringMatching(/^[0-9a-f]{64}$/) as string,
         expiresAt: new Date("2026-10-25T12:05:00.000Z"),
         createdAt: now,
       });
-      expect(mailService.sendAsync).toHaveBeenCalledWith(
-        expect.objectContaining({
-          to: email,
-          text: expect.stringContaining(row.code) as string,
-        }),
-      );
+      const [[mail]] = mailService.sendAsync.mock.calls as unknown as [
+        [{ to: string; text: string }],
+      ];
+      const mailedCode = /인증번호: (\d{6})/.exec(mail.text)?.[1];
+      expect(mail.to).toBe(email);
+      expect(mailedCode).toBeDefined();
+      expect(row.code).toBe(hash(mailedCode!));
       expect(order).toEqual(["commit", "sendAsync"]);
     });
 
@@ -169,6 +185,15 @@ describe("StudentVerificationService", () => {
 
       expect(verificationRepository.upsert).toHaveBeenCalled();
       expect(mailService.sendAsync).toHaveBeenCalled();
+    });
+
+    it("returns 403 when the user switched to graduated after the guard", async () => {
+      studentRepository.findByUserPkForUpdate.mockResolvedValue(null);
+
+      await expect(service.sendCode(userPk, email)).rejects.toThrow(
+        new ForbiddenException("User type not allowed"),
+      );
+      expect(verificationRepository.upsert).not.toHaveBeenCalled();
     });
 
     it("returns 409 when another account already verified the email", async () => {

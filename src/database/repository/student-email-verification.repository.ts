@@ -32,7 +32,7 @@ export class StudentEmailVerificationRepository {
     email = EXCLUDED.email, code = EXCLUDED.code, attempt_count = 0,
     expires_at = EXCLUDED.expires_at, created_at = EXCLUDED.created_at;
    */
-  // 학생당 진행 중인 요청 1개. 재전송하면 덮어써서 이전 코드는 무효
+  // 학생당 진행 중인 요청 1개. 재전송하면 덮어써서 이전 코드는 무효. code는 해시값
   async upsert(
     row: Pick<
       StudentEmailVerificationRow,

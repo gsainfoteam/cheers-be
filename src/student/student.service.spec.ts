@@ -1,4 +1,8 @@
-import { BadRequestException, UnauthorizedException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ForbiddenException,
+  UnauthorizedException,
+} from "@nestjs/common";
 import { AuthService } from "@src/auth/auth.service";
 import { DatabaseService } from "@src/database/database.service";
 import { CoffeeChatContactRepository } from "@src/database/repository/coffee-chat-contact.repository";
@@ -152,6 +156,14 @@ describe("StudentService", () => {
     });
     expect(departmentRepository.findByEmailDomain).toHaveBeenCalledWith(
       "gm.gist.ac.kr",
+    );
+  });
+
+  it("getDepartments returns 403 when the student row is gone (type changed)", async () => {
+    studentRepository.findByUserPk.mockResolvedValue(null);
+
+    await expect(service.getDepartments(userPk)).rejects.toThrow(
+      new ForbiddenException("User type not allowed"),
     );
   });
 
@@ -322,6 +334,15 @@ describe("StudentService", () => {
       );
       expect(profileRepository.insert).not.toHaveBeenCalled();
       expect(userRepository.activate).not.toHaveBeenCalled();
+    });
+
+    it("returns 403 when the user switched to graduated after the guard", async () => {
+      studentRepository.findByUserPkWithLatestProfile.mockResolvedValue(null);
+
+      await expect(service.saveInfo(userPk, request())).rejects.toThrow(
+        new ForbiddenException("User type not allowed"),
+      );
+      expect(contactRepository.upsert).not.toHaveBeenCalled();
     });
 
     it("returns 401 when the user withdrew right after the guard", async () => {

@@ -1,13 +1,15 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   GoneException,
   HttpException,
   HttpStatus,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { randomInt, timingSafeEqual } from "node:crypto";
+import { createHmac, randomInt, timingSafeEqual } from "node:crypto";
+import { ConfigService } from "@nestjs/config";
 import { DatabaseService } from "@src/database/database.service";
 import { SchoolRepository } from "@src/database/repository/school.repository";
 import { StudentEmailVerificationRepository } from "@src/database/repository/student-email-verification.repository";
@@ -38,13 +40,25 @@ type VerifyResult =
 // 재학생 학교 이메일 인증 (가입 단계 verify)
 @Injectable()
 export class StudentVerificationService {
+  // 인증번호는 HMAC으로만 저장. 6자리라 키 없는 해시는 100만 번이면 되돌릴 수 있어서 서버 비밀값을 키로 씀
+  private readonly codeHashKey: Buffer;
+
   constructor(
+    configService: ConfigService,
     private readonly dbService: DatabaseService,
     private readonly mailService: MailService,
     private readonly schoolRepository: SchoolRepository,
     private readonly studentRepository: StudentRepository,
     private readonly studentEmailVerificationRepository: StudentEmailVerificationRepository,
-  ) {}
+  ) {
+    // 새 env를 늘리지 않으려고 이미 필수인 JWT 서명 키에서 용도별 키를 파생 (AuthService가 존재를 검사)
+    this.codeHashKey = createHmac(
+      "sha256",
+      configService.get<string>("JWT_PRIVATE_KEY") ?? "",
+    )
+      .update("student-email-verification-code")
+      .digest();
+  }
 
   // 재전송도 같은 API. 이전 코드는 덮어써서 무효
   async sendCode(userPk: string, email: string): Promise<SendCodeResponseDto> {
@@ -89,7 +103,13 @@ export class StudentVerificationService {
       }
 
       await this.studentEmailVerificationRepository.upsert(
-        { studentPk: student.pk, email, code, expiresAt, createdAt },
+        {
+          studentPk: student.pk,
+          email,
+          code: this.hashCode(code),
+          expiresAt,
+          createdAt,
+        },
         tx,
       );
     });
@@ -164,7 +184,7 @@ export class StudentVerificationService {
       return { kind: "expired" };
     }
 
-    if (!codeEquals(verification.code, code)) {
+    if (!hashEquals(verification.code, this.hashCode(code))) {
       // 5번째로 틀려도 행은 남겨 둬서 이후 확인은 404, 재전송 대기도 유지
       const attemptCount =
         await this.studentEmailVerificationRepository.incrementAttemptCount(
@@ -192,20 +212,24 @@ export class StudentVerificationService {
     return { kind: "ok" };
   }
 
-  // 재학생 행은 가입 때 같이 만들어지므로 SignupStepGuard(student)를 통과했다면 항상 있음
+  private hashCode(code: string): string {
+    return createHmac("sha256", this.codeHashKey).update(code).digest("hex");
+  }
+
   private async lockStudent(userPk: string, tx: TxType): Promise<StudentRow> {
     const student = await this.studentRepository.findByUserPkForUpdate(
       userPk,
       tx,
     );
+    // 가드 통과 뒤 다른 기기에서 현업자로 유형을 바꾸면 재학생 행이 없음 (현업자 API와 같은 403)
     if (!student) {
-      throw new NotFoundException("Student not found");
+      throw new ForbiddenException("User type not allowed");
     }
     return student;
   }
 }
 
-const codeEquals = (expected: string, actual: string): boolean => {
+const hashEquals = (expected: string, actual: string): boolean => {
   const a = Buffer.from(expected);
   const b = Buffer.from(actual);
   return a.length === b.length && timingSafeEqual(a, b);

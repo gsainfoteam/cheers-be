@@ -12,7 +12,7 @@ import { student } from "./student";
 CREATE TABLE "student_email_verification" (
     "student_pk"    uuid                     NOT NULL REFERENCES "student" ("pk"),
     "attempt_count" smallint                 NOT NULL DEFAULT 0,
-    "code"          varchar(6)               NOT NULL,
+    "code"          varchar(64)              NOT NULL,
     "expires_at"    timestamp with time zone NOT NULL,
     "created_at"    timestamp with time zone NOT NULL DEFAULT NOW(),
     "email"         varchar(255)             NOT NULL
@@ -25,7 +25,8 @@ export const studentEmailVerification = pgTable("student_email_verification", {
     .notNull()
     .references(() => student.pk),
   attemptCount: smallint("attempt_count").notNull().default(0),
-  code: varchar("code", { length: 6 }).notNull(),
+  // 인증번호의 HMAC-SHA256 (hex). 원문은 저장하지 않음
+  code: varchar("code", { length: 64 }).notNull(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()

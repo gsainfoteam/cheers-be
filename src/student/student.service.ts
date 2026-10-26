@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -49,8 +50,12 @@ export class StudentService {
 
   async getDepartments(userPk: string): Promise<DepartmentListResponseDto> {
     const student = await this.studentRepository.findByUserPk(userPk);
+    // 가드 통과 뒤 다른 기기에서 현업자로 유형을 바꾸면 재학생 행이 없음 (현업자 API와 같은 403)
+    if (!student) {
+      throw new ForbiddenException("User type not allowed");
+    }
     // profile 단계 이후라 인증한 이메일이 항상 있음
-    if (!student?.email) {
+    if (!student.email) {
       throw new NotFoundException("Verified student email not found");
     }
 
@@ -94,7 +99,10 @@ export class StudentService {
 
       const current =
         await this.studentRepository.findByUserPkWithLatestProfile(userPk, tx);
-      if (!current?.student.email) {
+      if (!current) {
+        throw new ForbiddenException("User type not allowed");
+      }
+      if (!current.student.email) {
         throw new NotFoundException("Verified student email not found");
       }
 
