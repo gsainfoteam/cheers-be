@@ -32,7 +32,7 @@ ref over Client, Guard
   403 Signup step mismatch / User type not allowed
 end ref
 Guard -> Pipe: 통과
-alt body 검증 실패 (key 없음 · 빈 문자열 · 문자열 아님)
+alt body 검증 실패 (key 없음 · 빈 문자열 · 문자열 아님 · 512자 초과)
   Pipe -[#red]-> Client: 400 (class-validator 메시지)
 end
 Pipe -> Controller: verifyBusinessCard(req, user)
