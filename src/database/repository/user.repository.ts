@@ -136,6 +136,31 @@ export class UserRepository {
   }
 
   /*
+  UPDATE users SET name = COALESCE(name, ?2), updated_at = now() WHERE pk = ?1;
+   */
+  // OAuth에서 이름을 받지 못한 유저가 추가 정보 입력에서 한 번 입력. 이후 수정 불가
+  async fillName(userPk: string, name: string, tx: TxType): Promise<void> {
+    await tx
+      .update(users)
+      .set({
+        name: sql`COALESCE(${users.name}, ${name})`,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.pk, userPk));
+  }
+
+  /*
+  UPDATE users SET status = 'active', updated_at = now() WHERE pk = ?1;
+   */
+  // 추가 정보 입력까지 마치면 가입 완료
+  async activate(userPk: string, tx: TxType): Promise<void> {
+    await tx
+      .update(users)
+      .set({ status: "active", updatedAt: new Date() })
+      .where(eq(users.pk, userPk));
+  }
+
+  /*
   UPDATE users SET withdraw_requested_at = now(), updated_at = now() WHERE pk = ?1;
    */
   // 탈퇴 요청: 유예기간 시작
