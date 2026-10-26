@@ -19,6 +19,12 @@ import { ContactRequestDto } from "@src/user/dto/contact-request.dto";
 const trim = ({ value }: { value: unknown }) =>
   typeof value === "string" ? value.trim() : value;
 
+// 배열의 문자열 항목마다 trim (공백뿐인 항목은 빈 문자열이 되어 @IsNotEmpty에 걸림)
+const trimEach = ({ value }: { value: unknown }) =>
+  Array.isArray(value)
+    ? value.map((v: unknown) => (typeof v === "string" ? v.trim() : v))
+    : value;
+
 export class StudentAttachmentRequestDto {
   @IsIn(["cv", "portfolio"])
   kind: "cv" | "portfolio";
@@ -45,6 +51,7 @@ export class SaveStudentInfoRequestDto {
   @IsInt()
   department_id: number;
 
+  @Transform(trimEach)
   @IsArray()
   @ArrayNotEmpty()
   @ArrayMaxSize(20)
@@ -55,8 +62,10 @@ export class SaveStudentInfoRequestDto {
   interests: string[];
 
   @IsOptional()
+  @Transform(trimEach)
   @IsArray()
   @ArrayMaxSize(20)
+  @ArrayUnique()
   @IsString({ each: true })
   @IsNotEmpty({ each: true })
   @MaxLength(50, { each: true })

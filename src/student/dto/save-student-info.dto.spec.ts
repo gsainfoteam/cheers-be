@@ -28,6 +28,16 @@ describe("SaveStudentInfoRequestDto", () => {
     expect(dto.contact.phone).toBe("01012345678");
   });
 
+  it("trims interest and activity entries", async () => {
+    const { dto, errors } = await validateBody(
+      body({ interests: [" 반도체 "], activities: [" 학부 연구생"] }),
+    );
+
+    expect(errors).toEqual([]);
+    expect(dto.interests).toEqual(["반도체"]);
+    expect(dto.activities).toEqual(["학부 연구생"]);
+  });
+
   it.each([
     [
       "a non-mobile phone",
@@ -41,6 +51,8 @@ describe("SaveStudentInfoRequestDto", () => {
     ],
     ["empty interests", { interests: [] }],
     ["duplicate interests", { interests: ["반도체", "반도체"] }],
+    ["a blank interest", { interests: ["반도체", "   "] }],
+    ["duplicate activities", { activities: ["동아리", " 동아리 "] }],
     [
       "a file attachment (CRB-38)",
       { attachments: [{ kind: "cv", source: "file", url: "https://a.com" }] },
