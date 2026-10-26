@@ -16,6 +16,10 @@
 | [user/post-withdraw.puml](user/post-withdraw.puml)                                   | `POST /api/v1/user/withdraw`                       |
 | [consent/get-consent-list.puml](consent/get-consent-list.puml)                       | `GET /api/v1/user/consent/list`                    |
 | [consent/post-consent.puml](consent/post-consent.puml)                               | `POST /api/v1/user/consent`                        |
+| [student/post-verify-send-code.puml](student/post-verify-send-code.puml)             | `POST /api/v1/user/student/verify/send-code`       |
+| [student/post-verify-code.puml](student/post-verify-code.puml)                       | `POST /api/v1/user/student/verify/code`            |
+| [student/get-departments.puml](student/get-departments.puml)                         | `GET /api/v1/user/student/departments`             |
+| [student/post-info.puml](student/post-info.puml)                                     | `POST /api/v1/user/student/info`                   |
 | [file/post-business-card-upload-url.puml](file/post-business-card-upload-url.puml)   | `POST /api/v1/file/business-card/upload-url`       |
 | [file/post-attachment-upload-url.puml](file/post-attachment-upload-url.puml)         | `POST /api/v1/file/attachment/upload-url`          |
 | [graduated/post-verify-business-card.puml](graduated/post-verify-business-card.puml) | `POST /api/v1/user/graduated/verify/business-card` |
