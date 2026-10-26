@@ -29,6 +29,13 @@
       "when": 1793021921267,
       "tag": "0003_hash_verification_code",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793029087465,
+      "tag": "0004_insert_data",
+      "breakpoints": true
     }
   ]
 }

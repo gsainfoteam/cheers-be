@@ -1,0 +1,1461 @@
+{
+  "id": "427c70f5-3579-4c1f-a255-31e186c24d9e",
+  "prevId": "67a6f7cb-25ef-4dd6-9651-7efa1eac58e5",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.coffee_chat_contact": {
+      "name": "coffee_chat_contact",
+      "schema": "",
+      "columns": {
+        "user_pk": {
+          "name": "user_pk",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "kakao_enabled": {
+          "name": "kakao_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email_enabled": {
+          "name": "email_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "phone": {
+          "name": "phone",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "coffee_chat_contact_user_pk_users_pk_fk": {
+          "name": "coffee_chat_contact_user_pk_users_pk_fk",
+          "tableFrom": "coffee_chat_contact",
+          "columnsFrom": [
+            "user_pk"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "pk"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "coffee_chat_contact_kakao_phone_check": {
+          "name": "coffee_chat_contact_kakao_phone_check",
+          "value": "NOT \"coffee_chat_contact\".\"kakao_enabled\" OR \"coffee_chat_contact\".\"phone\" IS NOT NULL"
+        },
+        "coffee_chat_contact_email_check": {
+          "name": "coffee_chat_contact_email_check",
+          "value": "NOT \"coffee_chat_contact\".\"email_enabled\" OR \"coffee_chat_contact\".\"email\" IS NOT NULL"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.coffee_chat_request": {
+      "name": "coffee_chat_request",
+      "schema": "",
+      "columns": {
+        "pk": {
+          "name": "pk",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "graduated_pk": {
+          "name": "graduated_pk",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "student_pk": {
+          "name": "student_pk",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "student_profile_pk": {
+          "name": "student_profile_pk",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "graduated_viewed_at": {
+          "name": "graduated_viewed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "contact_shared_at": {
+          "name": "contact_shared_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "student_viewed_at": {
+          "name": "student_viewed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "message": {
+          "name": "message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "shared_phone": {
+          "name": "shared_phone",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "shared_email": {
+          "name": "shared_email",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "coffee_chat_request_graduated_pk_index": {
+          "name": "coffee_chat_request_graduated_pk_index",
+          "columns": [
+            {
+              "expression": "graduated_pk",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "coffee_chat_request_student_pk_index": {
+          "name": "coffee_chat_request_student_pk_index",
+          "columns": [
+            {
+              "expression": "student_pk",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "coffee_chat_request_graduated_pk_graduated_pk_fk": {
+          "name": "coffee_chat_request_graduated_pk_graduated_pk_fk",
+          "tableFrom": "coffee_chat_request",
+          "columnsFrom": [
+            "graduated_pk"
+          ],
+          "tableTo": "graduated",
+          "columnsTo": [
+            "pk"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "coffee_chat_request_student_pk_student_pk_fk": {
+          "name": "coffee_chat_request_student_pk_student_pk_fk",
+          "tableFrom": "coffee_chat_request",
+          "columnsFrom": [
+            "student_pk"
+          ],
+          "tableTo": "student",
+          "columnsTo": [
+            "pk"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "coffee_chat_request_student_profile_fk": {
+          "name": "coffee_chat_request_student_profile_fk",
+          "tableFrom": "coffee_chat_request",
+          "columnsFrom": [
+            "student_profile_pk",
+            "student_pk"
+          ],
+          "tableTo": "student_profile",
+          "columnsTo": [
+            "pk",
+            "student_pk"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.consent": {
+      "name": "consent",
+      "schema": "",
+      "columns": {
+        "type": {
+          "name": "type",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_required": {
+          "name": "is_required",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "url": {
+          "name": "url",
+          "type": "varchar(512)",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "consent_type_version_pk": {
+          "name": "consent_type_version_pk",
+          "columns": [
+            "type",
+            "version"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.department": {
+      "name": "department",
+      "schema": "",
+      "columns": {
+        "pk": {
+          "name": "pk",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "school_pk": {
+          "name": "school_pk",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "department_school_pk_school_pk_fk": {
+          "name": "department_school_pk_school_pk_fk",
+          "tableFrom": "department",
+          "columnsFrom": [
+            "school_pk"
+          ],
+          "tableTo": "school",
+          "columnsTo": [
+            "pk"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "department_school_pk_name_unique": {
+          "name": "department_school_pk_name_unique",
+          "columns": [
+            "school_pk",
+            "name"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.graduated_profile": {
+      "name": "graduated_profile",
+      "schema": "",
+      "columns": {
+        "graduated_pk": {
+          "name": "graduated_pk",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "nickname": {
+          "name": "nickname",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "company": {
+          "name": "company",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "department": {
+          "name": "department",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "job": {
+          "name": "job",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "hashtags": {
+          "name": "hashtags",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "links": {
+          "name": "links",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "graduated_profile_graduated_pk_graduated_pk_fk": {
+          "name": "graduated_profile_graduated_pk_graduated_pk_fk",
+          "tableFrom": "graduated_profile",
+          "columnsFrom": [
+            "graduated_pk"
+          ],
+          "tableTo": "graduated",
+          "columnsTo": [
+            "pk"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.graduated": {
+      "name": "graduated",
+      "schema": "",
+      "columns": {
+        "pk": {
+          "name": "pk",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_pk": {
+          "name": "user_pk",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "verified_at": {
+          "name": "verified_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "business_card_key": {
+          "name": "business_card_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "graduated_user_pk_users_pk_fk": {
+          "name": "graduated_user_pk_users_pk_fk",
+          "tableFrom": "graduated",
+          "columnsFrom": [
+            "user_pk"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "pk"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "graduated_user_pk_unique": {
+          "name": "graduated_user_pk_unique",
+          "columns": [
+            "user_pk"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.notification_log": {
+      "name": "notification_log",
+      "schema": "",
+      "columns": {
+        "pk": {
+          "name": "pk",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "coffee_chat_request_pk": {
+          "name": "coffee_chat_request_pk",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event": {
+          "name": "event",
+          "type": "notification_event",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "channel": {
+          "name": "channel",
+          "type": "notification_channel",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "notification_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "provider_message_id": {
+          "name": "provider_message_id",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "recipient": {
+          "name": "recipient",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "notification_log_coffee_chat_request_pk_index": {
+          "name": "notification_log_coffee_chat_request_pk_index",
+          "columns": [
+            {
+              "expression": "coffee_chat_request_pk",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "notification_log_coffee_chat_request_pk_coffee_chat_request_pk_fk": {
+          "name": "notification_log_coffee_chat_request_pk_coffee_chat_request_pk_fk",
+          "tableFrom": "notification_log",
+          "columnsFrom": [
+            "coffee_chat_request_pk"
+          ],
+          "tableTo": "coffee_chat_request",
+          "columnsTo": [
+            "pk"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.refresh_token": {
+      "name": "refresh_token",
+      "schema": "",
+      "columns": {
+        "opaque_hash": {
+          "name": "opaque_hash",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_pk": {
+          "name": "user_pk",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "refresh_token_user_pk_index": {
+          "name": "refresh_token_user_pk_index",
+          "columns": [
+            {
+              "expression": "user_pk",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "refresh_token_user_pk_users_pk_fk": {
+          "name": "refresh_token_user_pk_users_pk_fk",
+          "tableFrom": "refresh_token",
+          "columnsFrom": [
+            "user_pk"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "pk"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.school": {
+      "name": "school",
+      "schema": "",
+      "columns": {
+        "pk": {
+          "name": "pk",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email_domain": {
+          "name": "email_domain",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "school_email_domain_unique": {
+          "name": "school_email_domain_unique",
+          "columns": [
+            "email_domain"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.student_email_verification": {
+      "name": "student_email_verification",
+      "schema": "",
+      "columns": {
+        "student_pk": {
+          "name": "student_pk",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "attempt_count": {
+          "name": "attempt_count",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "code": {
+          "name": "code",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "student_email_verification_student_pk_student_pk_fk": {
+          "name": "student_email_verification_student_pk_student_pk_fk",
+          "tableFrom": "student_email_verification",
+          "columnsFrom": [
+            "student_pk"
+          ],
+          "tableTo": "student",
+          "columnsTo": [
+            "pk"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.student_profile_attachment": {
+      "name": "student_profile_attachment",
+      "schema": "",
+      "columns": {
+        "pk": {
+          "name": "pk",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "profile_pk": {
+          "name": "profile_pk",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "attachment_kind",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "attachment_source",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "file_name": {
+          "name": "file_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "student_profile_attachment_profile_pk_index": {
+          "name": "student_profile_attachment_profile_pk_index",
+          "columns": [
+            {
+              "expression": "profile_pk",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "student_profile_attachment_profile_pk_student_profile_pk_fk": {
+          "name": "student_profile_attachment_profile_pk_student_profile_pk_fk",
+          "tableFrom": "student_profile_attachment",
+          "columnsFrom": [
+            "profile_pk"
+          ],
+          "tableTo": "student_profile",
+          "columnsTo": [
+            "pk"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.student_profile": {
+      "name": "student_profile",
+      "schema": "",
+      "columns": {
+        "pk": {
+          "name": "pk",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "student_pk": {
+          "name": "student_pk",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "department_pk": {
+          "name": "department_pk",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "interests": {
+          "name": "interests",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "activities": {
+          "name": "activities",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "student_profile_department_pk_index": {
+          "name": "student_profile_department_pk_index",
+          "columns": [
+            {
+              "expression": "department_pk",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "student_profile_student_pk_student_pk_fk": {
+          "name": "student_profile_student_pk_student_pk_fk",
+          "tableFrom": "student_profile",
+          "columnsFrom": [
+            "student_pk"
+          ],
+          "tableTo": "student",
+          "columnsTo": [
+            "pk"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "student_profile_department_pk_department_pk_fk": {
+          "name": "student_profile_department_pk_department_pk_fk",
+          "tableFrom": "student_profile",
+          "columnsFrom": [
+            "department_pk"
+          ],
+          "tableTo": "department",
+          "columnsTo": [
+            "pk"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "student_profile_student_pk_version_unique": {
+          "name": "student_profile_student_pk_version_unique",
+          "columns": [
+            "student_pk",
+            "version"
+          ],
+          "nullsNotDistinct": false
+        },
+        "student_profile_pk_student_pk_unique": {
+          "name": "student_profile_pk_student_pk_unique",
+          "columns": [
+            "pk",
+            "student_pk"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.student": {
+      "name": "student",
+      "schema": "",
+      "columns": {
+        "pk": {
+          "name": "pk",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_pk": {
+          "name": "user_pk",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "verified_at": {
+          "name": "verified_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "student_user_pk_users_pk_fk": {
+          "name": "student_user_pk_users_pk_fk",
+          "tableFrom": "student",
+          "columnsFrom": [
+            "user_pk"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "pk"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "student_user_pk_unique": {
+          "name": "student_user_pk_unique",
+          "columns": [
+            "user_pk"
+          ],
+          "nullsNotDistinct": false
+        },
+        "student_email_unique": {
+          "name": "student_email_unique",
+          "columns": [
+            "email"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.user_consent": {
+      "name": "user_consent",
+      "schema": "",
+      "columns": {
+        "pk": {
+          "name": "pk",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_pk": {
+          "name": "user_pk",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "consent_type": {
+          "name": "consent_type",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "consent_version": {
+          "name": "consent_version",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "agreed_at": {
+          "name": "agreed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "user_consent_active_unique": {
+          "name": "user_consent_active_unique",
+          "columns": [
+            {
+              "expression": "user_pk",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "consent_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "consent_version",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "where": "\"user_consent\".\"revoked_at\" IS NULL",
+          "concurrently": false
+        },
+        "user_consent_user_pk_index": {
+          "name": "user_consent_user_pk_index",
+          "columns": [
+            {
+              "expression": "user_pk",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "user_consent_user_pk_users_pk_fk": {
+          "name": "user_consent_user_pk_users_pk_fk",
+          "tableFrom": "user_consent",
+          "columnsFrom": [
+            "user_pk"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "pk"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "user_consent_consent_fk": {
+          "name": "user_consent_consent_fk",
+          "tableFrom": "user_consent",
+          "columnsFrom": [
+            "consent_type",
+            "consent_version"
+          ],
+          "tableTo": "consent",
+          "columnsTo": [
+            "type",
+            "version"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.user_oauth_account": {
+      "name": "user_oauth_account",
+      "schema": "",
+      "columns": {
+        "provider": {
+          "name": "provider",
+          "type": "oauth_provider",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_sub": {
+          "name": "provider_sub",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_pk": {
+          "name": "user_pk",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_login_at": {
+          "name": "last_login_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "user_oauth_account_user_pk_users_pk_fk": {
+          "name": "user_oauth_account_user_pk_users_pk_fk",
+          "tableFrom": "user_oauth_account",
+          "columnsFrom": [
+            "user_pk"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "pk"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "user_oauth_account_provider_provider_sub_pk": {
+          "name": "user_oauth_account_provider_provider_sub_pk",
+          "columns": [
+            "provider",
+            "provider_sub"
+          ]
+        }
+      },
+      "uniqueConstraints": {
+        "user_oauth_account_user_pk_provider_unique": {
+          "name": "user_oauth_account_user_pk_provider_unique",
+          "columns": [
+            "user_pk",
+            "provider"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.users": {
+      "name": "users",
+      "schema": "",
+      "columns": {
+        "pk": {
+          "name": "pk",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "is_deleted": {
+          "name": "is_deleted",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "status": {
+          "name": "status",
+          "type": "user_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "type": {
+          "name": "type",
+          "type": "user_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_active_at": {
+          "name": "last_active_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "withdraw_requested_at": {
+          "name": "withdraw_requested_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "users_pending_created_at_idx": {
+          "name": "users_pending_created_at_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "where": "\"users\".\"status\" = 'pending'",
+          "concurrently": false
+        },
+        "users_withdraw_requested_at_idx": {
+          "name": "users_withdraw_requested_at_idx",
+          "columns": [
+            {
+              "expression": "withdraw_requested_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "where": "\"users\".\"withdraw_requested_at\" IS NOT NULL AND \"users\".\"is_deleted\" = false",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.attachment_kind": {
+      "name": "attachment_kind",
+      "schema": "public",
+      "values": [
+        "cv",
+        "portfolio"
+      ]
+    },
+    "public.attachment_source": {
+      "name": "attachment_source",
+      "schema": "public",
+      "values": [
+        "file",
+        "link"
+      ]
+    },
+    "public.notification_channel": {
+      "name": "notification_channel",
+      "schema": "public",
+      "values": [
+        "email",
+        "kakao_alimtalk"
+      ]
+    },
+    "public.notification_event": {
+      "name": "notification_event",
+      "schema": "public",
+      "values": [
+        "coffee_chat_requested",
+        "contact_shared"
+      ]
+    },
+    "public.notification_status": {
+      "name": "notification_status",
+      "schema": "public",
+      "values": [
+        "sent",
+        "failed"
+      ]
+    },
+    "public.oauth_provider": {
+      "name": "oauth_provider",
+      "schema": "public",
+      "values": [
+        "google",
+        "apple",
+        "naver"
+      ]
+    },
+    "public.user_status": {
+      "name": "user_status",
+      "schema": "public",
+      "values": [
+        "pending",
+        "active"
+      ]
+    },
+    "public.user_type": {
+      "name": "user_type",
+      "schema": "public",
+      "values": [
+        "student",
+        "graduated"
+      ]
+    }
+  },
+  "schemas": {},
+  "views": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
