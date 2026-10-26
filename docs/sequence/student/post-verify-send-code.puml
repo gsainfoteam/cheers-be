@@ -32,14 +32,14 @@ ref over Client, Guard
   403 Signup is already completed / Signup step mismatch / User type not allowed
 end ref
 Guard -> Pipe: 통과
+note right of Pipe: email은 trim + 소문자로 정규화한 뒤 검사
 alt body 검증 실패 (email 누락 · 이메일 형식 아님 · 255자 초과)
   Pipe -[#red]-> Client: 400 (class-validator 메시지)
 end
 Pipe -> Controller: sendCode(req, user)
 Controller -> Service: sendCode(userPk, email)
 
-note right of Service: email은 trim + 소문자로 정규화, 도메인 = @ 뒤
-Service -> SchoolRepository: findByEmailDomain(domain)
+Service -> SchoolRepository: findByEmailDomain(email의 @ 뒤)
 SchoolRepository -> PostgreSQL: SELECT school WHERE email_domain = ?
 PostgreSQL --> SchoolRepository: row
 SchoolRepository --> Service: school | null
@@ -66,7 +66,7 @@ group transaction (DatabaseService.db.transaction)
     created_at 기준 60초가 지나야 다시 보낼 수 있음
   end note
 
-  Service -> StudentRepository: existsByEmail(email, 내 studentPk 제외, tx)
+  Service -> StudentRepository: existsByEmailExcept(email, studentPk, tx)
   StudentRepository -> PostgreSQL: SELECT 1 FROM student WHERE email = ? AND pk <> ?
   PostgreSQL --> StudentRepository: row?
   StudentRepository --> Service: boolean

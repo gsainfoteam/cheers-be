@@ -63,8 +63,9 @@ group transaction (DatabaseService.db.transaction)
     Service -> StudentRepository: markVerified(studentPk, email, tx)
     StudentRepository -> PostgreSQL: UPDATE student SET email = ?, verified_at = now(), updated_at = now()
     alt student.email UNIQUE 위반 (23505: 다른 계정이 같은 이메일을 방금 인증)
-      StudentRepository -[#red]-> Client: 409 Email already verified by another account
-      note right: 이 경우만 트랜잭션 rollback
+      PostgreSQL -[#red]-> Service: DrizzleQueryError (cause.code = 23505)
+      note right of Service: 트랜잭션 rollback 후\nisUniqueViolation(e)로 판별
+      Service -[#red]-> Client: 409 Email already verified by another account
     end
     Service -> VerificationRepository: deleteByStudentPk(studentPk, tx)
     VerificationRepository -> PostgreSQL: DELETE student_email_verification WHERE student_pk = ?
