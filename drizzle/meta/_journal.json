@@ -22,6 +22,13 @@
       "when": 1792975840269,
       "tag": "0002_withdraw_grace_period",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793021921267,
+      "tag": "0003_hash_verification_code",
+      "breakpoints": true
     }
   ]
 }

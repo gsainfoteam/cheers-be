@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { DatabaseService } from "@src/database/database.service";
 import { TxType } from "@src/global/types/tx.types";
@@ -58,6 +58,57 @@ export class StudentRepository {
       .where(eq(student.userPk, userPk));
 
     return result[0] ?? null;
+  }
+
+  /*
+  SELECT * FROM student WHERE user_pk = ?1 FOR UPDATE;
+   */
+  // 인증코드 전송 · 확인, 추가 정보 저장: 같은 학생의 동시 요청을 직렬화
+  async findByUserPkForUpdate(
+    userPk: string,
+    tx: TxType,
+  ): Promise<StudentRow | null> {
+    const result = await tx
+      .select()
+      .from(student)
+      .where(eq(student.userPk, userPk))
+      .for("update");
+
+    return result[0] ?? null;
+  }
+
+  /*
+  SELECT 1 FROM student WHERE email = ?1 AND pk <> ?2 LIMIT 1;
+   */
+  // 다른 계정이 이미 인증한 학교 이메일인지. 탈퇴 유예기간 중인 계정도 이메일을 갖고 있으므로 포함
+  async existsByEmailExcept(
+    email: string,
+    studentPk: string,
+    tx: TxType,
+  ): Promise<boolean> {
+    const result = await tx
+      .select({ pk: student.pk })
+      .from(student)
+      .where(and(eq(student.email, email), ne(student.pk, studentPk)))
+      .limit(1);
+
+    return result.length > 0;
+  }
+
+  /*
+  UPDATE student SET email = ?2, verified_at = now(), updated_at = now() WHERE pk = ?1;
+   */
+  // 학교 이메일 인증 완료. 같은 이메일을 동시에 인증하면 email UNIQUE 위반
+  async markVerified(
+    studentPk: string,
+    email: string,
+    tx: TxType,
+  ): Promise<void> {
+    const now = new Date();
+    await tx
+      .update(student)
+      .set({ email, verifiedAt: now, updatedAt: now })
+      .where(eq(student.pk, studentPk));
   }
 
   /*

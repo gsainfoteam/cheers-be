@@ -9,6 +9,21 @@ import {
 import { Request, Response } from "express";
 import { SlackService } from "nestjs-slack";
 
+// HttpException을 객체로 만들었을 때 statusCode · message · error 외의 필드
+// (예: 인증코드 확인의 remaining_attempts)는 응답에 같이 내보냄
+const BASE_RESPONSE_FIELDS = new Set(["statusCode", "message", "error"]);
+
+const extraResponseFields = (
+  exception: HttpException,
+): Record<string, unknown> => {
+  const body = exception.getResponse();
+  if (typeof body !== "object" || body === null) return {};
+
+  return Object.fromEntries(
+    Object.entries(body).filter(([key]) => !BASE_RESPONSE_FIELDS.has(key)),
+  );
+};
+
 @Catch() // 모든 예외를 캐치
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
@@ -38,6 +53,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       }
 
       response.status(status).json({
+        ...extraResponseFields(exception),
         statusCode: status,
         message: exception.message,
       });

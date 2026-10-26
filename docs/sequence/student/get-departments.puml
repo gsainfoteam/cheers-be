@@ -1,0 +1,55 @@
+@startuml get-departments
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/v1/user/student/departments
+caption CRB-31 · 인증한 gist 이메일 도메인의 학교 학과 목록
+
+actor Client
+participant "SignupStepGuard\nUserTypeGuard" as Guard
+participant "StudentController" as Controller
+participant "StudentService" as Service
+participant "StudentRepository" as StudentRepository
+participant "DepartmentRepository" as DepartmentRepository
+database PostgreSQL
+
+Client -> Guard: GET /api/v1/user/student/departments\nAuthorization: Bearer <access token>
+ref over Client, Guard
+  SignupStepGuard → UserTypeGuard — flow/auth-guards.puml
+  @SignupStep({ step: "profile", allowActive: true })
+  pending: next_step = profile 일 때만 (이메일 인증 이후) / active: 항상 통과 (마이페이지 수정)
+  @UserTypes("student")
+  401 Missing access token / Token expired / Invalid token / User not found
+  403 Signup step mismatch / User type not allowed
+end ref
+Guard -> Controller: getDepartments(user)
+Controller -> Service: getDepartments(userPk)
+
+Service -> StudentRepository: findByUserPk(userPk)
+StudentRepository -> PostgreSQL: SELECT student WHERE user_pk = ?
+PostgreSQL --> StudentRepository: row
+StudentRepository --> Service: student | null
+alt 재학생 행 없음 (가드 통과 뒤 다른 기기에서 현업자로 유형 변경)
+  Service -[#red]-> Client: 403 User type not allowed
+end
+note right of Service
+  student.email은 항상 있음
+  (profile 단계 = verified_at 있음, active = 인증 완료)
+end note
+
+Service -> DepartmentRepository: findByEmailDomain(student.email 의 @ 뒤)
+DepartmentRepository -> PostgreSQL: SELECT d.pk, d.name FROM department d\nJOIN school s ON s.pk = d.school_pk\nWHERE s.email_domain = ? ORDER BY d.pk
+PostgreSQL --> DepartmentRepository: rows
+DepartmentRepository --> Service: { pk, name }[]
+note right: 학교 도메인이 seed에서 빠졌으면 빈 배열
+
+Service --> Controller: { departments: [{ id, name }] }
+Controller --> Client: 200 { departments: [{ id, name }] }
+
+@enduml
