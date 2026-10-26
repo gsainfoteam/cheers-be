@@ -37,7 +37,8 @@ alt body 검증 실패
   Pipe -[#red]-> Client: 400 (class-validator 메시지)
 end
 note right of Pipe
-  name 1~64자 / nickname 1~32자 / company · department · job 1~128자
+  name · nickname 은 앞뒤 공백 제거 후 검사
+  name 1~64자 / nickname ^[가-힣A-Za-z0-9_]{2,10}$ / company · department · job 1~128자
   hashtags 최대 10개, 각 1~20자, "#" 불가, 중복 불가
   links 최대 5개, http(s) URL 2048자 이하
   contact: email_enabled · kakao_enabled boolean, email 형식,
@@ -53,7 +54,7 @@ else kakao_enabled 인데 contact.phone 없음
 end
 note right of Service
   현업자는 "희망하지 않음"(둘 다 false) 가능 → 커피챗 신청을 받지 않음.
-  보낸 email · phone 은 그대로 저장 (희망하지 않음으로 바꿔도 지우지 않음)
+  끈 연락 방법의 email · phone 은 요청에 값이 있어도 null 로 저장 (toContactRow)
 end note
 
 group transaction (DatabaseService.db.transaction)
@@ -92,7 +93,7 @@ group transaction (DatabaseService.db.transaction)
 
   Service -> ContactRepository: upsert(userPk, { emailEnabled, kakaoEnabled, email, phone }, tx)
   ContactRepository -> PostgreSQL: INSERT coffee_chat_contact ...\nON CONFLICT (user_pk) DO UPDATE SET ..., updated_at = now()
-  note right: 신청 알림 수단이자 연락처 공유 때 학생에게 보낼 연락처.\nCHECK(kakao → phone, email → email)
+  note right: 신청 알림 수단이자 연락처 공유 때 학생에게 보낼 연락처.\n끈 방법의 값은 null. CHECK(kakao → phone, email → email)
 
   opt user.name = null
     Service -> UserRepository: fillName(userPk, name, tx)

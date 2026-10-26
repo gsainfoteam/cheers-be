@@ -39,6 +39,16 @@ describe("GraduatedInfoRequestDto", () => {
     expect(errors).toHaveLength(0);
   });
 
+  it("trims the name and nickname", async () => {
+    const { dto, errors } = await errorsOf(
+      body({ name: "  김철수 ", nickname: " chul_수1 " }),
+    );
+
+    expect(errors).toHaveLength(0);
+    expect(dto.name).toBe("김철수");
+    expect(dto.nickname).toBe("chul_수1");
+  });
+
   it.each([
     ["a hashtag with #", { hashtags: ["#백엔드"] }],
     ["duplicate hashtags", { hashtags: ["백엔드", "백엔드"] }],
@@ -46,7 +56,12 @@ describe("GraduatedInfoRequestDto", () => {
     ["a non-http link", { links: ["ftp://example.com"] }],
     ["a link without protocol", { links: ["www.linkedin.com/in/chulsoo"] }],
     ["more than 5 links", { links: Array(6).fill("https://example.com") }],
-    ["a nickname over 32 chars", { nickname: "가".repeat(33) }],
+    ["a blank name", { name: "   " }],
+    ["a blank nickname", { nickname: "   " }],
+    ["a 1-char nickname", { nickname: "가" }],
+    ["an 11-char nickname", { nickname: "가".repeat(11) }],
+    ["a nickname with a space inside", { nickname: "철 수" }],
+    ["a nickname with a symbol", { nickname: "철수!" }],
     ["an empty company", { company: "" }],
     [
       "a non-mobile phone number",

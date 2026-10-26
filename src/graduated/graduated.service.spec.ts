@@ -93,7 +93,10 @@ describe("GraduatedService", () => {
     },
   };
   const authService = { issueTokens: jest.fn() };
-  const fileService = { confirmUpload: jest.fn(), deleteFile: jest.fn() };
+  const fileService = {
+    confirmUpload: jest.fn(),
+    deleteFileQuietly: jest.fn(),
+  };
   const userRepository = {
     findByPkForUpdate: jest.fn(),
     fillName: jest.fn(),
@@ -120,7 +123,7 @@ describe("GraduatedService", () => {
     jest.clearAllMocks();
     userRepository.findByPkForUpdate.mockResolvedValue(userRow());
     fileService.confirmUpload.mockResolvedValue(NEW_KEY);
-    fileService.deleteFile.mockResolvedValue(undefined);
+    fileService.deleteFileQuietly.mockResolvedValue(undefined);
     graduatedRepository.findByUserPk.mockResolvedValue(graduatedRow());
     graduatedRepository.findByUserPkWithProfile.mockResolvedValue({
       graduated: graduatedRow({ verifiedAt: new Date() }),
@@ -148,7 +151,7 @@ describe("GraduatedService", () => {
         NEW_KEY,
         tx,
       );
-      expect(fileService.deleteFile).not.toHaveBeenCalled();
+      expect(fileService.deleteFileQuietly).not.toHaveBeenCalled();
     });
 
     it("deletes the previous business card after commit when replacing", async () => {
@@ -158,19 +161,8 @@ describe("GraduatedService", () => {
 
       await service.verifyBusinessCard(USER_PK, TEMP_KEY);
 
-      expect(fileService.deleteFile).toHaveBeenCalledTimes(1);
-      expect(fileService.deleteFile).toHaveBeenCalledWith(OLD_KEY);
-    });
-
-    it("still succeeds when deleting the previous file fails", async () => {
-      graduatedRepository.findByUserPk.mockResolvedValue(
-        graduatedRow({ businessCardKey: OLD_KEY }),
-      );
-      fileService.deleteFile.mockRejectedValue(new Error("s3 down"));
-
-      await expect(
-        service.verifyBusinessCard(USER_PK, TEMP_KEY),
-      ).resolves.toEqual(BaseResultDto.OK);
+      expect(fileService.deleteFileQuietly).toHaveBeenCalledTimes(1);
+      expect(fileService.deleteFileQuietly).toHaveBeenCalledWith(OLD_KEY);
     });
 
     it("does not touch the DB when the upload is rejected", async () => {
@@ -182,7 +174,7 @@ describe("GraduatedService", () => {
         service.verifyBusinessCard(USER_PK, TEMP_KEY),
       ).rejects.toThrow(BadRequestException);
       expect(dbService.db.transaction).not.toHaveBeenCalled();
-      expect(fileService.deleteFile).not.toHaveBeenCalled();
+      expect(fileService.deleteFileQuietly).not.toHaveBeenCalled();
     });
 
     it("throws 401 and deletes the new file when the user is gone", async () => {
@@ -191,7 +183,7 @@ describe("GraduatedService", () => {
       await expect(
         service.verifyBusinessCard(USER_PK, TEMP_KEY),
       ).rejects.toThrow(UnauthorizedException);
-      expect(fileService.deleteFile).toHaveBeenCalledWith(NEW_KEY);
+      expect(fileService.deleteFileQuietly).toHaveBeenCalledWith(NEW_KEY);
       expect(graduatedRepository.updateBusinessCard).not.toHaveBeenCalled();
     });
 
@@ -201,17 +193,17 @@ describe("GraduatedService", () => {
       await expect(
         service.verifyBusinessCard(USER_PK, TEMP_KEY),
       ).rejects.toThrow(ForbiddenException);
-      expect(fileService.deleteFile).toHaveBeenCalledWith(NEW_KEY);
+      expect(fileService.deleteFileQuietly).toHaveBeenCalledWith(NEW_KEY);
     });
 
-    it("rethrows the original error even if deleting the new file fails", async () => {
+    it("rethrows the original error after deleting the new file", async () => {
       const dbError = new Error("db down");
       graduatedRepository.updateBusinessCard.mockRejectedValueOnce(dbError);
-      fileService.deleteFile.mockRejectedValue(new Error("s3 down"));
 
       await expect(service.verifyBusinessCard(USER_PK, TEMP_KEY)).rejects.toBe(
         dbError,
       );
+      expect(fileService.deleteFileQuietly).toHaveBeenCalledWith(NEW_KEY);
     });
   });
 
@@ -277,7 +269,7 @@ describe("GraduatedService", () => {
       expect(authService.issueTokens).not.toHaveBeenCalled();
     });
 
-    it("allows no contact method for a graduated user", async () => {
+    it("allows no contact method and drops the email and phone", async () => {
       await service.saveInfo(
         USER_PK,
         infoRequest({
@@ -295,7 +287,32 @@ describe("GraduatedService", () => {
           userPk: USER_PK,
           emailEnabled: false,
           kakaoEnabled: false,
-          email: "chulsoo@example.com",
+          email: null,
+          phone: null,
+        },
+        tx,
+      );
+    });
+
+    it("drops only the value of the contact method that is turned off", async () => {
+      await service.saveInfo(
+        USER_PK,
+        infoRequest({
+          contact: {
+            email_enabled: false,
+            kakao_enabled: true,
+            email: "chulsoo@example.com",
+            phone: "01000000000",
+          },
+        }),
+      );
+
+      expect(coffeeChatContactRepository.upsert).toHaveBeenCalledWith(
+        {
+          userPk: USER_PK,
+          emailEnabled: false,
+          kakaoEnabled: true,
+          email: null,
           phone: "01000000000",
         },
         tx,

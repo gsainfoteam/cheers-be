@@ -2,7 +2,6 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
-  Logger,
   UnauthorizedException,
 } from "@nestjs/common";
 import { AuthService } from "@src/auth/auth.service";
@@ -14,14 +13,15 @@ import { UserRepository } from "@src/database/repository/user.repository";
 import { FilePurpose } from "@src/file/file.constants";
 import { FileService } from "@src/file/file.service";
 import { BaseResultDto } from "@src/global/dto/base-result.dto";
-import { assertContactValues } from "@src/user/dto/contact-request.dto";
+import {
+  assertContactValues,
+  toContactRow,
+} from "@src/user/dto/contact-request.dto";
 import { SignupCompleteResponseDto } from "@src/user/dto/signup-complete.dto";
 import { GraduatedInfoRequestDto } from "./dto/graduated-info.dto";
 
 @Injectable()
 export class GraduatedService {
-  private readonly logger = new Logger(GraduatedService.name);
-
   constructor(
     private readonly dbService: DatabaseService,
     private readonly authService: AuthService,
@@ -70,13 +70,13 @@ export class GraduatedService {
       });
     } catch (e) {
       // DB에 참조가 없는 새 파일을 지움 (남은 고아 파일은 CRB-41)
-      await this.deleteFileQuietly(key);
+      await this.fileService.deleteFileQuietly(key);
       throw e;
     }
 
     // 커밋 뒤에 지움. 실패해도 DB는 새 key를 가리키므로 로그만 남김
     if (previousKey && previousKey !== key) {
-      await this.deleteFileQuietly(previousKey);
+      await this.fileService.deleteFileQuietly(previousKey);
     }
     return BaseResultDto.OK;
   }
@@ -125,13 +125,7 @@ export class GraduatedService {
         tx,
       );
       await this.coffeeChatContactRepository.upsert(
-        {
-          userPk,
-          emailEnabled: req.contact.email_enabled,
-          kakaoEnabled: req.contact.kakao_enabled,
-          email: req.contact.email ?? null,
-          phone: req.contact.phone ?? null,
-        },
+        toContactRow(userPk, req.contact),
         tx,
       );
       if (!user.name && req.name) {
@@ -150,15 +144,5 @@ export class GraduatedService {
       access_token: tokens.accessToken,
       refresh_token: tokens.refreshToken,
     };
-  }
-
-  private async deleteFileQuietly(key: string): Promise<void> {
-    try {
-      await this.fileService.deleteFile(key);
-    } catch (e) {
-      this.logger.error(
-        `Failed to delete file ${key}: ${(e as Error).message}`,
-      );
-    }
   }
 }
