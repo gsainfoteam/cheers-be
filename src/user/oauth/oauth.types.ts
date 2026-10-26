@@ -2,6 +2,10 @@ import { UserOauthAccountRow } from "@src/database/repository/user-oauth-account
 
 export type OAuthProvider = UserOauthAccountRow["provider"];
 
+// 지금 로그인을 받는 provider. Apple · Naver는 검증 코드는 있지만 앱 등록 · 연동 확인 전이라 막아 둠.
+// 여는 법: 여기에 추가 + UserModule providers에 해당 Verifier 등록 + OAuthService 생성자에서 연결 (+ APPLE_CLIENT_ID)
+export const ENABLED_OAUTH_PROVIDERS: OAuthProvider[] = ["google"];
+
 // provider가 확인해 준 계정 정보. sub는 user_oauth_account.provider_sub
 export type OAuthProfile = {
   provider: OAuthProvider;

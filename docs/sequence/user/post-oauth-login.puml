@@ -33,7 +33,7 @@ participant "S3"
 
 Client -> Pipe: POST /api/v1/user/oauth/login\n{ provider, type, token, nonce }
 note right of Client: 가드 없음 (Authorization 불필요)
-alt body 검증 실패 (provider · type이 허용 값이 아님, token 빈 문자열,\ngoogle / apple인데 nonce 누락 · 빈 문자열 · 256자 초과)
+alt body 검증 실패 (provider가 google이 아님 — 지금은 google만 받음,\ntype이 허용 값이 아님, token 빈 문자열,\ngoogle / apple인데 nonce 누락 · 빈 문자열 · 256자 초과)
   Pipe -[#red]-> Client: 400 (class-validator 메시지)
 end
 Pipe -> Controller: login(req)
@@ -42,6 +42,10 @@ Controller -> Service: login(req)
 == provider 토큰 검증 (트랜잭션 밖) ==
 
 Service -> OAuthService: verify(provider, token, nonce)
+note right of OAuthService
+  지금은 GoogleVerifier만 연결 (ENABLED_OAUTH_PROVIDERS).
+  아래 apple · naver 분기는 코드는 있지만 열기 전까지 요청 검증에서 400
+end note
 alt provider = google / apple (GoogleVerifier / AppleVerifier → IdTokenVerifier)
   alt nonce 없음
     OAuthService -[#red]-> Client: 401 Invalid OAuth token

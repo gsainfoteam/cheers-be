@@ -6,10 +6,14 @@ import {
   ValidateIf,
 } from "class-validator";
 import { UserType } from "@src/auth/auth.types";
-import { OAuthProvider } from "@src/user/oauth/oauth.types";
+import {
+  ENABLED_OAUTH_PROVIDERS,
+  OAuthProvider,
+} from "@src/user/oauth/oauth.types";
 
 export class LoginRequestDto {
-  @IsIn(["google", "apple", "naver"])
+  // 지금은 google만 받음. apple · naver는 400 (ENABLED_OAUTH_PROVIDERS)
+  @IsIn(ENABLED_OAUTH_PROVIDERS)
   provider: OAuthProvider;
 
   // 웹에서 먼저 고른 유형. 가입을 마친(active) 유저는 무시

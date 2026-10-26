@@ -3,9 +3,7 @@ import { AuthModule } from "@src/auth/auth.module";
 import { ConfigModule } from "@src/config/config.module";
 import { DatabaseModule } from "@src/database/database.module";
 import { FileModule } from "@src/file/file.module";
-import { AppleVerifier } from "@src/user/oauth/apple.verifier";
 import { GoogleVerifier } from "@src/user/oauth/google.verifier";
-import { NaverVerifier } from "@src/user/oauth/naver.verifier";
 import { OAuthService } from "@src/user/oauth/oauth.service";
 import { UserController } from "@src/user/user.controller";
 import { UserService } from "@src/user/user.service";
@@ -20,9 +18,8 @@ import { WithdrawalService } from "@src/user/withdrawal.service";
     WithdrawalService,
     WithdrawalScheduler,
     OAuthService,
+    // Apple · Naver Verifier는 열 때 등록 (ENABLED_OAUTH_PROVIDERS)
     GoogleVerifier,
-    AppleVerifier,
-    NaverVerifier,
   ],
 })
 export class UserModule {}
