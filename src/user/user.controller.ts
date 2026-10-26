@@ -11,11 +11,15 @@ import {
 } from "@src/user/dto/refresh.dto";
 import { UserInfoDto } from "@src/user/dto/user-info.dto";
 import { UserService } from "@src/user/user.service";
+import { WithdrawalService } from "@src/user/withdrawal.service";
 
 // API 명세 "내 정보" 섹션. 약관 · 재학생 · 현업자 섹션은 각자 컨트롤러로 분리
 @Controller("/api/v1/user")
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(
+    private readonly userService: UserService,
+    private readonly withdrawalService: WithdrawalService,
+  ) {}
 
   @Post("/oauth/login")
   async login(@Body() req: LoginRequestDto): Promise<LoginResponseDto> {
@@ -42,10 +46,11 @@ export class UserController {
     return this.userService.logout(req, userCtx);
   }
 
-  // 가입 중 이탈한 유저도 직접 탈퇴할 수 있도록 상태와 무관하게 허용
+  // 가입 중 이탈한 유저도 직접 탈퇴할 수 있도록 상태와 무관하게 허용.
+  // 바로 지우지 않고 유예기간 뒤 스케줄러가 삭제 (WithdrawalService)
   @Post("/withdraw")
   @UseGuards(AnyStatusGuard)
   async withdraw(@CurrentUser() userCtx: UserContext): Promise<BaseResultDto> {
-    return this.userService.withdraw(userCtx);
+    return this.withdrawalService.request(userCtx);
   }
 }

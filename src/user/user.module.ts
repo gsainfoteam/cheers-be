@@ -9,12 +9,16 @@ import { NaverVerifier } from "@src/user/oauth/naver.verifier";
 import { OAuthService } from "@src/user/oauth/oauth.service";
 import { UserController } from "@src/user/user.controller";
 import { UserService } from "@src/user/user.service";
+import { WithdrawalScheduler } from "@src/user/withdrawal.scheduler";
+import { WithdrawalService } from "@src/user/withdrawal.service";
 
 @Module({
   imports: [ConfigModule, DatabaseModule, AuthModule, FileModule],
   controllers: [UserController],
   providers: [
     UserService,
+    WithdrawalService,
+    WithdrawalScheduler,
     OAuthService,
     GoogleVerifier,
     AppleVerifier,

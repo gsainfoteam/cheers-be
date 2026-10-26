@@ -34,6 +34,7 @@ const userRow = (overrides: Partial<UserRow> = {}): UserRow => ({
   lastActiveAt: new Date(),
   name: null,
   email: null,
+  withdrawRequestedAt: null,
   ...overrides,
 });
 
@@ -76,11 +77,10 @@ describe("UserService", () => {
   const fileService = { deleteFile: jest.fn(), getPresignedUrl: jest.fn() };
   const userRepository = {
     findByPk: jest.fn(),
-    findByPkForUpdate: jest.fn(),
     insert: jest.fn(),
     updateType: jest.fn(),
     fillProfileFromOAuth: jest.fn(),
-    withdraw: jest.fn(),
+    cancelWithdrawal: jest.fn(),
     findSignupProgress: jest.fn(),
   };
   const userOauthAccountRepository = {
@@ -212,7 +212,29 @@ describe("UserService", () => {
       );
       expect(userRepository.updateType).not.toHaveBeenCalled();
       expect(graduatedRepository.insert).not.toHaveBeenCalled();
+      expect(userRepository.cancelWithdrawal).not.toHaveBeenCalled();
       expect(authService.issueTokens).toHaveBeenCalledWith(active, tx);
+    });
+
+    it("cancels a pending withdrawal when the user logs in during the grace period", async () => {
+      const requested = userRow({
+        status: "active",
+        withdrawRequestedAt: new Date("2026-10-01T00:00:00Z"),
+      });
+      userOauthAccountRepository.findUserForLogin.mockResolvedValue(requested);
+      userRepository.cancelWithdrawal.mockImplementation(record("cancel"));
+      authService.issueTokens.mockImplementation(
+        record("issueTokens", { accessToken: "a", refreshToken: "r" }),
+      );
+
+      await expect(login("student")).resolves.toEqual({
+        access_token: "a",
+        refresh_token: "r",
+      });
+
+      expect(userRepository.cancelWithdrawal).toHaveBeenCalledWith(USER_PK, tx);
+      // 탈퇴 취소 뒤에 토큰을 발급 (last_active_at 갱신이 탈퇴 요청 유저를 건너뛰므로)
+      expect(calls).toEqual(["cancel", "issueTokens"]);
     });
 
     it("continues signup for a pending user with the same type", async () => {
@@ -584,97 +606,6 @@ describe("UserService", () => {
         ),
       ).resolves.toBe(BaseResultDto.OK);
       expect(authService.logout).toHaveBeenCalledWith("r1", USER_PK);
-    });
-  });
-
-  describe("withdraw", () => {
-    const ctx = new UserContext(USER_PK, "graduated", "active");
-
-    it("locks the user, removes login methods and personal info, then deletes the business card", async () => {
-      userRepository.findByPkForUpdate.mockImplementation(
-        record("users.lock", userRow({ status: "active", type: "graduated" })),
-      );
-      userOauthAccountRepository.deleteByUserPk.mockImplementation(
-        record("oauth.delete"),
-      );
-      authService.revokeAllTokens.mockImplementation(record("revokeAll"));
-      coffeeChatContactRepository.deleteByUserPk.mockImplementation(
-        record("contact.delete"),
-      );
-      graduatedRepository.findByUserPk.mockResolvedValue({
-        pk: "graduated-1",
-        businessCardKey: "business-card/a.jpg",
-      });
-      graduatedRepository.clearBusinessCardKey.mockImplementation(
-        record("graduated.clearBusinessCardKey"),
-      );
-      userRepository.withdraw.mockImplementation(record("users.withdraw"));
-      fileService.deleteFile.mockImplementation(record("s3.delete"));
-
-      await expect(service.withdraw(ctx)).resolves.toBe(BaseResultDto.OK);
-
-      expect(calls).toEqual([
-        "users.lock",
-        "oauth.delete",
-        "revokeAll",
-        "contact.delete",
-        "graduated.clearBusinessCardKey",
-        "users.withdraw",
-        "s3.delete",
-      ]);
-      expect(graduatedRepository.clearBusinessCardKey).toHaveBeenCalledWith(
-        "graduated-1",
-        tx,
-      );
-      expect(fileService.deleteFile).toHaveBeenCalledWith(
-        "business-card/a.jpg",
-      );
-      expect(studentRepository.clearEmailByUserPk).not.toHaveBeenCalled();
-    });
-
-    it("skips S3 for a graduated user without a business card", async () => {
-      userRepository.findByPkForUpdate.mockResolvedValue(
-        userRow({ status: "pending", type: "graduated" }),
-      );
-      graduatedRepository.findByUserPk.mockResolvedValue({
-        pk: "graduated-1",
-        businessCardKey: null,
-      });
-
-      await expect(service.withdraw(ctx)).resolves.toBe(BaseResultDto.OK);
-
-      expect(graduatedRepository.clearBusinessCardKey).not.toHaveBeenCalled();
-      expect(fileService.deleteFile).not.toHaveBeenCalled();
-      expect(userRepository.withdraw).toHaveBeenCalledWith(USER_PK, tx);
-    });
-
-    it("clears the school email of a student, including a pending verification", async () => {
-      userRepository.findByPkForUpdate.mockResolvedValue(
-        userRow({ status: "active", type: "student" }),
-      );
-      studentRepository.findByUserPk.mockResolvedValue({ pk: "student-1" });
-
-      await service.withdraw(ctx);
-
-      expect(
-        studentEmailVerificationRepository.deleteByStudentPk,
-      ).toHaveBeenCalledWith("student-1", tx);
-      expect(studentRepository.clearEmailByUserPk).toHaveBeenCalledWith(
-        USER_PK,
-        tx,
-      );
-      expect(graduatedRepository.findByUserPk).not.toHaveBeenCalled();
-      expect(userRepository.withdraw).toHaveBeenCalledWith(USER_PK, tx);
-      expect(fileService.deleteFile).not.toHaveBeenCalled();
-    });
-
-    it("returns 401 when the user is already withdrawn", async () => {
-      userRepository.findByPkForUpdate.mockResolvedValue(null);
-
-      await expect(service.withdraw(ctx)).rejects.toBeInstanceOf(
-        UnauthorizedException,
-      );
-      expect(userRepository.withdraw).not.toHaveBeenCalled();
     });
   });
 });

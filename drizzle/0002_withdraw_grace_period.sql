@@ -1,0 +1,2 @@
+ALTER TABLE "users" ADD COLUMN "withdraw_requested_at" timestamp with time zone;--> statement-breakpoint
+CREATE INDEX "users_withdraw_requested_at_idx" ON "users" USING btree ("withdraw_requested_at") WHERE "users"."withdraw_requested_at" IS NOT NULL AND "users"."is_deleted" = false;
