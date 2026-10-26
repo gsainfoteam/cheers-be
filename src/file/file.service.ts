@@ -2,7 +2,6 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   PutObjectCommand,
-  PutObjectTaggingCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -34,7 +33,7 @@ export class FileService {
 
   /**
    * this method uploads a file to the S3 bucket
-   * the file is tagged with expiration=true until validateFile is called
+   * the caller saves the key in the same request and deletes the file if that fails
    * @param file Express.Multer.File
    * @param key string
    * @returns string
@@ -45,7 +44,6 @@ export class FileService {
       Key: key,
       Body: file.buffer,
       ContentType: file.mimetype,
-      Tagging: "expiration=true",
       Metadata: {
         originalName: encodeURIComponent(file.originalname),
       },
@@ -56,26 +54,6 @@ export class FileService {
       throw new InternalServerErrorException();
     });
     return key;
-  }
-
-  /**
-   * this method validates a file in the S3 bucket
-   * specifically, it sets the expiration tag to false
-   * @param key string
-   * @returns void
-   */
-  async validateFile(key: string): Promise<void> {
-    const command = new PutObjectTaggingCommand({
-      Bucket: this.bucketName,
-      Key: key,
-      Tagging: {
-        TagSet: [{ Key: "expiration", Value: "false" }],
-      },
-    });
-    await this.s3Client.send(command).catch((err) => {
-      this.logger.error(err);
-      throw new InternalServerErrorException();
-    });
   }
 
   /**

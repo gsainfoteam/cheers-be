@@ -2,7 +2,6 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   PutObjectCommand,
-  PutObjectTaggingCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -53,7 +52,7 @@ describe("FileService", () => {
 
   afterEach(() => jest.restoreAllMocks());
 
-  it("uploads a file tagged for expiration and returns the key", async () => {
+  it("uploads a file and returns the key", async () => {
     const key = await service.uploadFile(file, "business-card/a.jpg");
 
     expect(key).toBe("business-card/a.jpg");
@@ -64,19 +63,9 @@ describe("FileService", () => {
       Key: "business-card/a.jpg",
       Body: file.buffer,
       ContentType: "image/jpeg",
-      Tagging: "expiration=true",
       Metadata: { originalName: encodeURIComponent("명함.jpg") },
     });
-  });
-
-  it("validates a file by setting the expiration tag to false", async () => {
-    await service.validateFile("business-card/a.jpg");
-
-    const command = send.mock.calls[0][0] as PutObjectTaggingCommand;
-    expect(command).toBeInstanceOf(PutObjectTaggingCommand);
-    expect(command.input.Tagging).toEqual({
-      TagSet: [{ Key: "expiration", Value: "false" }],
-    });
+    expect(command.input.Tagging).toBeUndefined();
   });
 
   it("deletes files", async () => {
