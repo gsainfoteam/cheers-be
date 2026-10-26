@@ -35,7 +35,7 @@ Controller -> Service: getSentDetail(userPk, id)
 
 group transaction (DatabaseService.db.transaction)
   Service -> CoffeeChatRequestRepository: findSentByPk(id, userPk, tx)
-  CoffeeChatRequestRepository -> PostgreSQL: SELECT r.*, g.pk, gp.nickname, gp.company, gp.job, u.name\nFROM coffee_chat_request r\nJOIN student s ON s.pk = r.student_pk AND s.user_pk = ?\nJOIN graduated g JOIN graduated_profile gp JOIN users u ON u.pk = g.user_pk\nWHERE r.pk = ?
+  CoffeeChatRequestRepository -> PostgreSQL: SELECT r.*, g.pk, gp.nickname, gp.company, gp.job, u.name,\nisActiveAccountAs("u") AS graduated_active\nFROM coffee_chat_request r\nJOIN student s ON s.pk = r.student_pk AND s.user_pk = ?\nJOIN graduated g JOIN graduated_profile gp JOIN users u ON u.pk = g.user_pk\nWHERE r.pk = ?
   note right: 내가 보낸 요청만 (다른 재학생의 요청은 없는 것으로 봄)
   CoffeeChatRequestRepository --> Service: row | null
   alt 요청 없음 또는 내가 보낸 요청이 아님
@@ -50,10 +50,12 @@ group transaction (DatabaseService.db.transaction)
 end
 note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
 
-Service -> Service: status 계산 (GET /api/v1/cheers/sent 와 같음)\nshared_contact = contact_shared_at 없으면 null,\n있으면 { name: u.name, email: shared_email,\n  phone: shared_phone, shared_at: contact_shared_at }
+Service -> Service: status 계산 (GET /api/v1/cheers/sent 와 같음)\nshared_contact = contact_shared_at 없으면 null,\n있으면 { name, email: shared_email,\n  phone: shared_phone, shared_at: contact_shared_at }\nname = graduated_active ? u.name : "탈퇴한 계정"
 note right of Service
   연락처는 공유 시점의 값(shared_email · shared_phone).
-  탈퇴 처리된 현업자는 users.name이 지워져 name이 null일 수 있음
+  현업자가 탈퇴했거나 탈퇴 유예기간 중이면 name은 "탈퇴한 계정"
+  (탈퇴 처리 후에는 users.name이 지워져 null이므로 그대로 내리지 않음).
+  유예기간 중 다시 로그인해 탈퇴를 취소하면 원래 이름으로 돌아옴
 end note
 Service --> Controller: SentRequestDetailDto
 Controller --> Client: 200 { id, graduated, message, status, created_at, shared_contact }
