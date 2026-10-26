@@ -6,7 +6,6 @@ import {
   Logger as winstonLogger,
   transports as winstonTransports,
 } from "winston";
-import "winston-daily-rotate-file";
 import { ConfigService } from "@nestjs/config";
 
 const { errors, combine, timestamp, ms, printf } = winstonFormat;
@@ -18,7 +17,9 @@ export class LoggerService implements LS {
   private queryTimeLogger: winstonLogger;
 
   constructor(private readonly configService: ConfigService) {
-    const logFilePath = this.configService.get<string>("LOG_PATH");
+    // drizzle 쿼리 로그는 양이 많고 파라미터에 개인정보가 섞일 수 있어 QUERY_LOG=true 일 때만 출력
+    const queryLogSilent =
+      this.configService.get<string>("QUERY_LOG") !== "true";
 
     this.logger = createWinstonLogger({
       format: combine(
@@ -39,17 +40,6 @@ export class LoggerService implements LS {
             }),
           ),
         }),
-        new winstonTransports.DailyRotateFile({
-          filename: `${logFilePath}/cheers-%DATE%.log`,
-          zippedArchive: true,
-          datePattern: "YYYY-MM-DD",
-        }),
-        new winstonTransports.DailyRotateFile({
-          level: "error",
-          filename: `${logFilePath}/error-cheers-%DATE%.log`,
-          zippedArchive: true,
-          datePattern: "YYYY-MM-DD",
-        }),
       ],
     });
 
@@ -60,13 +50,7 @@ export class LoggerService implements LS {
         ms(),
         printf((info) => `[${info.timestamp}][DB QUERY] ${info.message}`),
       ),
-      transports: [
-        new winstonTransports.DailyRotateFile({
-          filename: `${logFilePath}/cheers-query-%DATE%.log`,
-          zippedArchive: true,
-          datePattern: "YYYY-MM-DD",
-        }),
-      ],
+      transports: [new winstonTransports.Console({ silent: queryLogSilent })],
     });
 
     this.queryTimeLogger = createWinstonLogger({
@@ -76,13 +60,7 @@ export class LoggerService implements LS {
         ms(),
         printf((info) => `[${info.timestamp}][DB QUERY TIME] ${info.message}`),
       ),
-      transports: [
-        new winstonTransports.DailyRotateFile({
-          filename: `${logFilePath}/cheers-query-%DATE%.log`, //queryLogger와 queryTimeLogger 둘 다 같은곳에 저장 하는것이 의도
-          zippedArchive: true,
-          datePattern: "YYYY-MM-DD",
-        }),
-      ],
+      transports: [new winstonTransports.Console({ silent: queryLogSilent })],
     });
 
     console.log = (message: any, params?: any) => {
