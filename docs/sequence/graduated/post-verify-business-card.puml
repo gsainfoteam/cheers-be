@@ -1,0 +1,115 @@
+@startuml post-verify-business-card
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title POST /api/v1/user/graduated/verify/business-card
+caption CRB-32 · 명함 사진 등록 = 즉시 인증. 다시 등록하면 이전 명함을 대체 (가입 후 마이페이지에서도)
+
+actor Client
+participant "SignupStepGuard\nUserTypeGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "GraduatedController" as Controller
+participant "GraduatedService" as Service
+participant "FileService" as FileService
+participant "UserRepository" as UserRepository
+participant "GraduatedRepository" as GraduatedRepository
+database PostgreSQL
+participant "S3"
+
+Client -> Guard: POST /api/v1/user/graduated/verify/business-card\nAuthorization: Bearer <access token>\n{ key }
+ref over Client, Guard
+  SignupStepGuard → UserTypeGuard — flow/auth-guards.puml
+  @SignupStep({ step: "verify", allowActive: true })
+  pending: next_step = verify 일 때만 / active: 항상 통과 (마이페이지 명함 교체)
+  @UserTypes("graduated")
+  401 Missing access token / Token expired / Invalid token / User not found
+  403 Signup step mismatch / User type not allowed
+end ref
+Guard -> Pipe: 통과
+alt body 검증 실패 (key 없음 · 빈 문자열 · 문자열 아님)
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+Pipe -> Controller: verifyBusinessCard(req, user)
+Controller -> Service: verifyBusinessCard(userPk, key)
+
+Service -> FileService: confirmUpload(userPk, "business_card", key)
+ref over FileService, S3
+  flow/file-upload.puml (2. 확정)
+  key 가 tmp/business-card/<userPk>/ 아래인지 → HEAD → 크기 · magic bytes 확인
+  → tmp/ 밖으로 CopyObject → tmp 삭제
+end ref
+alt key 가 내 것이 아님
+  FileService -[#red]-> Client: 400 Invalid file key
+else 업로드되지 않음
+  FileService -[#red]-> Client: 400 File not uploaded
+else 크기 초과 또는 실제 내용이 jpg · png · heic · heif 가 아님 (tmp 파일은 삭제)
+  FileService -[#red]-> Client: 400 Uploaded file does not match the policy
+end
+FileService --> Service: 최종 key (business-card/<userPk>/...)
+note right of Service
+  S3 호출은 트랜잭션 밖에서 먼저 함.
+  DB 잠금을 S3 응답 시간만큼 잡지 않기 위해
+end note
+
+group transaction (DatabaseService.db.transaction)
+  Service -> UserRepository: findByPkForUpdate(userPk, tx)
+  UserRepository -> PostgreSQL: SELECT users WHERE pk = ? AND is_deleted = false\nAND withdraw_requested_at IS NULL FOR UPDATE
+  PostgreSQL --> UserRepository: row
+  UserRepository --> Service: user | null
+  note right of Service
+    같은 유저의 로그인(가입 중 유형 변경 → graduated 삭제) · 탈퇴 요청 ·
+    다른 기기의 동시 명함 등록과 직렬화. 이전 명함 key 를 잠근 상태에서 읽음
+  end note
+  alt 유저 없음 (가드 통과 직후 탈퇴 요청)
+    Service -[#red]-> Client: 401 User not found
+  end
+
+  Service -> GraduatedRepository: findByUserPk(userPk, tx)
+  GraduatedRepository -> PostgreSQL: SELECT graduated WHERE user_pk = ?
+  PostgreSQL --> GraduatedRepository: row
+  GraduatedRepository --> Service: graduated | null
+  alt graduated 없음 (가드 통과 직후 다른 기기에서 재학생으로 유형 변경)
+    Service -[#red]-> Client: 403 User type not allowed
+  end
+
+  Service -> GraduatedRepository: updateBusinessCard(graduated.pk, 최종 key, tx)
+  GraduatedRepository -> PostgreSQL: UPDATE graduated SET business_card_key = ?,\nverified_at = now(), updated_at = now() WHERE pk = ?
+  note right
+    별도 검수 없이 즉시 인증. 다시 등록하면 verified_at 도 새 시각으로
+  end note
+end
+note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
+
+alt 트랜잭션 실패 (401 · 403 포함)
+  Service -> FileService: deleteFile(최종 key)
+  FileService -> S3: DeleteObject
+  note right of Service
+    DB 에 참조가 없는 새 파일을 지움. 삭제 실패는 로그만 남기고
+    원래 예외로 응답 (남은 고아 파일은 CRB-41)
+  end note
+  Service -[#red]-> Client: 원래 예외 (401 / 403 / 500)
+end
+
+opt 이전 명함 key 있음 (재등록)
+  Service -> FileService: deleteFile(이전 key)
+  FileService -> S3: DeleteObject
+  note right of Service
+    커밋 뒤에 지움 (탈퇴 만료 처리와 같은 방식).
+    실패해도 DB 는 새 key 를 가리키므로 로그만 남기고 성공 응답
+  end note
+end
+
+Service --> Controller: BaseResultDto.OK
+Controller --> Client: 201 { result: "OK" }
+note right of Client
+  가입 중이면 다음 단계는 next_step = profile
+  (POST /api/v1/user/graduated/info)
+end note
+
+@enduml
