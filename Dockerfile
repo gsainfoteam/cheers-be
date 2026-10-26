@@ -30,8 +30,6 @@ COPY --from=builder --chown=bun:bun /app/drizzle ./drizzle
 
 COPY --from=builder --chown=bun:bun /app/dist ./dist
 
-RUN mkdir -p /app/logs && chown -R bun:bun /app/logs
-
 USER bun
 
 ENV NODE_ENV=production
