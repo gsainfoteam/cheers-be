@@ -1,0 +1,126 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - release
+  push:
+    branches:
+      - develop
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # nest build 는 node 로 실행해야 @src/* alias 가 치환됨 (Dockerfile 주석 참고)
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Lint
+        run: bun run lint:check
+
+      - name: Format
+        run: bun run format:check
+
+      - name: Build
+        run: bun run build
+
+      - name: Test
+        run: bun run test
+
+  # runner 안에서만 뜨는 일회용 Postgres 에 마이그레이션을 적용해 보고,
+  # 스키마 변경에 맞는 마이그레이션이 커밋돼 있는지 확인
+  migration:
+    name: migration
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: cheers
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: cheers
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cheers -d cheers"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://cheers:password@localhost:5432/cheers
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Apply migrations
+        run: bun run db:migrate
+
+      # 이미 적용된 마이그레이션을 다시 돌려도 no-op 이어야 함
+      - name: Re-apply migrations
+        run: bun run db:migrate
+
+      - name: Check migration drift
+        run: |
+          bun run db:generate
+          if [ -n "$(git status --porcelain drizzle)" ]; then
+            echo "::error::drizzle/schema 변경에 맞는 마이그레이션이 없습니다. bun run db:generate 후 생성된 파일을 커밋하세요"
+            git status --porcelain drizzle
+            git diff drizzle
+            exit 1
+          fi
