@@ -13,5 +13,3 @@ docker-compose.yml
 README.md
 test
 **/*.spec.ts
-logs
-*.log
