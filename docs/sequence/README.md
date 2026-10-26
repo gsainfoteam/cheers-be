@@ -4,13 +4,14 @@
 
 ## 목록
 
-| 파일                                                           | 내용                              |
-| -------------------------------------------------------------- | --------------------------------- |
-| [flow/auth-guards.puml](flow/auth-guards.puml)                 | 공통 인증 · 가입 단계 · 유형 가드 |
-| [consent/get-consent-list.puml](consent/get-consent-list.puml) | `GET /api/v1/user/consent/list`   |
-| [consent/post-consent.puml](consent/post-consent.puml)         | `POST /api/v1/user/consent`       |
-| [file/post-upload-url.puml](file/post-upload-url.puml)         | `POST /api/v1/file/upload-url`    |
-| [flow/file-upload.puml](flow/file-upload.puml)                 | 파일 업로드 · 확정 · 조회 · 삭제  |
+| 파일                                                                               | 내용                                         |
+| ---------------------------------------------------------------------------------- | -------------------------------------------- |
+| [flow/auth-guards.puml](flow/auth-guards.puml)                                     | 공통 인증 · 가입 단계 · 유형 가드            |
+| [consent/get-consent-list.puml](consent/get-consent-list.puml)                     | `GET /api/v1/user/consent/list`              |
+| [consent/post-consent.puml](consent/post-consent.puml)                             | `POST /api/v1/user/consent`                  |
+| [file/post-business-card-upload-url.puml](file/post-business-card-upload-url.puml) | `POST /api/v1/file/business-card/upload-url` |
+| [file/post-attachment-upload-url.puml](file/post-attachment-upload-url.puml)       | `POST /api/v1/file/attachment/upload-url`    |
+| [flow/file-upload.puml](flow/file-upload.puml)                                     | 파일 업로드 · 확정 · 조회 · 삭제             |
 
 ## 보기
 

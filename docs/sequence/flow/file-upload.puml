@@ -17,17 +17,17 @@ participant "FileService" as Service
 database PostgreSQL
 participant "S3"
 
-== 1. 업로드 URL 발급 · 업로드 — file/post-upload-url.puml ==
+== 1. 업로드 URL 발급 · 업로드 — file/post-business-card-upload-url.puml, file/post-attachment-upload-url.puml ==
 
-Client -> Feature: POST /api/v1/file/upload-url { purpose, content_type, size }
-Feature --> Client: { url, key: tmp/..., headers }
+Client -> Service: POST /api/v1/file/business-card/upload-url (현업자, pending 가능)\n또는 POST /api/v1/file/attachment/upload-url (active 재학생)\n{ content_type, size }
+Service --> Client: { url, key: tmp/..., headers }
 Client -> S3: PUT <url> (파일)
 S3 --> Client: 200
 
 == 2. 확정 — key를 받는 기능 API 안에서 ==
 
 Client -> Feature: { key: tmp/<directory>/<userPk>/<uuid>.<ext> }
-Feature -> Service: confirmUpload(userPk, purpose, key)
+Feature -> Service: confirmUpload(userPk, purpose, key)\npurpose = "business_card" | "attachment"
 alt key가 tmp/<directory>/<내 userPk>/ 아래가 아님
   Service -[#red]-> Client: 400 Invalid file key
 end
