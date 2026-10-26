@@ -8,7 +8,7 @@ export type CoffeeChatContactRow = typeof coffeeChatContact.$inferSelect;
 
 export type CoffeeChatContactInput = Pick<
   CoffeeChatContactRow,
-  "kakaoEnabled" | "emailEnabled" | "phone" | "email"
+  "userPk" | "kakaoEnabled" | "emailEnabled" | "phone" | "email"
 >;
 
 @Injectable()
@@ -38,17 +38,19 @@ export class CoffeeChatContactRepository {
     phone = EXCLUDED.phone, email = EXCLUDED.email, updated_at = now();
    */
   // 추가 정보 저장 API에서 함께 저장 (버전 관리 안 함)
-  async upsert(
-    userPk: string,
-    contact: CoffeeChatContactInput,
-    tx: TxType,
-  ): Promise<void> {
+  async upsert(row: CoffeeChatContactInput, tx: TxType): Promise<void> {
     await tx
       .insert(coffeeChatContact)
-      .values({ userPk, ...contact })
+      .values(row)
       .onConflictDoUpdate({
         target: coffeeChatContact.userPk,
-        set: { ...contact, updatedAt: new Date() },
+        set: {
+          kakaoEnabled: row.kakaoEnabled,
+          emailEnabled: row.emailEnabled,
+          phone: row.phone,
+          email: row.email,
+          updatedAt: new Date(),
+        },
       });
   }
 

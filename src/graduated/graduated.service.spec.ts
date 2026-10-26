@@ -236,8 +236,8 @@ describe("GraduatedService", () => {
         tx,
       );
       expect(coffeeChatContactRepository.upsert).toHaveBeenCalledWith(
-        USER_PK,
         {
+          userPk: USER_PK,
           emailEnabled: true,
           kakaoEnabled: false,
           email: "chulsoo@example.com",
@@ -291,8 +291,8 @@ describe("GraduatedService", () => {
       );
 
       expect(coffeeChatContactRepository.upsert).toHaveBeenCalledWith(
-        USER_PK,
         {
+          userPk: USER_PK,
           emailEnabled: false,
           kakaoEnabled: false,
           email: "chulsoo@example.com",

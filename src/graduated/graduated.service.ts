@@ -125,8 +125,8 @@ export class GraduatedService {
         tx,
       );
       await this.coffeeChatContactRepository.upsert(
-        userPk,
         {
+          userPk,
           emailEnabled: req.contact.email_enabled,
           kakaoEnabled: req.contact.kakao_enabled,
           email: req.contact.email ?? null,

@@ -17,6 +17,9 @@ export class ContactRequestDto {
   kakao_enabled: boolean;
 
   @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === "string" ? value.trim() : value,
+  )
   @IsEmail()
   @MaxLength(255)
   email?: string | null;
