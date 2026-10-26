@@ -225,6 +225,7 @@ describe("StudentService", () => {
             contact: {
               email_enabled: false,
               kakao_enabled: true,
+              email: "gildong@gm.gist.ac.kr",
               phone: "01012345678",
             },
           }),
@@ -233,8 +234,15 @@ describe("StudentService", () => {
 
       expect(profileRepository.insert).not.toHaveBeenCalled();
       expect(attachmentRepository.insertMany).not.toHaveBeenCalled();
+      // 끈 방법(email)의 값은 보내도 null로 저장
       expect(contactRepository.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({ kakaoEnabled: true, phone: "01012345678" }),
+        {
+          userPk,
+          emailEnabled: false,
+          kakaoEnabled: true,
+          email: null,
+          phone: "01012345678",
+        },
         tx,
       );
       expect(userRepository.activate).not.toHaveBeenCalled();

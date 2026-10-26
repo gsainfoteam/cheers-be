@@ -104,9 +104,9 @@ group transaction (DatabaseService.db.transaction)
   end
   note right of Service: 이전 버전은 커피챗 요청이 참조하므로 수정 · 삭제하지 않음
 
-  Service -> ContactRepository: upsert(userPk, { emailEnabled, kakaoEnabled, email, phone }, tx)
+  Service -> ContactRepository: upsert({ userPk, emailEnabled, kakaoEnabled, email, phone }, tx)
   ContactRepository -> PostgreSQL: INSERT coffee_chat_contact ...\nON CONFLICT (user_pk) DO UPDATE SET ..., updated_at = now()
-  note right: 연락 설정은 버전 관리 안 함.\nCHECK(kakao → phone, email → email)
+  note right: 연락 설정은 버전 관리 안 함.\n끈 방법의 email / phone은 보내도 null로 저장.\nCHECK(kakao → phone, email → email)
 
   opt user.name = null
     Service -> UserRepository: fillName(userPk, name, tx)

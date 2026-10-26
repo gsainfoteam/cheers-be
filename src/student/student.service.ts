@@ -126,14 +126,14 @@ export class StudentService {
         );
       }
 
-      // 연락 설정은 버전 관리하지 않음
+      // 연락 설정은 버전 관리하지 않음. 끈 방법의 email / phone은 보내도 저장하지 않음 (null)
       await this.coffeeChatContactRepository.upsert(
         {
           userPk,
           emailEnabled: req.contact.email_enabled,
           kakaoEnabled: req.contact.kakao_enabled,
-          email: req.contact.email ?? null,
-          phone: req.contact.phone ?? null,
+          email: req.contact.email_enabled ? (req.contact.email ?? null) : null,
+          phone: req.contact.kakao_enabled ? (req.contact.phone ?? null) : null,
         },
         tx,
       );
