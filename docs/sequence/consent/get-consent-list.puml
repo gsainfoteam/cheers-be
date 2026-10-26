@@ -1,0 +1,34 @@
+@startuml get-consent-list
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/v1/user/consent/list
+caption CRB-12 · 최신 약관 목록과 내 동의 여부
+
+actor Client
+participant "AnyStatusGuard" as Guard
+participant "ConsentController" as Controller
+participant "ConsentService" as Service
+participant "ConsentRepository" as ConsentRepository
+database PostgreSQL
+
+Client -> Guard: GET /api/v1/user/consent/list\nAuthorization: Bearer <access token>
+ref over Client, Guard: authenticate() — flow/auth-guards.puml\n401 Missing access token / Token expired / Invalid token
+note right of Guard: 가입 상태와 관계없이 통과 (pending · active)
+Guard -> Controller: getList(user)
+Controller -> Service: getList(userPk)
+Service -> ConsentRepository: findLatestWithAgreement(userPk)
+ConsentRepository -> PostgreSQL: SELECT consent (type별 최신 버전)\n+ 내 유효한 동의 여부 (revoked_at IS NULL)
+note right: 최신 버전 · 유효한 동의 판정은\nconsent.sql.ts (가입 단계 가드와 같은 조각)
+PostgreSQL --> ConsentRepository: rows (ORDER BY type)
+ConsentRepository --> Service: LatestConsent[]
+Service --> Controller: { consents }
+Controller --> Client: 200 { consents: [{ type, version, is_required, url, agreed }] }
+
+@enduml
