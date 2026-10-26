@@ -103,8 +103,8 @@ describe("FileService", () => {
 });
 
 describe("generateFileKey", () => {
-  it("builds a key under the directory with a lowercased extension", () => {
-    expect(generateFileKey(FileDirectory.BUSINESS_CARD, "Card.JPG")).toMatch(
+  it("builds a key under the directory with the extension of the detected type", () => {
+    expect(generateFileKey(FileDirectory.BUSINESS_CARD, "image/jpeg")).toMatch(
       /^business-card\/[0-9a-f-]{36}\.jpg$/,
     );
   });

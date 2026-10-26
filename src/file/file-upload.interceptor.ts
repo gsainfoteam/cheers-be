@@ -5,12 +5,12 @@ import { FileUploadPolicy } from "./file.constants";
 /**
  * single file upload interceptor with size / MIME type limits
  * - exceeding maxSize: 413 (multer LIMIT_FILE_SIZE, converted by Nest)
- * - disallowed MIME type: 400
- * - missing file: use `@UploadedFile(new ParseFilePipe())` in the controller (400)
+ * - disallowed MIME type: 400 (checks only the Content-Type the client sent)
+ * - missing file or disallowed content: use `createFileValidationPipe` in the controller (400)
  *
  * @example
  * @UseInterceptors(createFileUploadInterceptor("file", BUSINESS_CARD_FILE_POLICY))
- * upload(@UploadedFile(new ParseFilePipe()) file: Express.Multer.File) {}
+ * upload(@UploadedFile(createFileValidationPipe(BUSINESS_CARD_FILE_POLICY)) file: Express.Multer.File) {}
  */
 export function createFileUploadInterceptor(
   fieldName: string,

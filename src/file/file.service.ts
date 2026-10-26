@@ -11,6 +11,8 @@ import {
   Logger,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { MAX_ORIGINAL_NAME_LENGTH } from "./file.constants";
+import { detectFileMimeType } from "./file.utils";
 
 const DEFAULT_PRESIGNED_URL_EXPIRES_IN = 600;
 
@@ -43,9 +45,15 @@ export class FileService {
       Bucket: this.bucketName,
       Key: key,
       Body: file.buffer,
-      ContentType: file.mimetype,
+      // 클라이언트가 보낸 타입 대신 내용에서 감지한 타입으로 저장
+      ContentType: detectFileMimeType(file.buffer) ?? file.mimetype,
       Metadata: {
-        originalName: encodeURIComponent(file.originalname),
+        // 코드 포인트 단위로 잘라 서로게이트 쌍이 깨지지 않게 함
+        originalName: encodeURIComponent(
+          Array.from(file.originalname)
+            .slice(0, MAX_ORIGINAL_NAME_LENGTH)
+            .join(""),
+        ),
       },
     });
 
