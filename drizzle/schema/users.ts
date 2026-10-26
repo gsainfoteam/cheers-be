@@ -25,9 +25,12 @@ CREATE TABLE "users" (
     "updated_at"     timestamp with time zone NOT NULL DEFAULT NOW(),
     "last_active_at" timestamp with time zone NOT NULL DEFAULT NOW(),
     "name"           varchar(64)              NULL,
-    "email"          varchar(255)             NULL
+    "email"          varchar(255)             NULL,
+    "withdraw_requested_at" timestamp with time zone NULL
 );
 CREATE INDEX ON "users" ("created_at") WHERE "status" = 'pending';
+CREATE INDEX ON "users" ("withdraw_requested_at")
+  WHERE "withdraw_requested_at" IS NOT NULL AND "is_deleted" = false;
 */
 export const users = pgTable(
   "users",
@@ -50,12 +53,23 @@ export const users = pgTable(
     // OAuth에서 받음, 없으면 추가 정보 입력에서 한 번 받음. 이후 수정 불가
     name: varchar("name", { length: 64 }),
     email: varchar("email", { length: 255 }),
+    // 회원 탈퇴 요청 시각. 유예기간(active: WITHDRAWAL_GRACE_DAYS, pending: 1일) 동안은 비활성,
+    // 그 안에 다시 로그인하면 null로 되돌림. 지나면 스케줄러가 개인정보 삭제 + is_deleted = true
+    withdrawRequestedAt: timestamp("withdraw_requested_at", {
+      withTimezone: true,
+    }),
   },
   (table) => [
     // 가입 미완료 계정 정리 스케줄러용 (pending 행만 들어감)
     index("users_pending_created_at_idx")
       .on(table.createdAt)
       .where(sql`${table.status} = 'pending'`),
+    // 탈퇴 유예기간 만료 스케줄러용 (탈퇴 요청 후 아직 삭제 전인 행만 들어감)
+    index("users_withdraw_requested_at_idx")
+      .on(table.withdrawRequestedAt)
+      .where(
+        sql`${table.withdrawRequestedAt} IS NOT NULL AND ${table.isDeleted} = false`,
+      ),
   ],
 );
 

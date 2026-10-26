@@ -1,0 +1,64 @@
+@startuml post-withdraw
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title POST /api/v1/user/withdraw
+caption CRB-10 · 회원 탈퇴 요청: 유예기간 시작 + 모든 기기 로그아웃 (삭제는 flow/withdrawal-purge.puml)
+
+actor Client
+participant "AnyStatusGuard" as Guard
+participant "UserController" as Controller
+participant "WithdrawalService" as Service
+participant "AuthService" as AuthService
+participant "UserRepository" as UserRepository
+participant "RefreshTokenRepository" as RefreshTokenRepository
+database PostgreSQL
+
+Client -> Guard: POST /api/v1/user/withdraw\nAuthorization: Bearer <access token>
+ref over Client, Guard: authenticate() — flow/auth-guards.puml\n401 Missing access token / Token expired / Invalid token
+note right of Guard: 가입 중(pending)인 유저도 탈퇴 가능
+Guard -> Controller: withdraw(user)
+Controller -> Service: request(userCtx)
+
+group transaction (DatabaseService.db.transaction)
+  Service -> UserRepository: findByPkForUpdate(userPk, tx)
+  UserRepository -> PostgreSQL: SELECT users\nWHERE is_deleted = false AND withdraw_requested_at IS NULL\nFOR UPDATE
+  note right
+    다른 기기의 동시 로그인(탈퇴 취소)과 겹치지 않도록 잠금
+    (로그인도 같은 유저 행을 FOR UPDATE로 잠금)
+  end note
+  PostgreSQL --> UserRepository: row
+  UserRepository --> Service: user | null
+  alt 유저 없음 (이미 탈퇴했거나 탈퇴 요청함)
+    Service -[#red]-> Client: 401 User not found
+  end
+
+  Service -> UserRepository: requestWithdrawal(pk, tx)
+  UserRepository -> PostgreSQL: UPDATE users SET withdraw_requested_at = now()
+  note right
+    유예기간 시작. 가입을 마친(active) 유저는 WITHDRAWAL_GRACE_DAYS(기본 30일),
+    가입 중(pending)이면 1일. 개인정보는 아직 지우지 않음
+  end note
+  Service -> AuthService: revokeAllTokens(pk, tx)
+  AuthService -> RefreshTokenRepository: deleteByUserPk(pk, tx)
+  RefreshTokenRepository -> PostgreSQL: DELETE refresh_token
+  note right: 모든 기기에서 로그아웃
+end
+note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
+
+Service --> Controller: BaseResultDto.OK
+Controller --> Client: 201 { result: "OK" }
+note right of Client
+  유예기간 중에는 비활성: findByPk가 탈퇴 요청 유저를 찾지 않아
+  GET /user/info · 토큰 갱신 · 가입 단계 API는 401 User not found.
+  이미 발급된 access token은 만료(기본 1시간)까지 UserGuard를 통과할 수 있음.
+  유예기간 안에 같은 OAuth 계정으로 로그인하면 탈퇴 취소 (user/post-oauth-login.puml)
+end note
+
+@enduml

@@ -15,6 +15,13 @@
       "when": 1792928806825,
       "tag": "0001_seed_school_department",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792975840269,
+      "tag": "0002_withdraw_grace_period",
+      "breakpoints": true
     }
   ]
 }
