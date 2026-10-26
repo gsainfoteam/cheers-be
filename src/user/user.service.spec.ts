@@ -98,7 +98,6 @@ describe("UserService", () => {
   };
   const studentProfileRepository = { deleteByStudentPk: jest.fn() };
   const studentProfileAttachmentRepository = {
-    findByProfilePk: jest.fn(),
     deleteByStudentPk: jest.fn(),
   };
   const studentEmailVerificationRepository = { deleteByStudentPk: jest.fn() };
@@ -356,7 +355,33 @@ describe("UserService", () => {
       );
     });
 
-    it("uses the DB type and status rather than the token claims", async () => {
+    it("queries everything at once with the claim type when it matches the DB", async () => {
+      userRepository.findByPk.mockResolvedValue(userRow({ type: "graduated" }));
+      userRepository.findSignupProgress.mockResolvedValue(progress());
+      coffeeChatContactRepository.findByUserPk.mockResolvedValue(null);
+      graduatedRepository.findByUserPkWithProfile.mockResolvedValue({
+        graduated: { pk: "graduated-1", verifiedAt: null },
+        profile: null,
+      });
+
+      await service.getInfo(ctx("graduated"));
+
+      expect(userRepository.findSignupProgress).toHaveBeenCalledTimes(1);
+      expect(userRepository.findSignupProgress).toHaveBeenCalledWith(
+        USER_PK,
+        "graduated",
+      );
+      expect(graduatedRepository.findByUserPkWithProfile).toHaveBeenCalledTimes(
+        1,
+      );
+      expect(
+        studentRepository.findByUserPkWithLatestProfile,
+      ).not.toHaveBeenCalled();
+      expect(authService.touchLastActive).toHaveBeenCalledWith(USER_PK);
+    });
+
+    it("re-queries with the DB type and answers by DB type/status when the claim is stale", async () => {
+      // 토큰은 student로 발급됐지만 다른 기기에서 graduated로 유형을 바꾼 상태
       userRepository.findByPk.mockResolvedValue(
         userRow({ type: "graduated", email: "a@gmail.com" }),
       );
@@ -364,6 +389,7 @@ describe("UserService", () => {
         progress({ hasMissingRequiredConsent: true }),
       );
       coffeeChatContactRepository.findByUserPk.mockResolvedValue(null);
+      studentRepository.findByUserPkWithLatestProfile.mockResolvedValue(null);
       graduatedRepository.findByUserPkWithProfile.mockResolvedValue({
         graduated: { pk: "graduated-1", verifiedAt: null },
         profile: null,
@@ -381,17 +407,23 @@ describe("UserService", () => {
         student: null,
         graduated: { verified: false, profile: null },
       });
-      expect(userRepository.findSignupProgress).toHaveBeenCalledWith(
+      // 처음엔 클레임 type(student)으로, 불일치 확인 후 DB type(graduated)으로 다시 조회
+      expect(userRepository.findSignupProgress).toHaveBeenNthCalledWith(
+        1,
+        USER_PK,
+        "student",
+      );
+      expect(userRepository.findSignupProgress).toHaveBeenNthCalledWith(
+        2,
         USER_PK,
         "graduated",
       );
       expect(
         studentRepository.findByUserPkWithLatestProfile,
-      ).not.toHaveBeenCalled();
+      ).toHaveBeenCalledTimes(1);
       expect(graduatedRepository.findByUserPkWithProfile).toHaveBeenCalledWith(
         USER_PK,
       );
-      expect(authService.touchLastActive).toHaveBeenCalledWith(USER_PK);
     });
 
     it("maps an active student's latest profile, attachments and contact", async () => {
@@ -416,22 +448,23 @@ describe("UserService", () => {
         latest: {
           profile: { pk: "profile-2", interests: ["반도체"], activities: null },
           department: { pk: 1, name: "전기전자컴퓨터공학부" },
+          // json_agg로 같은 쿼리에서 받은 첨부 (sort_order 순)
+          attachments: [
+            {
+              kind: "portfolio",
+              source: "link",
+              url: "https://portfolio.example.com",
+              fileName: null,
+            },
+            {
+              kind: "cv",
+              source: "file",
+              url: "cv/key.pdf",
+              fileName: "이력서.pdf",
+            },
+          ],
         },
       });
-      studentProfileAttachmentRepository.findByProfilePk.mockResolvedValue([
-        {
-          kind: "portfolio",
-          source: "link",
-          url: "https://portfolio.example.com",
-          fileName: null,
-        },
-        {
-          kind: "cv",
-          source: "file",
-          url: "cv/key.pdf",
-          fileName: "이력서.pdf",
-        },
-      ]);
       fileService.getPresignedUrl.mockResolvedValue("https://s3/presigned");
 
       const info = await service.getInfo(ctx("student"));
@@ -472,9 +505,6 @@ describe("UserService", () => {
       expect(
         studentRepository.findByUserPkWithLatestProfile,
       ).toHaveBeenCalledWith(USER_PK);
-      expect(
-        studentProfileAttachmentRepository.findByProfilePk,
-      ).toHaveBeenCalledWith("profile-2");
     });
 
     it("returns a null profile for a student who has not entered one yet", async () => {
@@ -493,9 +523,7 @@ describe("UserService", () => {
         verified: false,
         profile: null,
       });
-      expect(
-        studentProfileAttachmentRepository.findByProfilePk,
-      ).not.toHaveBeenCalled();
+      expect(fileService.getPresignedUrl).not.toHaveBeenCalled();
     });
 
     it("flags consent_required for an active user missing a revised required consent", async () => {

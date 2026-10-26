@@ -143,23 +143,23 @@ export class UserService {
   }
 
   async getInfo(userCtx: UserContext): Promise<UserInfoDto> {
-    // 토큰 클레임은 유형 변경 · 가입 완료 전 값일 수 있어 DB 기준으로 응답
-    const user = await this.userRepository.findByPk(userCtx.userPk);
+    // 유형이 필요한 조회는 토큰 클레임의 type으로 유저 조회와 동시에 보냄.
+    // 클레임은 가입 중 유형 변경 전 값일 수 있으므로 응답은 DB의 type · status 기준
+    const [user, contact, claimTyped] = await Promise.all([
+      this.userRepository.findByPk(userCtx.userPk),
+      this.coffeeChatContactRepository.findByUserPk(userCtx.userPk),
+      this.findTypeDependentInfo(userCtx.userPk, userCtx.type),
+      this.authService.touchLastActive(userCtx.userPk),
+    ]);
     if (!user) {
       throw new UnauthorizedException("User not found");
     }
 
-    // 유형은 위에서 알았으므로 유형별 정보도 같이 조회
-    const [progress, contact, studentInfo, graduatedInfo] = await Promise.all([
-      this.userRepository.findSignupProgress(user.pk, user.type),
-      this.coffeeChatContactRepository.findByUserPk(user.pk),
-      user.type === "student"
-        ? this.studentRepository.findByUserPkWithLatestProfile(user.pk)
-        : null,
-      user.type === "graduated"
-        ? this.graduatedRepository.findByUserPkWithProfile(user.pk)
-        : null,
-    ]);
+    // 다른 기기에서 유형을 바꾼 뒤 남은 access token이면 DB type으로 다시 조회
+    const { progress, studentInfo, graduatedInfo } =
+      user.type === userCtx.type
+        ? claimTyped
+        : await this.findTypeDependentInfo(user.pk, user.type);
     const contactDto = contact ? this.toContactDto(contact) : null;
 
     const student = studentInfo
@@ -168,7 +168,6 @@ export class UserService {
     const graduated = graduatedInfo
       ? this.toGraduatedInfoDto(graduatedInfo, contactDto)
       : null;
-    await this.authService.touchLastActive(user.pk);
 
     return {
       id: user.pk,
@@ -340,6 +339,27 @@ export class UserService {
     return status === "active" && progress.hasMissingRequiredConsent;
   }
 
+  // 가입 진행 상황과 유형별 정보는 type에 따라 조회 대상이 달라 함께 묶음
+  private async findTypeDependentInfo(
+    userPk: string,
+    type: UserType,
+  ): Promise<{
+    progress: SignupProgress;
+    studentInfo: StudentWithLatestProfile | null;
+    graduatedInfo: GraduatedWithProfile | null;
+  }> {
+    const [progress, studentInfo, graduatedInfo] = await Promise.all([
+      this.userRepository.findSignupProgress(userPk, type),
+      type === "student"
+        ? this.studentRepository.findByUserPkWithLatestProfile(userPk)
+        : null,
+      type === "graduated"
+        ? this.graduatedRepository.findByUserPkWithProfile(userPk)
+        : null,
+    ]);
+    return { progress, studentInfo, graduatedInfo };
+  }
+
   private async toStudentInfoDto(
     { student, latest }: StudentWithLatestProfile,
     contact: ContactDto | null,
@@ -352,11 +372,6 @@ export class UserService {
       };
     }
 
-    // 첨부는 버전 하나에 여러 개라 따로 조회
-    const attachments =
-      await this.studentProfileAttachmentRepository.findByProfilePk(
-        latest.profile.pk,
-      );
     return {
       email: student.email,
       verified: student.verifiedAt !== null,
@@ -368,7 +383,7 @@ export class UserService {
         interests: latest.profile.interests,
         activities: latest.profile.activities ?? [],
         attachments: await Promise.all(
-          attachments.map(async (attachment) => ({
+          latest.attachments.map(async (attachment) => ({
             kind: attachment.kind,
             source: attachment.source,
             // file이면 비공개 버킷의 key라 presigned URL로 내려줌

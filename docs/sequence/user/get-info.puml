@@ -19,7 +19,6 @@ participant "AuthService" as AuthService
 participant "UserRepository" as UserRepository
 participant "CoffeeChatContactRepository" as CoffeeChatContactRepository
 participant "StudentRepository" as StudentRepository
-participant "StudentProfileAttachmentRepository" as StudentProfileAttachmentRepository
 participant "GraduatedRepository" as GraduatedRepository
 database PostgreSQL
 participant "S3"
@@ -30,45 +29,57 @@ note right of Guard: 가입 상태와 관계없이 통과 (pending · active)
 Guard -> Controller: getInfo(user)
 Controller -> Service: getInfo(userCtx)
 
-Service -> UserRepository: findByPk(userPk)
-UserRepository -> PostgreSQL: SELECT users (is_deleted = false)
-PostgreSQL --> UserRepository: row
-UserRepository --> Service: user | null
+par 동시에 조회 — 유형이 필요한 조회는 토큰 클레임의 type(claimType)으로
+  Service -> UserRepository: findByPk(userPk)
+  UserRepository -> PostgreSQL: SELECT users (is_deleted = false)
+  UserRepository --> Service: user | null
+else
+  Service -> CoffeeChatContactRepository: findByUserPk(userPk)
+  CoffeeChatContactRepository -> PostgreSQL: SELECT coffee_chat_contact
+  CoffeeChatContactRepository --> Service: contact | null
+else
+  Service -> UserRepository: findSignupProgress(userPk, claimType)
+  UserRepository -> PostgreSQL: 필수 약관 미동의 여부,\n유형별 인증(verified_at) · 추가 정보 존재 여부
+  UserRepository --> Service: { hasMissingRequiredConsent, verified, hasProfile }
+else claimType = student
+  Service -> StudentRepository: findByUserPkWithLatestProfile(userPk)
+  StudentRepository -> PostgreSQL: SELECT student\nLEFT JOIN LATERAL (student_profile JOIN department,\n첨부는 json_agg ORDER BY sort_order,\nORDER BY version DESC LIMIT 1)
+  note right: 현재 정보 = 가장 큰 version.\n재학생 행 · 프로필 · 학과 · 첨부를 한 쿼리로
+  StudentRepository --> Service: { student, latest: { profile, department, attachments } | null }
+else claimType = graduated
+  Service -> GraduatedRepository: findByUserPkWithProfile(userPk)
+  GraduatedRepository -> PostgreSQL: SELECT graduated LEFT JOIN graduated_profile
+  GraduatedRepository --> Service: { graduated, profile | null }
+else
+  Service -> AuthService: touchLastActive(userPk)
+  AuthService -> UserRepository: updateLastActiveAt(userPk)
+  UserRepository -> PostgreSQL: UPDATE users SET last_active_at = now()\nWHERE is_deleted = false
+  note right: 유저 조회와 동시에 실행되므로\n탈퇴한 유저는 건드리지 않게 조건을 둠
+end
+note right of Service: 트랜잭션 없음 (조회 + 최근 접속 시각 갱신만)
+
 alt 유저 없음 (탈퇴)
   Service -[#red]-> Client: 401 User not found
 end
-note right of Service
-  토큰 클레임은 유형 변경 · 가입 완료 전 값일 수 있어
-  이후 응답은 모두 DB의 type · status 기준
-end note
 
-par 동시에 조회 (유형은 위에서 앎)
-  Service -> UserRepository: findSignupProgress(pk, type)
-  UserRepository -> PostgreSQL: 필수 약관 미동의 여부,\n유형별 인증(verified_at) · 추가 정보 존재 여부
-  PostgreSQL --> UserRepository: row
-  UserRepository --> Service: { hasMissingRequiredConsent, verified, hasProfile }
-else
-  Service -> CoffeeChatContactRepository: findByUserPk(pk)
-  CoffeeChatContactRepository -> PostgreSQL: SELECT coffee_chat_contact
-  CoffeeChatContactRepository --> Service: contact | null
-else type = student
-  Service -> StudentRepository: findByUserPkWithLatestProfile(pk)
-  StudentRepository -> PostgreSQL: SELECT student\nLEFT JOIN LATERAL (student_profile JOIN department\nORDER BY version DESC LIMIT 1)
-  note right: 현재 정보 = 가장 큰 version.\n재학생 행 · 프로필 · 학과를 한 쿼리로
-  PostgreSQL --> StudentRepository: row
-  StudentRepository --> Service: { student, latest: { profile, department } | null }
-else type = graduated
-  Service -> GraduatedRepository: findByUserPkWithProfile(pk)
-  GraduatedRepository -> PostgreSQL: SELECT graduated LEFT JOIN graduated_profile
-  PostgreSQL --> GraduatedRepository: row
-  GraduatedRepository --> Service: { graduated, profile | null }
+opt DB의 type ≠ claimType
+  note over Service
+    다른 기기에서 가입 중 유형을 바꾼 뒤 남은 access token (최대 access token 수명).
+    응답은 DB의 type · status 기준이어야 하므로 유형이 필요한 조회만 다시 함
+  end note
+  par DB type으로 다시 조회
+    Service -> UserRepository: findSignupProgress(userPk, user.type)
+    UserRepository -> PostgreSQL: 필수 약관 미동의 여부, 인증 · 추가 정보 존재 여부
+  else
+    Service -> StudentRepository: findByUserPkWithLatestProfile(userPk)
+    note right: user.type = student일 때
+  else
+    Service -> GraduatedRepository: findByUserPkWithProfile(userPk)
+    note right: user.type = graduated일 때
+  end
 end
 
 opt type = student이고 추가 정보가 있음
-  Service -> StudentProfileAttachmentRepository: findByProfilePk(profilePk)
-  StudentProfileAttachmentRepository -> PostgreSQL: SELECT student_profile_attachment ORDER BY sort_order
-  note right: 버전 하나에 첨부가 여러 개라 따로 조회
-  StudentProfileAttachmentRepository --> Service: attachments
   loop source = file인 첨부
     Service -> S3: getPresignedUrl(key)
     note right: 비공개 버킷이라 presigned URL로 내려줌.\n서명은 서버에서 계산 (S3 호출 없음)
@@ -77,11 +88,6 @@ opt type = student이고 추가 정보가 있음
     end
   end
 end
-
-Service -> AuthService: touchLastActive(pk)
-AuthService -> UserRepository: updateLastActiveAt(pk)
-UserRepository -> PostgreSQL: UPDATE users SET last_active_at = now()
-note right of Service: 트랜잭션 없음 (조회 + 최근 접속 시각 갱신만)
 
 Service -> Service: next_step = calculateNextStep(status, progress)\nconsent_required = active && hasMissingRequiredConsent
 note right of Service

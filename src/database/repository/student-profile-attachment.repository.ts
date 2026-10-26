@@ -1,6 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { asc, eq, inArray } from "drizzle-orm";
-import { DatabaseService } from "@src/database/database.service";
+import { eq, inArray } from "drizzle-orm";
 import { TxType } from "@src/global/types/tx.types";
 import { studentProfileAttachment } from "../../../drizzle/schema/student-profile-attachment";
 import { studentProfile } from "../../../drizzle/schema/student-profile";
@@ -8,24 +7,9 @@ import { studentProfile } from "../../../drizzle/schema/student-profile";
 export type StudentProfileAttachmentRow =
   typeof studentProfileAttachment.$inferSelect;
 
+// 첨부 조회는 StudentRepository.findByUserPkWithLatestProfile (json_agg로 한 쿼리)
 @Injectable()
 export class StudentProfileAttachmentRepository {
-  constructor(private readonly dbService: DatabaseService) {}
-
-  /*
-  SELECT * FROM student_profile_attachment WHERE profile_pk = ?1 ORDER BY sort_order;
-   */
-  async findByProfilePk(
-    profilePk: string,
-    tx?: TxType,
-  ): Promise<StudentProfileAttachmentRow[]> {
-    return (tx ?? this.dbService.db)
-      .select()
-      .from(studentProfileAttachment)
-      .where(eq(studentProfileAttachment.profilePk, profilePk))
-      .orderBy(asc(studentProfileAttachment.sortOrder));
-  }
-
   /*
   DELETE FROM student_profile_attachment
   WHERE profile_pk IN (SELECT pk FROM student_profile WHERE student_pk = ?1);
