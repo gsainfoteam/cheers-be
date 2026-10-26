@@ -1,20 +1,36 @@
 import {
+  CopyObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
+  HeadObjectCommandOutput,
   PutObjectCommand,
   S3Client,
+  S3ServiceException,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import {
+  BadRequestException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   Logger,
+  PayloadTooLargeException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { MAX_ORIGINAL_NAME_LENGTH } from "./file.constants";
-import { detectFileMimeType } from "./file.utils";
+import { UserContext } from "@src/auth/context/user-context";
+import { FILE_UPLOAD_POLICIES, FilePurpose } from "./file.constants";
+import { UploadUrl } from "./file.types";
+import {
+  detectFileMimeType,
+  FILE_SIGNATURE_LENGTH,
+  generateTempFileKey,
+  isUserTempFileKey,
+  toConfirmedFileKey,
+} from "./file.utils";
 
 const DEFAULT_PRESIGNED_URL_EXPIRES_IN = 600;
+const DEFAULT_UPLOAD_URL_EXPIRES_IN = 300;
 
 @Injectable()
 export class FileService {
@@ -22,45 +38,122 @@ export class FileService {
   private readonly s3Client: S3Client;
   private readonly bucketName: string;
   private readonly presignedUrlExpiresIn: number;
+  private readonly uploadUrlExpiresIn: number;
   constructor(private readonly configService: ConfigService) {
     this.s3Client = new S3Client({
       region: configService.getOrThrow<string>("AWS_S3_REGION"),
+      // 기본값(WHEN_SUPPORTED)이면 presigned PUT에 빈 body의 checksum이 서명돼 실제 업로드가 실패함
+      requestChecksumCalculation: "WHEN_REQUIRED",
     });
     this.bucketName = configService.getOrThrow<string>("AWS_S3_BUCKET_NAME");
     this.presignedUrlExpiresIn = Number(
       configService.get<string>("S3_PRESIGNED_URL_EXPIRES_IN") ??
         DEFAULT_PRESIGNED_URL_EXPIRES_IN,
     );
+    this.uploadUrlExpiresIn = Number(
+      configService.get<string>("S3_UPLOAD_URL_EXPIRES_IN") ??
+        DEFAULT_UPLOAD_URL_EXPIRES_IN,
+    );
   }
 
   /**
-   * this method uploads a file to the S3 bucket
-   * the caller saves the key in the same request and deletes the file if that fails
-   * @param file Express.Multer.File
-   * @param key string
-   * @returns string
+   * this method creates a presigned PUT URL for the browser to upload a file directly
+   * Content-Type and Content-Length are signed, so S3 rejects a different type or size
+   * the file goes under tmp/ until confirmUpload is called
+   * @param user UserContext
+   * @param purpose FilePurpose
+   * @param contentType string
+   * @param size number bytes
+   * @returns UploadUrl
    */
-  async uploadFile(file: Express.Multer.File, key: string): Promise<string> {
+  async createUploadUrl(
+    user: UserContext,
+    purpose: FilePurpose,
+    contentType: string,
+    size: number,
+  ): Promise<UploadUrl> {
+    const policy = FILE_UPLOAD_POLICIES[purpose];
+    if (!policy.allowedUserTypes.includes(user.type)) {
+      throw new ForbiddenException("User type not allowed");
+    }
+    const extension = policy.allowedContentTypes[contentType];
+    if (!extension) {
+      throw new BadRequestException(`Unsupported file type: ${contentType}`);
+    }
+    if (size > policy.maxSize) {
+      throw new PayloadTooLargeException();
+    }
+
+    const key = generateTempFileKey(policy.directory, user.userPk, extension);
     const command = new PutObjectCommand({
       Bucket: this.bucketName,
       Key: key,
-      Body: file.buffer,
-      // 클라이언트가 보낸 타입 대신 내용에서 감지한 타입으로 저장
-      ContentType: detectFileMimeType(file.buffer) ?? file.mimetype,
-      Metadata: {
-        // 코드 포인트 단위로 잘라 서로게이트 쌍이 깨지지 않게 함
-        originalName: encodeURIComponent(
-          Array.from(file.originalname)
-            .slice(0, MAX_ORIGINAL_NAME_LENGTH)
-            .join(""),
-        ),
-      },
+      ContentType: contentType,
+      ContentLength: size,
+    });
+    const url = await getSignedUrl(this.s3Client, command, {
+      expiresIn: this.uploadUrlExpiresIn,
+      signableHeaders: new Set(["content-type", "content-length"]),
+    }).catch((err) => {
+      this.logger.error(err);
+      throw new InternalServerErrorException();
     });
 
+    return {
+      url,
+      key,
+      headers: { "Content-Type": contentType },
+      expiresIn: this.uploadUrlExpiresIn,
+    };
+  }
+
+  /**
+   * this method confirms a file uploaded with createUploadUrl
+   * it checks the owner, size and the actual content (magic numbers),
+   * then moves the file out of tmp/ with the detected Content-Type
+   * @param userPk string
+   * @param purpose FilePurpose
+   * @param tempKey string key returned by createUploadUrl
+   * @returns string confirmed key to store in the DB
+   */
+  async confirmUpload(
+    userPk: string,
+    purpose: FilePurpose,
+    tempKey: string,
+  ): Promise<string> {
+    const policy = FILE_UPLOAD_POLICIES[purpose];
+    if (!isUserTempFileKey(policy.directory, userPk, tempKey)) {
+      throw new BadRequestException("Invalid file key");
+    }
+
+    const head = await this.headFile(tempKey);
+    if (!head) {
+      throw new BadRequestException("File not uploaded");
+    }
+    // 서명된 Content-Type은 클라이언트가 고른 값이라, 실제 내용으로 다시 확인
+    const contentType =
+      (head.ContentLength ?? 0) <= policy.maxSize
+        ? detectFileMimeType(await this.readFileSignature(tempKey))
+        : undefined;
+    const extension = contentType && policy.allowedContentTypes[contentType];
+    if (!contentType || !extension) {
+      await this.deleteFile(tempKey);
+      throw new BadRequestException("Uploaded file does not match the policy");
+    }
+
+    const key = toConfirmedFileKey(tempKey, extension);
+    const command = new CopyObjectCommand({
+      Bucket: this.bucketName,
+      CopySource: `${this.bucketName}/${tempKey}`,
+      Key: key,
+      ContentType: contentType,
+      MetadataDirective: "REPLACE",
+    });
     await this.s3Client.send(command).catch((err) => {
       this.logger.error(err);
       throw new InternalServerErrorException();
     });
+    await this.deleteFile(tempKey);
     return key;
   }
 
@@ -100,6 +193,40 @@ export class FileService {
     });
 
     return getSignedUrl(this.s3Client, command, { expiresIn }).catch((err) => {
+      this.logger.error(err);
+      throw new InternalServerErrorException();
+    });
+  }
+
+  // 내용 판별용으로 앞부분만 읽음 (Range GET)
+  private async readFileSignature(key: string): Promise<Buffer> {
+    const command = new GetObjectCommand({
+      Bucket: this.bucketName,
+      Key: key,
+      Range: `bytes=0-${FILE_SIGNATURE_LENGTH - 1}`,
+    });
+
+    const output = await this.s3Client.send(command).catch((err) => {
+      this.logger.error(err);
+      throw new InternalServerErrorException();
+    });
+    return Buffer.from((await output.Body?.transformToByteArray()) ?? []);
+  }
+
+  // 없으면 null
+  private async headFile(key: string): Promise<HeadObjectCommandOutput | null> {
+    const command = new HeadObjectCommand({
+      Bucket: this.bucketName,
+      Key: key,
+    });
+
+    return this.s3Client.send(command).catch((err) => {
+      if (
+        err instanceof S3ServiceException &&
+        err.$metadata.httpStatusCode === 404
+      ) {
+        return null;
+      }
       this.logger.error(err);
       throw new InternalServerErrorException();
     });

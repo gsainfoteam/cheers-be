@@ -1,26 +1,39 @@
+import { UserType } from "@src/auth/auth.types";
+
 export const FileDirectory = {
   BUSINESS_CARD: "business-card",
 } as const;
 
 export type FileDirectory = (typeof FileDirectory)[keyof typeof FileDirectory];
 
+// 업로드 URL 발급 API의 purpose 값
+export const FilePurpose = {
+  BUSINESS_CARD: "business_card",
+} as const;
+
+export type FilePurpose = (typeof FilePurpose)[keyof typeof FilePurpose];
+
+// 확정 전 업로드 위치. 버킷 lifecycle이 이 prefix를 1일 뒤 삭제
+export const TEMP_PREFIX = "tmp/";
+
 export interface FileUploadPolicy {
+  directory: FileDirectory;
   maxSize: number;
-  allowedMimeTypes: string[];
+  // Content-Type → 저장할 확장자
+  allowedContentTypes: Record<string, string>;
+  allowedUserTypes: UserType[];
 }
 
-export const BUSINESS_CARD_FILE_POLICY: FileUploadPolicy = {
-  maxSize: 10 * 1024 * 1024,
-  allowedMimeTypes: ["image/jpeg", "image/png", "image/heic", "image/heif"],
+export const FILE_UPLOAD_POLICIES: Record<FilePurpose, FileUploadPolicy> = {
+  [FilePurpose.BUSINESS_CARD]: {
+    directory: FileDirectory.BUSINESS_CARD,
+    maxSize: 10 * 1024 * 1024,
+    allowedContentTypes: {
+      "image/jpeg": "jpg",
+      "image/png": "png",
+      "image/heic": "heic",
+      "image/heif": "heif",
+    },
+    allowedUserTypes: ["graduated"],
+  },
 };
-
-// 파일 내용에서 감지한 MIME 타입 → 저장할 확장자
-export const FILE_EXTENSIONS: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/heic": "heic",
-  "image/heif": "heif",
-};
-
-// S3 사용자 메타데이터는 합쳐서 2KB까지라 원래 파일명은 앞부분만 저장
-export const MAX_ORIGINAL_NAME_LENGTH = 100;
