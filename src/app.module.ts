@@ -10,6 +10,7 @@ import { FileModule } from "@src/file/file.module";
 import { GraduatedModule } from "@src/graduated/graduated.module";
 import { AppController } from "./app.controller";
 import { UserModule } from "@src/user/user.module";
+import { CheersModule } from "@src/cheers/cheers.module";
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { UserModule } from "@src/user/user.module";
     ConsentModule,
     FileModule,
     GraduatedModule,
+    CheersModule,
   ],
   controllers: [AppController],
   providers: [],
