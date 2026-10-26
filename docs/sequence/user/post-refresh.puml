@@ -45,10 +45,10 @@ group transaction (DatabaseService.db.transaction)
   end
 
   AuthService -> UserRepository: findByPk(userPk, tx)
-  UserRepository -> PostgreSQL: SELECT users (is_deleted = false)
+  UserRepository -> PostgreSQL: SELECT users (is_deleted = false\nAND withdraw_requested_at IS NULL)
   PostgreSQL --> UserRepository: row
   UserRepository --> AuthService: user | null
-  alt 유저 없음 (탈퇴)
+  alt 유저 없음 (탈퇴 · 탈퇴 유예기간 중)
     AuthService -[#red]-> Client: 401 User not found
   end
   note right of AuthService

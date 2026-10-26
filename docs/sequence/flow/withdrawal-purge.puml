@@ -1,0 +1,95 @@
+@startuml withdrawal-purge
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title 스케줄러: 탈퇴 유예기간 만료 처리
+caption CRB-10 · src/user/withdrawal.scheduler.ts · 매일 04:00 (Asia/Seoul)
+
+participant "WithdrawalScheduler" as Scheduler
+participant "WithdrawalService" as Service
+participant "AuthService" as AuthService
+participant "UserRepository" as UserRepository
+participant "UserOauthAccountRepository" as UserOauthAccountRepository
+participant "RefreshTokenRepository" as RefreshTokenRepository
+participant "CoffeeChatContactRepository" as CoffeeChatContactRepository
+participant "StudentRepository" as StudentRepository
+participant "StudentEmailVerificationRepository" as StudentEmailVerificationRepository
+participant "GraduatedRepository" as GraduatedRepository
+database PostgreSQL
+participant "S3"
+
+Scheduler -> Service: purgeExpired()
+Service -> Service: cutoffs\nactive: now - WITHDRAWAL_GRACE_DAYS (기본 30일)\npending: now - 1일
+
+loop 더 처리할 유저가 없을 때까지
+  Service -> UserRepository: findWithdrawalDuePks(cutoffs, 100, attempted)
+  UserRepository -> PostgreSQL: SELECT pk FROM users WHERE is_deleted = false AND (\n(status = active AND withdraw_requested_at <= active 기준) OR\n(status = pending AND withdraw_requested_at <= pending 기준))\nAND pk NOT IN (이번 실행에서 시도한 유저)\nORDER BY withdraw_requested_at LIMIT 100
+  note right: 부분 인덱스 users_withdraw_requested_at_idx
+  UserRepository --> Service: pks
+
+  loop pk마다 (유저별 트랜잭션)
+    group transaction (DatabaseService.db.transaction)
+      Service -> UserRepository: lockWithdrawalDue(pk, cutoffs, tx)
+      UserRepository -> PostgreSQL: SELECT users WHERE pk = ? AND (위와 같은 만료 조건)\nFOR UPDATE SKIP LOCKED
+      note right
+        다른 인스턴스가 처리 중이거나 같은 유저가 로그인(탈퇴 취소) 중이면
+        기다리지 않고 건너뜀. 잠근 뒤 조건을 다시 보므로
+        그 사이 탈퇴가 취소됐으면 null
+      end note
+      UserRepository --> Service: user | null
+      opt user 있음
+        Service -> UserOauthAccountRepository: deleteByUserPk(pk, tx)
+        UserOauthAccountRepository -> PostgreSQL: DELETE user_oauth_account
+        note right: hard delete라 같은 OAuth 계정으로 새로 가입 가능
+        Service -> AuthService: revokeAllTokens(pk, tx)
+        AuthService -> RefreshTokenRepository: deleteByUserPk(pk, tx)
+        Service -> CoffeeChatContactRepository: deleteByUserPk(pk, tx)
+        CoffeeChatContactRepository -> PostgreSQL: DELETE coffee_chat_contact (연락 이메일 · 전화번호)
+        alt type = student
+          Service -> StudentRepository: findByUserPk(pk, tx)
+          opt 재학생 행이 있음
+            Service -> StudentEmailVerificationRepository: deleteByStudentPk(studentPk, tx)
+            StudentEmailVerificationRepository -> PostgreSQL: DELETE student_email_verification
+            Service -> StudentRepository: clearEmailByUserPk(pk, tx)
+            StudentRepository -> PostgreSQL: UPDATE student SET email = NULL
+            note right: UQ를 풀어 같은 gist 이메일로 재가입 가능
+          end
+        else type = graduated
+          Service -> GraduatedRepository: findByUserPk(pk, tx)
+          opt business_card_key가 있음
+            Service -> GraduatedRepository: clearBusinessCardKey(graduatedPk, tx)
+            GraduatedRepository -> PostgreSQL: UPDATE graduated SET business_card_key = NULL
+          end
+        end
+        Service -> UserRepository: withdraw(pk, tx)
+        UserRepository -> PostgreSQL: UPDATE users SET is_deleted = true, name = NULL, email = NULL
+      end
+    end
+    opt 명함 key를 지웠음
+      Service -> S3: deleteFile(businessCardKey)
+      note right: 실패하면 로그만 (DB에는 이미 참조가 없음)
+    end
+    alt 이 유저 처리 중 예외
+      note over Service: 로그만 남기고 다음 유저로. 이번 실행에서는 다시 시도하지 않고 다음 날 재시도
+    end
+  end
+end
+
+note over Service, PostgreSQL
+  남기는 것: 약관 동의 이력, student / graduated · 프로필 행, 커피챗 요청(공유된 연락처 포함)과 알림 로그
+  — 상대방의 커피챗 기록이 참조함. withdraw_requested_at도 기록으로 남김
+end note
+
+Service --> Scheduler: 처리한 유저 수
+Scheduler -> Scheduler: 로그 (Purged N withdrawn user(s))
+alt purgeExpired 자체가 실패 (DB 연결 등)
+  note over Scheduler: 에러 로그만 남기고 다음 날 다시 실행
+end
+
+@enduml

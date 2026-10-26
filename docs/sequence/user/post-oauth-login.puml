@@ -74,7 +74,7 @@ OAuthService --> Service: OAuthProfile { provider, sub, email, name }
 group transaction (DatabaseService.db.transaction)
   Service -> UserOauthAccountRepository: findUserForLogin(provider, sub, tx)
   UserOauthAccountRepository -> PostgreSQL: SELECT users JOIN user_oauth_account\nWHERE provider, provider_sub, is_deleted = false\nFOR UPDATE OF users
-  note right: 같은 계정의 동시 로그인 · 탈퇴와\n겹치지 않도록 유저 행을 잠금
+  note right: 같은 계정의 동시 로그인 · 탈퇴 요청 · 만료 처리와\n겹치지 않도록 유저 행을 잠금.\n탈퇴 유예기간 중인 유저도 찾음
   PostgreSQL --> UserOauthAccountRepository: row
   UserOauthAccountRepository --> Service: user | null
 
@@ -92,6 +92,11 @@ group transaction (DatabaseService.db.transaction)
       Service -> GraduatedRepository: insert(userPk, tx)
     end
   else 계정 있음
+    opt 탈퇴 유예기간 중 (withdraw_requested_at 있음)
+      Service -> UserRepository: cancelWithdrawal(pk, tx)
+      UserRepository -> PostgreSQL: UPDATE users SET withdraw_requested_at = NULL
+      note right: 다시 로그인하면 탈퇴 취소.\n스케줄러는 FOR UPDATE SKIP LOCKED라\n로그인 중인 유저를 건너뜀
+    end
     Service -> UserOauthAccountRepository: updateLastLogin(provider, sub, email, tx)
     UserOauthAccountRepository -> PostgreSQL: UPDATE user_oauth_account SET last_login_at\n(email은 받았을 때만)
     Service -> UserRepository: fillProfileFromOAuth(pk, { name, email }, tx)

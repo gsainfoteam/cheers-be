@@ -31,7 +31,7 @@ Controller -> Service: getInfo(userCtx)
 
 par 동시에 조회 — 유형이 필요한 조회는 토큰 클레임의 type(claimType)으로
   Service -> UserRepository: findByPk(userPk)
-  UserRepository -> PostgreSQL: SELECT users (is_deleted = false)
+  UserRepository -> PostgreSQL: SELECT users (is_deleted = false\nAND withdraw_requested_at IS NULL)
   UserRepository --> Service: user | null
 else
   Service -> CoffeeChatContactRepository: findByUserPk(userPk)
@@ -58,7 +58,7 @@ else
 end
 note right of Service: 트랜잭션 없음 (조회 + 최근 접속 시각 갱신만)
 
-alt 유저 없음 (탈퇴)
+alt 유저 없음 (탈퇴 · 탈퇴 유예기간 중)
   Service -[#red]-> Client: 401 User not found
 end
 
