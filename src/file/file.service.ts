@@ -11,14 +11,12 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   Logger,
   PayloadTooLargeException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { UserContext } from "@src/auth/context/user-context";
 import { FILE_UPLOAD_POLICIES, FilePurpose } from "./file.constants";
 import { UploadUrl } from "./file.types";
 import {
@@ -60,22 +58,20 @@ export class FileService {
    * this method creates a presigned PUT URL for the browser to upload a file directly
    * Content-Type and Content-Length are signed, so S3 rejects a different type or size
    * the file goes under tmp/ until confirmUpload is called
-   * @param user UserContext
+   * who may upload for each purpose is checked by the controller's guards
+   * @param userPk string
    * @param purpose FilePurpose
    * @param contentType string
    * @param size number bytes
    * @returns UploadUrl
    */
   async createUploadUrl(
-    user: UserContext,
+    userPk: string,
     purpose: FilePurpose,
     contentType: string,
     size: number,
   ): Promise<UploadUrl> {
     const policy = FILE_UPLOAD_POLICIES[purpose];
-    if (!policy.allowedUserTypes.includes(user.type)) {
-      throw new ForbiddenException("User type not allowed");
-    }
     const extension = policy.allowedContentTypes[contentType];
     if (!extension) {
       throw new BadRequestException(`Unsupported file type: ${contentType}`);
@@ -84,7 +80,7 @@ export class FileService {
       throw new PayloadTooLargeException();
     }
 
-    const key = generateTempFileKey(policy.directory, user.userPk, extension);
+    const key = generateTempFileKey(policy.directory, userPk, extension);
     const command = new PutObjectCommand({
       Bucket: this.bucketName,
       Key: key,

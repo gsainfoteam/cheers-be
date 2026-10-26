@@ -48,6 +48,7 @@ const JPEG_SIGNATURE = Buffer.from([0xff, 0xd8, 0xff]);
 const PNG_SIGNATURE = Buffer.from([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
 ]);
+const PDF_SIGNATURE = Buffer.from("%PDF-", "latin1");
 
 // ISO BMFF(ftyp) major brand → MIME 타입
 const HEIF_BRANDS: Record<string, string> = {
@@ -71,6 +72,9 @@ export function detectFileMimeType(buffer: Buffer): string | undefined {
   }
   if (buffer.length >= 8 && buffer.subarray(0, 8).equals(PNG_SIGNATURE)) {
     return "image/png";
+  }
+  if (buffer.length >= 5 && buffer.subarray(0, 5).equals(PDF_SIGNATURE)) {
+    return "application/pdf";
   }
   if (buffer.length >= 12 && buffer.toString("latin1", 4, 8) === "ftyp") {
     return HEIF_BRANDS[buffer.toString("latin1", 8, 12)];

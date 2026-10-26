@@ -8,13 +8,11 @@ import {
 } from "@aws-sdk/client-s3";
 import {
   BadRequestException,
-  ForbiddenException,
   InternalServerErrorException,
   PayloadTooLargeException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Test } from "@nestjs/testing";
-import { UserContext } from "@src/auth/context/user-context";
 import { FileDirectory, FilePurpose } from "./file.constants";
 import { FileService } from "./file.service";
 import {
@@ -30,8 +28,6 @@ const config: Record<string, string> = {
 };
 
 const USER_PK = "11111111-1111-1111-1111-111111111111";
-const graduated = new UserContext(USER_PK, "graduated", "pending");
-const student = new UserContext(USER_PK, "student", "pending");
 const TEMP_KEY = `tmp/business-card/${USER_PK}/a.jpg`;
 const MB = 1024 * 1024;
 
@@ -99,7 +95,7 @@ describe("FileService upload", () => {
   describe("createUploadUrl", () => {
     it("signs content-type and content-length into a PUT URL under tmp/", async () => {
       const result = await service.createUploadUrl(
-        graduated,
+        USER_PK,
         FilePurpose.BUSINESS_CARD,
         "image/jpeg",
         1234,
@@ -122,21 +118,10 @@ describe("FileService upload", () => {
       expect(url.searchParams.has("x-amz-checksum-crc32")).toBe(false);
     });
 
-    it("rejects a user type the purpose does not allow", async () => {
-      await expect(
-        service.createUploadUrl(
-          student,
-          FilePurpose.BUSINESS_CARD,
-          "image/jpeg",
-          1234,
-        ),
-      ).rejects.toBeInstanceOf(ForbiddenException);
-    });
-
     it("rejects an unsupported content type", async () => {
       await expect(
         service.createUploadUrl(
-          graduated,
+          USER_PK,
           FilePurpose.BUSINESS_CARD,
           "application/pdf",
           1234,
@@ -147,13 +132,48 @@ describe("FileService upload", () => {
     it("rejects a file larger than the policy", async () => {
       await expect(
         service.createUploadUrl(
-          graduated,
+          USER_PK,
           FilePurpose.BUSINESS_CARD,
           "image/png",
           10 * MB + 1,
         ),
       ).rejects.toBeInstanceOf(PayloadTooLargeException);
     });
+
+    it("issues a CV · portfolio URL for a PDF up to 20MB under attachment/", async () => {
+      const result = await service.createUploadUrl(
+        USER_PK,
+        FilePurpose.ATTACHMENT,
+        "application/pdf",
+        20 * MB,
+      );
+
+      expect(result.key).toMatch(
+        new RegExp(`^tmp/attachment/${USER_PK}/[0-9a-f-]{36}\\.pdf$`),
+      );
+    });
+
+    it.each([
+      ["an image", "image/png", MB, BadRequestException],
+      [
+        "a PDF over 20MB",
+        "application/pdf",
+        20 * MB + 1,
+        PayloadTooLargeException,
+      ],
+    ])(
+      "rejects %s for CV · portfolio",
+      async (_, contentType, size, exception) => {
+        await expect(
+          service.createUploadUrl(
+            USER_PK,
+            FilePurpose.ATTACHMENT,
+            contentType,
+            size,
+          ),
+        ).rejects.toBeInstanceOf(exception);
+      },
+    );
   });
 
   describe("confirmUpload", () => {
@@ -311,6 +331,7 @@ describe("detectFileMimeType", () => {
   it.each([
     ["jpeg", jpeg, "image/jpeg"],
     ["png", png, "image/png"],
+    ["pdf", Buffer.from("%PDF-1.7\n%"), "application/pdf"],
     ["heic", ftyp("heic"), "image/heic"],
     ["heix", ftyp("heix"), "image/heic"],
     ["mif1", ftyp("mif1"), "image/heif"],

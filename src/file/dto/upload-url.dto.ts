@@ -1,10 +1,6 @@
-import { IsIn, IsInt, IsNotEmpty, IsPositive, IsString } from "class-validator";
-import { FilePurpose } from "@src/file/file.constants";
+import { IsInt, IsNotEmpty, IsPositive, IsString } from "class-validator";
 
 export class UploadUrlRequestDto {
-  @IsIn(Object.values(FilePurpose))
-  purpose: FilePurpose;
-
   @IsString()
   @IsNotEmpty()
   content_type: string;
