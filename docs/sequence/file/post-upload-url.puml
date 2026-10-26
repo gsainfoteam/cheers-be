@@ -1,0 +1,65 @@
+@startuml post-upload-url
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title POST /api/v1/file/upload-url
+caption CRB-6 · 브라우저가 S3에 직접 올릴 presigned PUT URL 발급
+
+actor Client
+participant "AnyStatusGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "FileController" as Controller
+participant "FileService" as Service
+participant "S3"
+
+Client -> Guard: POST /api/v1/file/upload-url\nAuthorization: Bearer <access token>\n{ purpose, content_type, size }
+ref over Client, Guard
+  AnyStatusGuard — flow/auth-guards.puml
+  가입 중(pending)에도 통과 (명함 인증 단계에서 호출)
+  401 Missing access token / Token expired / Invalid token
+end ref
+Guard -> Pipe: 통과
+alt body 검증 실패 (purpose가 business_card가 아님, content_type 빈 문자열, size가 양의 정수가 아님)
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+Pipe -> Controller: createUploadUrl(req, user)
+Controller -> Service: createUploadUrl(user, purpose, content_type, size)
+note right of Service: 정책: FILE_UPLOAD_POLICIES[purpose]\n명함 = 현업자만, jpeg · png · heic · heif, 10MB
+
+alt 이 purpose를 쓸 수 없는 유저 유형
+  Service -[#red]-> Client: 403 User type not allowed
+else 허용되지 않은 content_type
+  Service -[#red]-> Client: 400 Unsupported file type: <content_type>
+else size > 정책 최대 크기
+  Service -[#red]-> Client: 413 Payload Too Large
+end
+
+Service -> Service: key = tmp/<directory>/<userPk>/<uuid>.<ext>
+Service -> Service: getSignedUrl(PutObjectCommand)\nContent-Type · Content-Length 서명, 만료 S3_UPLOAD_URL_EXPIRES_IN(기본 300초)
+note right of Service
+  서명은 서버 자격증명으로 로컬에서 계산.
+  S3 호출 없음
+end note
+Service --> Controller: { url, key, headers, expiresIn }
+Controller --> Client: 200 { url, method: "PUT", key, headers: { Content-Type }, expires_in }
+
+== 업로드 (브라우저 → S3, 백엔드 거치지 않음) ==
+
+Client -> S3: PUT <url>\nContent-Type: <content_type>\n<파일 바이너리>
+alt 서명과 다른 Content-Type · 크기, 또는 URL 만료
+  S3 -[#red]-> Client: 403 SignatureDoesNotMatch / AccessDenied
+end
+S3 --> Client: 200
+note over Client, S3
+  CORS: 버킷 allowed_origins에서 온 PUT만 브라우저가 통과
+  확정 전 tmp/ 파일은 버킷 lifecycle이 1일 뒤 삭제
+  확정은 key를 받는 기능 API에서 — flow/file-upload.puml
+end note
+
+@enduml

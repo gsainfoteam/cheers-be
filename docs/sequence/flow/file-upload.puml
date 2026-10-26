@@ -1,0 +1,80 @@
+@startuml file-upload
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title 공통 흐름: 파일 업로드 · 확정 · 조회 · 삭제
+caption CRB-6 · src/file/ · presigned PUT · GET, private 버킷
+
+actor Client
+participant "기능 API\n(예: 명함 인증)" as Feature
+participant "FileService" as Service
+database PostgreSQL
+participant "S3"
+
+== 1. 업로드 URL 발급 · 업로드 — file/post-upload-url.puml ==
+
+Client -> Feature: POST /api/v1/file/upload-url { purpose, content_type, size }
+Feature --> Client: { url, key: tmp/..., headers }
+Client -> S3: PUT <url> (파일)
+S3 --> Client: 200
+
+== 2. 확정 — key를 받는 기능 API 안에서 ==
+
+Client -> Feature: { key: tmp/<directory>/<userPk>/<uuid>.<ext> }
+Feature -> Service: confirmUpload(userPk, purpose, key)
+alt key가 tmp/<directory>/<내 userPk>/ 아래가 아님
+  Service -[#red]-> Client: 400 Invalid file key
+end
+Service -> S3: HeadObject(key)
+alt 없음 (404)
+  Service -[#red]-> Client: 400 File not uploaded
+end
+S3 --> Service: ContentLength, ContentType
+opt ContentLength <= 정책 최대 크기
+  Service -> S3: GetObject(key, Range: bytes=0-11)
+  S3 --> Service: 앞 12바이트
+  Service -> Service: detectFileMimeType (magic bytes)
+end
+alt 크기 초과, 또는 실제 내용이 허용 형식이 아님 (HTML · SVG를 image/*로 올린 경우 등)
+  Service -> S3: DeleteObject(key)
+  Service -[#red]-> Client: 400 Uploaded file does not match the policy
+end
+Service -> S3: CopyObject(key → <directory>/<userPk>/<uuid>.<감지한 확장자>)\nContentType = 감지한 타입
+Service -> S3: DeleteObject(key)
+Service --> Feature: 최종 key
+Feature -> PostgreSQL: 최종 key 저장 (예: graduated.business_card_key)
+opt DB 저장 실패
+  Feature -> Service: deleteFile(최종 key)
+  Service -> S3: DeleteObject
+end
+opt 이전 파일이 있었음 (교체)
+  Feature -> Service: deleteFile(이전 key)
+  Service -> S3: DeleteObject
+end
+note over Service, S3
+  S3 호출 실패는 로그 + 500 Internal Server Error
+  최종 경로로 옮긴 뒤 남는 고아 파일 정리는 CRB-41
+end note
+
+== 3. 조회 ==
+
+Client -> Feature: 파일이 들어 있는 응답 요청 (예: GET /api/v1/user/info)
+Feature -> Service: getPresignedUrl(key)
+Service -> Service: getSignedUrl(GetObjectCommand)\n만료 S3_PRESIGNED_URL_EXPIRES_IN(기본 600초)
+Service --> Feature: 조회 URL
+Feature --> Client: { ..., url }
+Client -> S3: GET <url> (img src · 링크, CORS 아님)
+S3 --> Client: 파일
+
+== 4. 삭제 — 유형 변경 · 탈퇴(CRB-10), 교체 ==
+
+Feature -> Service: deleteFile(key) / deleteFiles(keys)
+Service -> S3: DeleteObject
+
+@enduml
