@@ -16,6 +16,8 @@ import { ConsentRepository } from "@src/database/repository/consent.repository";
 import { UserConsentRepository } from "@src/database/repository/user-consent.repository";
 import { SchoolRepository } from "@src/database/repository/school.repository";
 import { DepartmentRepository } from "@src/database/repository/department.repository";
+import { GraduatedCardRepository } from "@src/database/repository/graduated-card.repository";
+import { CoffeeChatRequestRepository } from "@src/database/repository/coffee-chat-request.repository";
 
 const repositories = [
   RefreshTokenRepository,
@@ -32,6 +34,8 @@ const repositories = [
   UserConsentRepository,
   SchoolRepository,
   DepartmentRepository,
+  GraduatedCardRepository,
+  CoffeeChatRequestRepository,
 ];
 
 @Module({

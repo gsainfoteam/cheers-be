@@ -1,0 +1,70 @@
+@startuml get-cheers
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/v1/cheers
+caption CRB-37 · 현업자 정보 카드 목록 (정렬: 최근 가입 · 최근 접속 · 랜덤)
+
+actor Client
+participant "UserGuard\n+ UserTypeGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "CheersStudentController" as Controller
+participant "CheersStudentService" as Service
+participant "GraduatedCardRepository" as GraduatedCardRepository
+database PostgreSQL
+
+Client -> Guard: GET /api/v1/cheers?sort=&page=&size=\nAuthorization: Bearer <access token>
+ref over Client, Guard
+  UserGuard, UserTypeGuard — flow/auth-guards.puml
+  @UserTypes(["student"]). 가입을 마친(active) 재학생만
+  401 Missing access token / Token expired / Invalid token
+  403 Signup is not completed / User type not allowed (현업자)
+end ref
+Guard -> Pipe: 통과
+alt query 검증 실패 (sort가 recent_joined · recent_active · random 이 아님,\npage < 1, size < 1 또는 > 50, 정수가 아님)
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+note right of Pipe: 기본값 sort = recent_joined, page = 1, size = 20
+Pipe -> Controller: getGraduatedList(query)
+Controller -> Service: getGraduatedList(query)
+
+Service -> Service: offset = (page - 1) * size
+opt sort = random
+  Service -> Service: seed = floor(now / CHEERS_RANDOM_SEED_MINUTES분)
+  note right of Service
+    CHEERS_RANDOM_SEED_MINUTES 기본 60.
+    같은 구간 안에서는 seed가 같아 페이지를 넘겨도 순서가 유지됨.
+    구간이 바뀌는 순간 넘기면 중복 · 누락이 생길 수 있음
+  end note
+end
+
+par 동시에 조회 — 같은 조건
+  Service -> GraduatedCardRepository: findPage({ sort, offset, limit: size, seed })
+  GraduatedCardRepository -> PostgreSQL: SELECT g.pk, gp.nickname, gp.company, gp.job,\ngp.hashtags, gp.links, u.last_active_at,\nCOALESCE(c.kakao_enabled OR c.email_enabled, false) AS can_request\nFROM graduated g JOIN users u JOIN graduated_profile gp\nLEFT JOIN coffee_chat_contact c\nWHERE u.type = 'graduated' AND u.status = 'active'\nAND isActiveAccount\nORDER BY <sort>, g.pk LIMIT size OFFSET offset
+  note right
+    isActiveAccount (user.sql.ts) = is_deleted = false
+    AND withdraw_requested_at IS NULL → 탈퇴 · 탈퇴 유예기간 중인 현업자 제외
+    정렬: recent_joined = gp.created_at DESC
+    recent_active = u.last_active_at DESC
+    random = md5(g.pk || seed)
+    이름 · 부서 · 연락처는 select하지 않음
+  end note
+  GraduatedCardRepository --> Service: rows
+else
+  Service -> GraduatedCardRepository: (count)
+  GraduatedCardRepository -> PostgreSQL: SELECT count(*) (같은 FROM · WHERE)
+  GraduatedCardRepository --> Service: total
+end
+note right of Service: 트랜잭션 없음 (조회만)
+
+Service -> Service: hashtags · links가 null이면 [],\nlast_active_at ISO 8601
+Service --> Controller: { items, page, size, total }
+Controller --> Client: 200 { items: CheersCardDto[], page, size, total }
+
+@enduml
