@@ -6,6 +6,11 @@ import { coffeeChatContact } from "../../../drizzle/schema/coffee-chat-contact";
 
 export type CoffeeChatContactRow = typeof coffeeChatContact.$inferSelect;
 
+export type CoffeeChatContactInput = Pick<
+  CoffeeChatContactRow,
+  "kakaoEnabled" | "emailEnabled" | "phone" | "email"
+>;
+
 @Injectable()
 export class CoffeeChatContactRepository {
   constructor(private readonly dbService: DatabaseService) {}
@@ -23,6 +28,28 @@ export class CoffeeChatContactRepository {
       .where(eq(coffeeChatContact.userPk, userPk));
 
     return result[0] ?? null;
+  }
+
+  /*
+  INSERT INTO coffee_chat_contact (user_pk, kakao_enabled, email_enabled, phone, email)
+  VALUES (?1, ?2, ?3, ?4, ?5)
+  ON CONFLICT (user_pk) DO UPDATE SET
+    kakao_enabled = EXCLUDED.kakao_enabled, email_enabled = EXCLUDED.email_enabled,
+    phone = EXCLUDED.phone, email = EXCLUDED.email, updated_at = now();
+   */
+  // 추가 정보 저장 API에서 함께 저장 (버전 관리 안 함)
+  async upsert(
+    userPk: string,
+    contact: CoffeeChatContactInput,
+    tx: TxType,
+  ): Promise<void> {
+    await tx
+      .insert(coffeeChatContact)
+      .values({ userPk, ...contact })
+      .onConflictDoUpdate({
+        target: coffeeChatContact.userPk,
+        set: { ...contact, updatedAt: new Date() },
+      });
   }
 
   /*

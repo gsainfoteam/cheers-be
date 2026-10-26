@@ -1,0 +1,71 @@
+import { Type } from "class-transformer";
+import {
+  ArrayMaxSize,
+  ArrayUnique,
+  IsArray,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUrl,
+  Matches,
+  MaxLength,
+  ValidateNested,
+} from "class-validator";
+import { ContactRequestDto } from "@src/user/dto/contact-request.dto";
+
+export class GraduatedInfoRequestDto {
+  // users.name이 null일 때만 필수 (서비스에서 검사). 이미 있으면 무시
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(64)
+  name?: string;
+
+  // 첫 저장에만 필수 (서비스에서 검사). 가입 후 변경 불가라 이후 보내면 무시
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(32)
+  nickname?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(128)
+  company: string;
+
+  // 비공개 (다른 회원에게 보이지 않음)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(128)
+  department: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(128)
+  job: string;
+
+  // "#" 없이
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @IsNotEmpty({ each: true })
+  @MaxLength(20, { each: true })
+  @Matches(/^[^#]+$/, { each: true, message: "hashtags must not contain #" })
+  hashtags?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(5)
+  @IsUrl(
+    { protocols: ["http", "https"], require_protocol: true },
+    { each: true },
+  )
+  @MaxLength(2048, { each: true })
+  links?: string[];
+
+  @ValidateNested()
+  @Type(() => ContactRequestDto)
+  contact: ContactRequestDto;
+}

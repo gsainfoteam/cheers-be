@@ -74,6 +74,22 @@ export class GraduatedRepository {
   }
 
   /*
+  UPDATE graduated SET business_card_key = ?2, verified_at = now(), updated_at = now() WHERE pk = ?1;
+   */
+  // 명함 인증: 별도 검수 없이 즉시 인증. 다시 등록하면 verified_at도 새 시각으로
+  async updateBusinessCard(
+    graduatedPk: string,
+    businessCardKey: string,
+    tx: TxType,
+  ): Promise<void> {
+    const now = new Date();
+    await tx
+      .update(graduated)
+      .set({ businessCardKey, verifiedAt: now, updatedAt: now })
+      .where(eq(graduated.pk, graduatedPk));
+  }
+
+  /*
   UPDATE graduated SET business_card_key = NULL, updated_at = now() WHERE pk = ?1;
    */
   // 회원 탈퇴: 명함 key 제거 (S3 파일은 커밋 후 서비스에서 삭제)
