@@ -40,7 +40,7 @@ alt body 검증 실패
 end
 note right of Pipe
   name 1~64자 / department_id 정수
-  interests 1~20개, 각 1~50자, 중복 불가 / activities 0~20개, 각 1~50자
+  interests 1~20개 / activities 0~20개: 항목마다 trim 후 1~50자, 중복 불가
   attachments 최대 10개: kind cv | portfolio, source = link 만 (file 은 CRB-38),
     url http(s) 2048자 이하
   contact: email_enabled · kakao_enabled boolean, email 형식,
@@ -77,7 +77,10 @@ group transaction (DatabaseService.db.transaction)
   Service -> StudentRepository: findByUserPkWithLatestProfile(userPk, tx)
   StudentRepository -> PostgreSQL: SELECT student + 가장 큰 version 의 student_profile\n+ 학과 + 첨부(sort_order 순)
   PostgreSQL --> StudentRepository: row
-  StudentRepository --> Service: { student, latest | null }
+  StudentRepository --> Service: { student, latest | null } | null
+  alt 재학생 행 없음 (가드 통과 뒤 다른 기기에서 현업자로 유형 변경)
+    Service -[#red]-> Client: 403 User type not allowed
+  end
 
   Service -> DepartmentRepository: findByPkAndEmailDomain(department_id, student.email 의 @ 뒤, tx)
   DepartmentRepository -> PostgreSQL: SELECT d.* FROM department d JOIN school s ON s.pk = d.school_pk\nWHERE d.pk = ? AND s.email_domain = ?
@@ -104,7 +107,7 @@ group transaction (DatabaseService.db.transaction)
   end
   note right of Service: 이전 버전은 커피챗 요청이 참조하므로 수정 · 삭제하지 않음
 
-  Service -> ContactRepository: upsert({ userPk, emailEnabled, kakaoEnabled, email, phone }, tx)
+  Service -> ContactRepository: upsert(toContactRow(userPk, contact), tx)
   ContactRepository -> PostgreSQL: INSERT coffee_chat_contact ...\nON CONFLICT (user_pk) DO UPDATE SET ..., updated_at = now()
   note right: 연락 설정은 버전 관리 안 함.\n끈 방법의 email / phone은 보내도 null로 저장.\nCHECK(kakao → phone, email → email)
 

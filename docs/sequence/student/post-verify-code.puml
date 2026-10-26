@@ -40,7 +40,10 @@ group transaction (DatabaseService.db.transaction)
   StudentRepository -> PostgreSQL: SELECT student WHERE user_pk = ? FOR UPDATE
   note right: 동시에 여러 번 확인해도\n시도 횟수가 정확히 쌓이도록 직렬화
   PostgreSQL --> StudentRepository: row
-  StudentRepository --> Service: student
+  StudentRepository --> Service: student | null
+  alt 재학생 행 없음 (가드 통과 뒤 다른 기기에서 현업자로 유형 변경)
+    Service -[#red]-> Client: 403 User type not allowed
+  end
 
   Service -> VerificationRepository: findByStudentPk(studentPk, tx)
   VerificationRepository -> PostgreSQL: SELECT student_email_verification WHERE student_pk = ?
@@ -51,7 +54,7 @@ group transaction (DatabaseService.db.transaction)
     note over Service: 결과 = NOT_FOUND
   else expires_at <= now
     note over Service: 결과 = EXPIRED\n(행은 만료 인증번호 정리 스케줄러가 지움, CRB-29)
-  else 코드 불일치 (timingSafeEqual)
+  else HMAC(code) ≠ 저장된 code (timingSafeEqual)
     Service -> VerificationRepository: incrementAttemptCount(studentPk, tx)
     VerificationRepository -> PostgreSQL: UPDATE student_email_verification\nSET attempt_count = attempt_count + 1 RETURNING attempt_count
     note right
@@ -59,7 +62,7 @@ group transaction (DatabaseService.db.transaction)
       → 이후 확인은 404, 재전송 60초 대기도 유지
     end note
     note over Service: 결과 = WRONG, remaining = 5 - attempt_count
-  else 코드 일치
+  else HMAC(code) = 저장된 code
     Service -> StudentRepository: markVerified(studentPk, email, tx)
     StudentRepository -> PostgreSQL: UPDATE student SET email = ?, verified_at = now(), updated_at = now()
     alt student.email UNIQUE 위반 (23505: 다른 계정이 같은 이메일을 방금 인증)

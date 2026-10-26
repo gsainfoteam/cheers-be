@@ -34,9 +34,12 @@ Controller -> Service: getDepartments(userPk)
 Service -> StudentRepository: findByUserPk(userPk)
 StudentRepository -> PostgreSQL: SELECT student WHERE user_pk = ?
 PostgreSQL --> StudentRepository: row
-StudentRepository --> Service: student
+StudentRepository --> Service: student | null
+alt 재학생 행 없음 (가드 통과 뒤 다른 기기에서 현업자로 유형 변경)
+  Service -[#red]-> Client: 403 User type not allowed
+end
 note right of Service
-  가드를 통과했으면 student.email은 항상 있음
+  student.email은 항상 있음
   (profile 단계 = verified_at 있음, active = 인증 완료)
 end note
 

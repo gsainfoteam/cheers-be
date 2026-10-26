@@ -33,7 +33,7 @@ ref over Client, Guard
 end ref
 Guard -> Pipe: 통과
 note right of Pipe: email은 trim + 소문자로 정규화한 뒤 검사
-alt body 검증 실패 (email 누락 · 이메일 형식 아님 · 255자 초과)
+alt body 검증 실패 (email 누락 · 이메일 형식 아님 · 255자 초과 · "+" 포함)
   Pipe -[#red]-> Client: 400 (class-validator 메시지)
 end
 Pipe -> Controller: sendCode(req, user)
@@ -52,7 +52,10 @@ group transaction (DatabaseService.db.transaction)
   StudentRepository -> PostgreSQL: SELECT student WHERE user_pk = ? FOR UPDATE
   note right: 같은 학생의 동시 전송을 직렬화\n(쿨다운 검사와 upsert 사이에 끼어들지 않게)
   PostgreSQL --> StudentRepository: row
-  StudentRepository --> Service: student
+  StudentRepository --> Service: student | null
+  alt 재학생 행 없음 (가드 통과 뒤 다른 기기에서 현업자로 유형 변경)
+    Service -[#red]-> Client: 403 User type not allowed
+  end
 
   Service -> VerificationRepository: findByStudentPk(studentPk, tx)
   VerificationRepository -> PostgreSQL: SELECT student_email_verification WHERE student_pk = ?
@@ -79,7 +82,9 @@ group transaction (DatabaseService.db.transaction)
   end note
 
   Service -> Service: code = crypto.randomInt(0, 1_000_000)\n6자리 0 채움
-  Service -> VerificationRepository: upsert(studentPk, { email, code,\nattempt_count: 0, created_at: now, expires_at: now + 5분 }, tx)
+  Service -> Service: codeHash = HMAC-SHA256(key, code)
+  note right of Service: key는 JWT_PRIVATE_KEY에서 파생.\n원문 코드는 저장하지 않음
+  Service -> VerificationRepository: upsert({ studentPk, email, code: codeHash,\ncreated_at: now, expires_at: now + 5분 }, tx)
   VerificationRepository -> PostgreSQL: INSERT student_email_verification ...\nON CONFLICT (student_pk) DO UPDATE
   note right: 학생당 진행 중인 요청 1개.\n덮어쓰므로 이전 코드는 무효
 end
