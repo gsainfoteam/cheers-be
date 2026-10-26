@@ -68,7 +68,7 @@ describe("cheers DTOs", () => {
     it.each([
       { graduated_id: "not-a-uuid", message: "궁금합니다" },
       { graduated_id: graduatedId, message: "   " },
-      { graduated_id: graduatedId, message: "가".repeat(1001) },
+      { graduated_id: graduatedId, message: "가".repeat(201) },
       { graduated_id: graduatedId },
     ])("rejects %#", async (value) => {
       await expect(validate(CreateRequestDto, value, "body")).rejects.toThrow(
@@ -76,11 +76,11 @@ describe("cheers DTOs", () => {
       );
     });
 
-    it("accepts a 1000-character message", async () => {
+    it("accepts a 200-character message", async () => {
       await expect(
         validate(
           CreateRequestDto,
-          { graduated_id: graduatedId, message: "가".repeat(1000) },
+          { graduated_id: graduatedId, message: "가".repeat(200) },
           "body",
         ),
       ).resolves.toBeDefined();

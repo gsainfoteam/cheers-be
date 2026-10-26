@@ -3,7 +3,7 @@ export const DEFAULT_PAGE_SIZE = 20;
 export const MAX_PAGE_SIZE = 50;
 
 // 커피챗 요청 질문 내용 (trim 후)
-export const MESSAGE_MAX_LENGTH = 1000;
+export const MESSAGE_MAX_LENGTH = 200;
 
 // 현업자 목록 random 정렬의 섞는 기준이 바뀌는 주기 (CHEERS_RANDOM_SEED_MINUTES 기본값)
 export const DEFAULT_RANDOM_SEED_MINUTES = 60;
