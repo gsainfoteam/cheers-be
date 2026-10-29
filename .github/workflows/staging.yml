@@ -53,3 +53,26 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  deploy:
+    name: Update Git Repository
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+        with:
+          repository: gsainfoteam/icarus-gitops
+          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          fetch-depth: 0
+
+      - name: Update Kubernetes Manifest
+        run: |
+          sed -i "s|tag:.*|tag: ${{ needs.build.outputs.image_tag }}|g" infoteam/service-v2/cheers/staging/values.yaml
+
+      - name: Commit and Push
+        run: |
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "GitHub Actions"
+          git commit -am "Update image $REPOSITORY:$IMAGE_TAG"
+          git push -u origin main
