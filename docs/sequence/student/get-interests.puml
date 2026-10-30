@@ -1,0 +1,42 @@
+@startuml get-interests
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/v1/user/student/interests
+caption CRB-55 · 재학생 기본정보 입력 화면에 내려줄 고정 관심 분야 목록
+
+actor Client
+participant "SignupStepGuard\nUserTypeGuard" as Guard
+participant "StudentController" as Controller
+participant "StudentService" as Service
+participant "InterestService" as InterestService
+
+Client -> Guard: GET /api/v1/user/student/interests\nAuthorization: Bearer <access token>
+ref over Client, Guard
+  SignupStepGuard → UserTypeGuard — flow/auth-guards.puml
+  @SignupStep({ step: "profile", allowActive: true })
+  pending: next_step = profile 일 때만 (이메일 인증 이후) / active: 항상 통과 (마이페이지 수정)
+  @UserTypes("student")
+  401 Missing access token / Token expired / Invalid token / User not found
+  403 Signup step mismatch / User type not allowed
+end ref
+Guard -> Controller: getInterests()
+Controller -> Service: getInterests()
+Service -> InterestService: getNames()
+InterestService --> Service: name[]
+note right of InterestService
+  서버 기동 시 interest 테이블에서 한 번 읽어 메모리에 보관한 목록 (DB 조회 없음)
+  flow/interest-cache-bootstrap.puml
+  화면에 띄울 추천 목록일 뿐, 저장 API 가 이 값만 받는 것은 아님
+  순서는 sort_order
+end note
+Service --> Controller: { interests: string[] }
+Controller --> Client: 200 { interests: ["반도체", "소프트웨어", ...] }
+
+@enduml

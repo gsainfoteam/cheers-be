@@ -20,6 +20,7 @@ import {
 import { FileService } from "@src/file/file.service";
 import { TxType } from "@src/global/types/tx.types";
 import { SaveStudentInfoRequestDto } from "./dto/save-student-info.dto";
+import { InterestService } from "./interest.service";
 import { StudentService } from "./student.service";
 
 const userPk = "690c15dc-0000-4000-8000-000000000001";
@@ -113,6 +114,7 @@ describe("StudentService", () => {
   const profileRepository = { insert: jest.fn() };
   const attachmentRepository = { insertMany: jest.fn() };
   const contactRepository = { upsert: jest.fn() };
+  const interestService = { getNames: jest.fn() };
   const service = new StudentService(
     dbService as unknown as DatabaseService,
     authService as unknown as AuthService,
@@ -123,6 +125,7 @@ describe("StudentService", () => {
     profileRepository as unknown as StudentProfileRepository,
     attachmentRepository as unknown as StudentProfileAttachmentRepository,
     contactRepository as unknown as CoffeeChatContactRepository,
+    interestService as unknown as InterestService,
   );
 
   beforeEach(() => {
@@ -168,6 +171,14 @@ describe("StudentService", () => {
     await expect(service.getDepartments(userPk)).rejects.toThrow(
       new ForbiddenException("User type not allowed"),
     );
+  });
+
+  it("getInterests returns the fixed interest list", () => {
+    interestService.getNames.mockReturnValue(["반도체", "소프트웨어"]);
+
+    expect(service.getInterests()).toEqual({
+      interests: ["반도체", "소프트웨어"],
+    });
   });
 
   describe("saveInfo", () => {

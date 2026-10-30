@@ -27,6 +27,8 @@ import {
   toContactRow,
 } from "@src/user/dto/contact-request.dto";
 import { SignupCompleteResponseDto } from "@src/user/dto/signup-complete.dto";
+import { InterestListResponseDto } from "./dto/interests.dto";
+import { InterestService } from "./interest.service";
 import {
   SaveStudentInfoRequestDto,
   StudentAttachmentRequestDto,
@@ -53,6 +55,7 @@ export class StudentService {
     private readonly studentProfileRepository: StudentProfileRepository,
     private readonly studentProfileAttachmentRepository: StudentProfileAttachmentRepository,
     private readonly coffeeChatContactRepository: CoffeeChatContactRepository,
+    private readonly interestService: InterestService,
   ) {}
 
   async getDepartments(userPk: string): Promise<DepartmentListResponseDto> {
@@ -72,6 +75,10 @@ export class StudentService {
     return {
       departments: departments.map((d) => ({ id: d.pk, name: d.name })),
     };
+  }
+
+  getInterests(): InterestListResponseDto {
+    return { interests: this.interestService.getNames() };
   }
 
   // 보낸 값으로 전체 교체. 학과 · 관심 분야 · 참여 활동 · 첨부가 바뀌었을 때만 새 버전
