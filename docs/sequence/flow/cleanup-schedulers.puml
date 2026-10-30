@@ -14,8 +14,9 @@ caption CRB-29 · src/user/cleanup.scheduler.ts · 가입 미완료 03:00 / 만�
 participant "CleanupScheduler" as Scheduler
 participant "CleanupService" as Service
 participant "AuthService" as AuthService
-participant "UserRepository" as UserRepository
 participant "UserService" as UserService
+participant "FileService" as FileService
+participant "UserRepository" as UserRepository
 participant "UserOauthAccountRepository" as UserOauthAccountRepository
 participant "UserConsentRepository" as UserConsentRepository
 participant "CoffeeChatContactRepository" as CoffeeChatContactRepository
@@ -36,13 +37,13 @@ Scheduler -> Service: purgeIncompleteSignups()
 Service -> Service: cutoff = now - 24시간 (가안)
 
 loop 더 처리할 유저가 없을 때까지
-  Service -> UserRepository: findIncompleteSignupPks(cutoff, 100, attempted)
-  UserRepository -> PostgreSQL: SELECT pk FROM users WHERE status = 'pending'\nAND created_at <= cutoff AND last_active_at <= cutoff AND pk NOT IN (이번 실행에서 시도한 유저)\nORDER BY created_at LIMIT 100
+  Service -> UserRepository: findIncompleteSignupPks(cutoff, 100, skipped)
+  UserRepository -> PostgreSQL: SELECT pk FROM users WHERE status = 'pending'\nAND created_at <= cutoff AND last_active_at <= cutoff AND pk NOT IN (이번 실행에서 지우지 못한 유저)\nORDER BY created_at LIMIT 100
   note right
     부분 인덱스 users_pending_created_at_idx.
     last_active_at도 24시간 지나야 함: 가입을 진행 중인 유저는 지우지 않음.
     withdraw_requested_at · is_deleted는 보지 않음: 탈퇴 요청한 pending, 탈퇴 스케줄러가
-    이미 soft delete한 pending 행(프로필 · 약관 동의 이력)까지 hard delete (겹쳐도 결과는 같음)
+    이미 soft delete한 pending 행(약관 동의 이력 등)까지 hard delete. 어느 쪽이 먼저 돌아도 hard delete로 끝남
   end note
   UserRepository --> Service: pks
 
@@ -69,13 +70,10 @@ loop 더 처리할 유저가 없을 때까지
         UserService -> StudentRepository: findByUserPk(pk, tx)
         opt 재학생 행이 있음
           UserService -> StudentEmailVerificationRepository: deleteByStudentPk(studentPk, tx)
-          UserService -> AttachmentRepository: findFileKeysByStudentPk(studentPk, tx)
-          note right: source = file인 첨부의 S3 key를 삭제 전에 조회해 둠
           UserService -> AttachmentRepository: deleteByStudentPk(studentPk, tx)
           UserService -> StudentProfileRepository: deleteByStudentPk(studentPk, tx)
           UserService -> StudentRepository: deleteByPk(studentPk, tx)
         end
-        UserService --> Service: 첨부 S3 key 목록
         Service -> UserService: deleteGraduated(pk, tx)
         UserService -> GraduatedRepository: findByUserPk(pk, tx)
         opt 현업자 행이 있음
@@ -87,17 +85,25 @@ loop 더 처리할 유저가 없을 때까지
         UserRepository -> PostgreSQL: DELETE FROM users WHERE pk = ?
         note right
           FK cascade가 없어 위 순서(자식 → 부모)를 지켜야 함.
-          커피챗 요청 · 알림 로그는 active 유저만 만들 수 있어 pending에는 없음
+          커피챗 요청 · 알림 로그는 active 유저만 만들 수 있어 pending에는 없음.
+          프로필 · 첨부는 가입 완료와 같은 트랜잭션에서 생기므로 pending에는 첨부 S3 파일도 없음
         end note
       end
     end
     note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback
-    opt 명함 · 첨부 파일 key를 지웠음
-      Service -> S3: deleteFile(key) 각각
-      note right: 커밋 뒤에 삭제. 실패하면 로그만 (DB에는 이미 참조가 없음)
+    opt 명함 key를 지웠음 (커밋 뒤)
+      Service -> FileService: deleteFileQuietly(key)
+      FileService -> S3: DeleteObject
+      alt S3 삭제 실패
+        note over FileService: 로그만 남기고 계속 (DB에는 이미 참조가 없음)
+      end
     end
-    alt 이 유저 처리 중 예외
-      note over Service: 로그만 남기고 다음 유저로. 이번 실행에서는 다시 시도하지 않고 다음 날 재시도
+    alt 잠금 실패 · 대상 아님 (user = null)
+      note over Service: skipped에 넣고 다음 유저로
+    else 이 유저 처리 중 예외
+      note over Service: 로그를 남기고 skipped에 넣은 뒤 다음 유저로. 이번 실행에서는 다시 시도하지 않고 다음 날 재시도
+    else 삭제함
+      note over Service: skipped에 넣지 않음 (다시 조회되지 않으므로 쿼리 파라미터가 늘지 않음)
     end
   end
 end
@@ -109,7 +115,7 @@ Scheduler -> Scheduler: 로그 (Deleted N incomplete signup(s))
 
 Scheduler -> Service: purgeExpiredData()
 note over Service
-  세 정리는 서로 독립이라 하나가 실패해도 나머지는 실행.
+  세 정리는 각자 트랜잭션으로 실행. 하나가 실패하면 runPurge가 에러 로그를 남기고 0을 반환하며 나머지는 실행 (다음 날 재시도).
   단순 DELETE라 서버가 여러 대여서 동시에 돌아도 같은 행을 두 번 지울 뿐 결과는 같음
 end note
 Service -> StudentEmailVerificationRepository: deleteExpired(now)
@@ -117,13 +123,10 @@ StudentEmailVerificationRepository -> PostgreSQL: DELETE FROM student_email_veri
 note right: 만료된 코드는 검증 불가. 해시 · gist 이메일이 남지 않게 지움
 Service -> SendLogRepository: deleteOlderThan(now - 48시간)
 SendLogRepository -> PostgreSQL: DELETE FROM student_email_send_log\nWHERE created_at < now - 48시간
-note right: 상한 계산은 최근 24시간만 봄. 경계의 행이 먼저 지워지지 않도록 48시간 보존.\n행에 이메일 원문이 있어 오래 두지 않음.\n유형 변경 시에는 지우지 않음 (지우면 상한이 초기화)
+note right: 상한 계산은 최근 24시간만 봄. 서버 간 시각 차이에 대비해 48시간 보존 (하루 한 번 실행이라 최대 약 72시간 남음).\n행에 이메일 원문이 있어 오래 두지 않음.\n유형 변경 시에는 지우지 않음 (지우면 상한이 초기화)
 Service -> RefreshTokenRepository: deleteExpired()
 RefreshTokenRepository -> PostgreSQL: DELETE FROM refresh_token WHERE expires_at < now()
 Service --> Scheduler: 종류별 삭제 건수
 Scheduler -> Scheduler: 로그 (verification N, send log N, refresh token N)
-alt 정리 중 예외 (DB 연결 등)
-  note over Scheduler: 에러 로그만 남기고 다음 날 다시 실행
-end
 
 @enduml

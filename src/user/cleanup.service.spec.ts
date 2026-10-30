@@ -125,9 +125,7 @@ describe("CleanupService", () => {
       studentEmailSendLogRepository.deleteByUserPk.mockImplementation(
         record("send_log"),
       );
-      userService.deleteStudent.mockImplementation(
-        record("student", ["attachment/a.pdf"]),
-      );
+      userService.deleteStudent.mockImplementation(record("student"));
       userService.deleteGraduated.mockImplementation(
         record("graduated", "business-card/u1/x.png"),
       );
@@ -149,7 +147,6 @@ describe("CleanupService", () => {
         "student",
         "graduated",
         "users.delete",
-        "s3:attachment/a.pdf",
         "s3:business-card/u1/x.png",
       ]);
     });
@@ -163,16 +160,20 @@ describe("CleanupService", () => {
       await expect(service.purgeIncompleteSignups(NOW)).resolves.toBe(0);
       expect(userRepository.deleteByPk).not.toHaveBeenCalled();
       expect(fileService.deleteFileQuietly).not.toHaveBeenCalled();
+      expect(userRepository.findIncompleteSignupPks).toHaveBeenLastCalledWith(
+        expect.any(Date),
+        100,
+        ["u1"],
+      );
     });
 
-    it("keeps going after a failure and does not retry the user in the same run", async () => {
+    it("keeps going after a failure, does not retry the failed user and does not list deleted users", async () => {
       userRepository.findIncompleteSignupPks
         .mockResolvedValueOnce(["u1", "u2"])
         .mockResolvedValueOnce([]);
       userRepository.lockIncompleteSignup.mockImplementation((pk: string) =>
         Promise.resolve(userRow(pk)),
       );
-      userService.deleteStudent.mockResolvedValue([]);
       userService.deleteGraduated.mockResolvedValue(null);
       userRepository.deleteByPk.mockImplementation((pk: string) =>
         pk === "u1" ? Promise.reject(new Error("fk")) : Promise.resolve(),
@@ -182,7 +183,7 @@ describe("CleanupService", () => {
       expect(userRepository.findIncompleteSignupPks).toHaveBeenLastCalledWith(
         expect.any(Date),
         100,
-        ["u1", "u2"],
+        ["u1"],
       );
     });
 
@@ -191,7 +192,6 @@ describe("CleanupService", () => {
         .mockResolvedValueOnce(["u1"])
         .mockResolvedValueOnce([]);
       userRepository.lockIncompleteSignup.mockResolvedValue(userRow("u1"));
-      userService.deleteStudent.mockResolvedValue(["a.pdf"]);
       userService.deleteGraduated.mockResolvedValue("card.png");
       userRepository.deleteByPk.mockRejectedValue(new Error("fk"));
 

@@ -45,27 +45,30 @@ export class CleanupService {
   ) {}
 
   // 가입 미완료(pending) 계정을 hard delete. 삭제한 유저 수를 반환.
-  // 탈퇴 요청 · soft delete 여부는 보지 않음 (탈퇴 스케줄러와 겹쳐도 최종 결과가 같음).
+  // 탈퇴 요청 · soft delete 여부는 보지 않음. 탈퇴 스케줄러는 행과 약관 동의 이력을 남기지만,
+  // 그쪽이 먼저 처리한 pending 행도 여기서 전부 지우므로 어느 쪽이 먼저 돌아도 hard delete로 끝남.
   // 유저마다 트랜잭션을 나눠서 한 명이 실패해도 나머지는 진행하고, 실패한 유저는 다음 실행에서 다시 시도
   async purgeIncompleteSignups(now: Date = new Date()): Promise<number> {
     const cutoff = new Date(now.getTime() - INCOMPLETE_SIGNUP_RETENTION_MS);
-    // 이번 실행에서 이미 시도한 유저 (삭제 · 실패 · 다른 인스턴스가 잠금). 같은 유저를 다시 조회하지 않음
-    const attempted: string[] = [];
+    // 이번 실행에서 지우지 못한 유저 (실패 · 다른 인스턴스가 잠금 등). 같은 유저를 다시 조회하지 않음.
+    // 삭제한 유저는 다시 조회되지 않으므로 넣지 않음 (많아지면 쿼리 파라미터 한도를 넘음)
+    const skipped: string[] = [];
     let deleted = 0;
 
     for (;;) {
       const pks = await this.userRepository.findIncompleteSignupPks(
         cutoff,
         PURGE_BATCH_SIZE,
-        attempted,
+        skipped,
       );
       if (pks.length === 0) break;
 
       for (const pk of pks) {
-        attempted.push(pk);
         try {
           if (await this.deleteIncompleteSignup(pk, cutoff)) deleted++;
+          else skipped.push(pk);
         } catch (e) {
+          skipped.push(pk);
           this.logger.error(
             `Failed to delete incomplete signup ${pk}: ${(e as Error).message}`,
           );
@@ -109,12 +112,13 @@ export class CleanupService {
   }
 
   // FK cascade가 없으므로 자식 행부터 지움. 커피챗 요청 · 알림 로그는 active 유저만 만들 수 있어 pending에는 없음.
+  // 프로필과 첨부는 가입 완료와 같은 트랜잭션에서 생기므로 pending에는 첨부 S3 파일도 없음 (지울 파일은 명함뿐).
   // 반환값: 삭제했으면 true, 다른 인스턴스가 처리 중이거나 그 사이 가입을 마치거나 활동했으면 false
   private async deleteIncompleteSignup(
     userPk: string,
     cutoff: Date,
   ): Promise<boolean> {
-    const fileKeys = await this.dbService.db.transaction(async (tx) => {
+    const result = await this.dbService.db.transaction(async (tx) => {
       const user = await this.userRepository.lockIncompleteSignup(
         userPk,
         cutoff,
@@ -128,20 +132,19 @@ export class CleanupService {
       await this.coffeeChatContactRepository.deleteByUserPk(user.pk, tx);
       // 재학생이었다가 유형을 바꾼 유저에게도 기록이 남아 있어 유형과 상관없이 지움
       await this.studentEmailSendLogRepository.deleteByUserPk(user.pk, tx);
-      const keys = await this.userService.deleteStudent(user.pk, tx);
+      await this.userService.deleteStudent(user.pk, tx);
       const businessCardKey = await this.userService.deleteGraduated(
         user.pk,
         tx,
       );
-      if (businessCardKey) keys.push(businessCardKey);
       await this.userRepository.deleteByPk(user.pk, tx);
-      return keys;
+      return { businessCardKey };
     });
-    if (!fileKeys) return false;
+    if (!result) return false;
 
     // DB 정리가 끝난 뒤에 지움. 실패해도 DB에는 참조가 없으므로 로그만 남김
-    for (const key of fileKeys) {
-      await this.fileService.deleteFileQuietly(key);
+    if (result.businessCardKey) {
+      await this.fileService.deleteFileQuietly(result.businessCardKey);
     }
     return true;
   }
