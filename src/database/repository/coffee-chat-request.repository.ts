@@ -29,6 +29,8 @@ export type SentRequestRow = Pick<
     company: string;
     job: string;
   };
+  // 현업자가 사용 중인 계정 (탈퇴 · 탈퇴 유예기간 중이면 false)
+  graduatedActive: boolean;
 };
 
 export type SentRequestDetailRow = SentRequestRow &
@@ -38,8 +40,6 @@ export type SentRequestDetailRow = SentRequestRow &
   > & {
     // 현업자 이름 (탈퇴 처리 후에는 null)
     graduatedName: string | null;
-    // 현업자가 사용 중인 계정 (탈퇴 · 탈퇴 유예기간 중이면 false)
-    graduatedActive: boolean;
   };
 
 export type SentRequestPage = {
@@ -131,6 +131,7 @@ const sentRequestColumns = {
     company: graduatedProfile.company,
     job: graduatedProfile.job,
   },
+  graduatedActive: sql<boolean>`${isActiveAccount}`,
 };
 
 @Injectable()
@@ -163,10 +164,13 @@ export class CoffeeChatRequestRepository {
 
   /*
   SELECT r.pk, r.message, r.created_at, r.graduated_viewed_at, r.contact_shared_at,
-    gp.graduated_pk, gp.nickname, gp.company, gp.job
+    gp.graduated_pk, gp.nickname, gp.company, gp.job,
+    (u.is_deleted = false AND u.withdraw_requested_at IS NULL) AS graduated_active
   FROM coffee_chat_request r
   JOIN student s ON s.pk = r.student_pk AND s.user_pk = ?1
   JOIN graduated_profile gp ON gp.graduated_pk = r.graduated_pk
+  JOIN graduated g ON g.pk = r.graduated_pk
+  JOIN users u ON u.pk = g.user_pk
   ORDER BY r.created_at DESC, r.pk DESC LIMIT ?2 OFFSET ?3;
   SELECT count(*) FROM coffee_chat_request r JOIN student s ON s.pk = r.student_pk AND s.user_pk = ?1;
    */
@@ -186,6 +190,8 @@ export class CoffeeChatRequestRepository {
           graduatedProfile,
           eq(graduatedProfile.graduatedPk, coffeeChatRequest.graduatedPk),
         )
+        .innerJoin(graduated, eq(graduated.pk, coffeeChatRequest.graduatedPk))
+        .innerJoin(users, eq(users.pk, graduated.userPk))
         .orderBy(desc(coffeeChatRequest.createdAt), desc(coffeeChatRequest.pk))
         .limit(limit)
         .offset(offset),
@@ -221,7 +227,6 @@ export class CoffeeChatRequestRepository {
         sharedEmail: coffeeChatRequest.sharedEmail,
         sharedPhone: coffeeChatRequest.sharedPhone,
         graduatedName: users.name,
-        graduatedActive: sql<boolean>`${isActiveAccount}`,
       })
       .from(coffeeChatRequest)
       .innerJoin(student, isSentBy(studentUserPk))
