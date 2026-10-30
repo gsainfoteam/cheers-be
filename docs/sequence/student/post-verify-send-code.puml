@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title POST /api/v1/user/student/verify/send-code
-caption CRB-31 · gist 이메일로 6자리 인증코드 전송 (재전송도 같은 API, 이전 코드 무효)
+caption CRB-31 · CRB-48 · gist 이메일로 6자리 인증코드 전송 (재전송도 같은 API, 이전 코드 무효). 최근 24시간 전송 상한 적용
 
 actor Client
 participant "SignupStepGuard\nUserTypeGuard" as Guard
@@ -19,6 +19,7 @@ participant "StudentVerificationService" as Service
 participant "SchoolRepository" as SchoolRepository
 participant "StudentRepository" as StudentRepository
 participant "StudentEmailVerificationRepository" as VerificationRepository
+participant "StudentEmailSendLogRepository" as SendLogRepository
 database PostgreSQL
 participant "MailService" as MailService
 participant "SMTP"
@@ -62,7 +63,7 @@ group transaction (DatabaseService.db.transaction)
   PostgreSQL --> VerificationRepository: row
   VerificationRepository --> Service: verification | null
   alt 진행 중인 요청의 created_at + 60초 > now
-    Service -[#red]-> Client: 429 Resend is not available yet
+    Service -[#red]-> Client: 429 Resend is not available yet\n{ statusCode, message, retry_available_at = created_at + 60초 }
   end
   note right of Service
     시도 횟수를 다 쓴(5회) 요청 · 만료된 요청도
@@ -81,12 +82,50 @@ group transaction (DatabaseService.db.transaction)
     유예기간이 끝나 탈퇴 처리되면 student.email = NULL 로 풀림
   end note
 
+  Service -> SendLogRepository: findRecentByUserPk(userPk, now - 24시간, tx)
+  SendLogRepository -> PostgreSQL: SELECT student_email_send_log\nWHERE user_pk = ? AND created_at > ? ORDER BY created_at
+  note right
+    student_pk가 아니라 user_pk 기준.
+    유형을 바꾸면 student 행이 새로 만들어져서
+    student_pk 기준이면 횟수가 초기화됨
+  end note
+  PostgreSQL --> SendLogRepository: rows
+  SendLogRepository --> Service: 내 최근 24시간 전송 기록
+  alt 내 전송 횟수 >= 5
+    Service -[#red]-> Client: 429 Daily send limit exceeded\n{ statusCode, message, retry_available_at }
+  else failed_attempt_count 합계 >= 10
+    Service -[#red]-> Client: 429 Too many failed attempts\n{ statusCode, message, retry_available_at }
+  end
+  note right of Service
+    retry_available_at = 오래된 기록부터 24시간이 지나
+    상한 아래로 내려가는 시각
+  end note
+
+  Service -> SendLogRepository: findRecentByEmail(email, now - 24시간, tx)
+  SendLogRepository -> PostgreSQL: SELECT student_email_send_log\nWHERE email = ? AND created_at > ? ORDER BY created_at
+  PostgreSQL --> SendLogRepository: rows
+  SendLogRepository --> Service: 이 이메일의 최근 24시간 전송 기록 (모든 계정)
+  alt 이 이메일 전송 횟수 >= 10
+    Service -[#red]-> Client: 429 Daily send limit exceeded for this email\n{ statusCode, message, retry_available_at }
+  end
+  note right of Service
+    메일 폭탄 · 여러 계정을 쓰는 대입 방지.
+    학생 행 잠금으로 직렬화되지 않으므로 계정 여러 개가
+    동시에 보내면 조금 넘을 수 있음 (계정당 상한으로 제한됨)
+  end note
+
   Service -> Service: code = crypto.randomInt(0, 1_000_000)\n6자리 0 채움
   Service -> Service: codeHash = HMAC-SHA256(key, code)
   note right of Service: key는 JWT 서명 개인키(JwtKeyService)에서 파생.\n원문 코드는 저장하지 않음
   Service -> VerificationRepository: upsert({ studentPk, email, code: codeHash,\ncreated_at: now, expires_at: now + 5분 }, tx)
   VerificationRepository -> PostgreSQL: INSERT student_email_verification ...\nON CONFLICT (student_pk) DO UPDATE
   note right: 학생당 진행 중인 요청 1개.\n덮어쓰므로 이전 코드는 무효
+  Service -> SendLogRepository: insert({ userPk, email, created_at: now }, tx)
+  SendLogRepository -> PostgreSQL: INSERT student_email_send_log (failed_attempt_count = 0)
+  note right
+    재전송해도 기록이 남아 횟수 · 누적 실패가 유지됨.
+    24시간 지난 행은 정리 스케줄러가 지움 (CRB-29)
+  end note
 end
 note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
 

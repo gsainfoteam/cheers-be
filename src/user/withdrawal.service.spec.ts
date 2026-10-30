@@ -5,6 +5,7 @@ import { UserContext } from "@src/auth/context/user-context";
 import { DatabaseService } from "@src/database/database.service";
 import { CoffeeChatContactRepository } from "@src/database/repository/coffee-chat-contact.repository";
 import { GraduatedRepository } from "@src/database/repository/graduated.repository";
+import { StudentEmailSendLogRepository } from "@src/database/repository/student-email-send-log.repository";
 import { StudentEmailVerificationRepository } from "@src/database/repository/student-email-verification.repository";
 import { StudentRepository } from "@src/database/repository/student.repository";
 import { UserOauthAccountRepository } from "@src/database/repository/user-oauth-account.repository";
@@ -63,6 +64,7 @@ describe("WithdrawalService", () => {
     clearEmailByUserPk: jest.fn(),
   };
   const studentEmailVerificationRepository = { deleteByStudentPk: jest.fn() };
+  const studentEmailSendLogRepository = { deleteByUserPk: jest.fn() };
   const graduatedRepository = {
     findByUserPk: jest.fn(),
     clearBusinessCardKey: jest.fn(),
@@ -79,6 +81,7 @@ describe("WithdrawalService", () => {
       userOauthAccountRepository as unknown as UserOauthAccountRepository,
       studentRepository as unknown as StudentRepository,
       studentEmailVerificationRepository as unknown as StudentEmailVerificationRepository,
+      studentEmailSendLogRepository as unknown as StudentEmailSendLogRepository,
       graduatedRepository as unknown as GraduatedRepository,
       coffeeChatContactRepository as unknown as CoffeeChatContactRepository,
     );
@@ -258,6 +261,22 @@ describe("WithdrawalService", () => {
       expect(userRepository.withdraw).toHaveBeenCalledWith(USER_PK, tx);
       expect(fileService.deleteFileQuietly).not.toHaveBeenCalled();
     });
+
+    it.each(["student", "graduated"] as const)(
+      "deletes the email send log of a %s, who may have switched types",
+      async (type) => {
+        userRepository.findWithdrawalDuePks
+          .mockResolvedValueOnce([USER_PK])
+          .mockResolvedValueOnce([]);
+        userRepository.lockWithdrawalDue.mockResolvedValue(userRow({ type }));
+
+        await expect(createService().purgeExpired(now)).resolves.toBe(1);
+
+        expect(
+          studentEmailSendLogRepository.deleteByUserPk,
+        ).toHaveBeenCalledWith(USER_PK, tx);
+      },
+    );
 
     it("skips a user locked by another instance or whose withdrawal was just canceled", async () => {
       userRepository.findWithdrawalDuePks

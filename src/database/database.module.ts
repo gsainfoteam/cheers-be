@@ -9,6 +9,7 @@ import { StudentRepository } from "@src/database/repository/student.repository";
 import { StudentProfileRepository } from "@src/database/repository/student-profile.repository";
 import { StudentProfileAttachmentRepository } from "@src/database/repository/student-profile-attachment.repository";
 import { StudentEmailVerificationRepository } from "@src/database/repository/student-email-verification.repository";
+import { StudentEmailSendLogRepository } from "@src/database/repository/student-email-send-log.repository";
 import { GraduatedRepository } from "@src/database/repository/graduated.repository";
 import { GraduatedProfileRepository } from "@src/database/repository/graduated-profile.repository";
 import { CoffeeChatContactRepository } from "@src/database/repository/coffee-chat-contact.repository";
@@ -28,6 +29,7 @@ const repositories = [
   StudentProfileRepository,
   StudentProfileAttachmentRepository,
   StudentEmailVerificationRepository,
+  StudentEmailSendLogRepository,
   GraduatedRepository,
   GraduatedProfileRepository,
   CoffeeChatContactRepository,
