@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { TxType } from "@src/global/types/tx.types";
-import { userConsent } from "../../../drizzle/schema/user-consent";
+import { userConsent } from "@drizzle/schema/user-consent";
 
 export type ConsentVersion = { type: string; version: string };
 

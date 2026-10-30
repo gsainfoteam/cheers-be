@@ -1,5 +1,5 @@
 import { and, eq, isNull, SQL, sql } from "drizzle-orm";
-import { users } from "../../../drizzle/schema/users";
+import { users } from "@drizzle/schema/users";
 
 // 유저 쿼리 공용 조각
 // 사용 중인 계정: 탈퇴하지 않았고(is_deleted = false) 탈퇴 유예기간 중도 아님(withdraw_requested_at IS NULL).

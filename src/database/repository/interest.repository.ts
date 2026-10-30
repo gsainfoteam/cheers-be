@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { asc } from "drizzle-orm";
 import { DatabaseService } from "@src/database/database.service";
-import { interest } from "../../../drizzle/schema/interest";
+import { interest } from "@drizzle/schema/interest";
 
 // 기준 데이터 (seed). 조회만 함
 @Injectable()

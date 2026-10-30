@@ -2,8 +2,8 @@ import { Injectable } from "@nestjs/common";
 import { and, eq, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { TxType } from "@src/global/types/tx.types";
-import { studentProfileAttachment } from "../../../drizzle/schema/student-profile-attachment";
-import { studentProfile } from "../../../drizzle/schema/student-profile";
+import { studentProfileAttachment } from "@drizzle/schema/student-profile-attachment";
+import { studentProfile } from "@drizzle/schema/student-profile";
 
 export type StudentProfileAttachmentRow =
   typeof studentProfileAttachment.$inferSelect;

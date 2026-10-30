@@ -1,5 +1,5 @@
 # nest build 는 node 로 실행해야 함: bun 으로 실행하면 bun 이 tsconfig paths 를 직접 resolve 해서
-# Nest CLI 가 @src/* alias 를 상대 경로로 치환하지 않고 그대로 남김
+# Nest CLI 가 @src/*, @drizzle/* alias 를 상대 경로로 치환하지 않고 그대로 남김
 FROM node:24-slim AS builder
 
 COPY --from=oven/bun:1 /usr/local/bin/bun /usr/local/bin/bun
