@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title GET /api/v1/cheers/sent/{id}
-caption CRB-37 · 보낸 요청 상세 + 공유받은 연락처. 공유 후 처음 열람 시 student_viewed_at 기록
+caption CRB-37 · 보낸 요청 상세 + 공유받은 연락처. 공유 후 처음 열람 시 student_viewed_at 기록\nCRB-54 · 선배가 탈퇴했거나 탈퇴 유예기간 중이면 연락처(email · phone)를 내리지 않고 탈퇴 안내
 
 actor Client
 participant "UserGuard\n+ UserTypeGuard" as Guard
@@ -50,14 +50,22 @@ group transaction (DatabaseService.db.transaction)
 end
 note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
 
-Service -> Service: status 계산 (GET /api/v1/cheers/sent 와 같음)\nshared_contact = contact_shared_at 없으면 null,\n있으면 { name, email: shared_email,\n  phone: shared_phone, shared_at: contact_shared_at }\nname = graduated_active ? u.name : "탈퇴한 계정"
+Service -> Service: status 계산 (GET /api/v1/cheers/sent 와 같음)\ngraduated_withdrawn = NOT graduated_active
+alt 공유 전 (contact_shared_at 없음)
+  Service -> Service: shared_contact = null
+else 공유됨 AND 현업자 활성 (graduated_active = true)
+  Service -> Service: shared_contact = { name: u.name,\n  email: shared_email, phone: shared_phone,\n  shared_at: contact_shared_at }
+else 공유됨 AND 현업자 탈퇴 또는 탈퇴 유예기간 중 (graduated_active = false)
+  Service -> Service: shared_contact = { name: "탈퇴한 계정",\n  email: null, phone: null,\n  shared_at: contact_shared_at }
+end
 note right of Service
-  연락처는 공유 시점의 값(shared_email · shared_phone).
-  현업자가 탈퇴했거나 탈퇴 유예기간 중이면 name은 "탈퇴한 계정"
-  (탈퇴 처리 후에는 users.name이 지워져 null이므로 그대로 내리지 않음).
-  유예기간 중 다시 로그인해 탈퇴를 취소하면 원래 이름으로 돌아옴
+  CRB-54: 탈퇴한 선배의 연락처는 응답에서 뺌. 프론트는 graduated_withdrawn = true로
+  "탈퇴한 선배입니다" 안내를 띄움 (연락처가 null인 이유를 구분하는 값).
+  DB의 shared_email · shared_phone은 지우지 않음 (탈퇴 정책상 요청 기록 보관).
+  유예기간 중 선배가 다시 로그인해 탈퇴를 취소하면 연락처가 다시 내려감.
+  탈퇴 처리 후에는 users.name이 지워져 null이므로 name은 항상 "탈퇴한 계정"
 end note
 Service --> Controller: SentRequestDetailDto
-Controller --> Client: 200 { id, graduated, message, status, created_at, shared_contact }
+Controller --> Client: 200 { id, graduated, graduated_withdrawn, message, status, created_at, shared_contact }
 
 @enduml

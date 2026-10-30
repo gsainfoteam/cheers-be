@@ -65,6 +65,7 @@ const sentRow = (overrides: Partial<SentRequestRow> = {}): SentRequestRow => ({
     company: "인포테크",
     job: "백엔드 개발자",
   },
+  graduatedActive: true,
   ...overrides,
 });
 
@@ -76,7 +77,6 @@ const detailRow = (
   sharedEmail: null,
   sharedPhone: null,
   graduatedName: "김철수",
-  graduatedActive: true,
   ...overrides,
 });
 
@@ -410,11 +410,31 @@ describe("CheersStudentService", () => {
           company: "인포테크",
           job: "백엔드 개발자",
         },
+        graduated_withdrawn: false,
         message: "궁금합니다",
         status: "requested",
         created_at: "2026-10-25T12:00:00.000Z",
       });
       expect(result).toMatchObject({ page: 2, size: 10, total: 3 });
+    });
+
+    it("flags requests whose graduated withdrew or is in the grace period", async () => {
+      coffeeChatRequestRepository.findSentPage.mockResolvedValue({
+        rows: [sentRow(), sentRow({ graduatedActive: false })],
+        total: 2,
+      });
+
+      const result = await createService().getSentList(
+        userPk,
+        query(PaginationQueryDto, { page: 1, size: 20 }),
+      );
+
+      expect(result.items.map((item) => item.graduated_withdrawn)).toEqual([
+        false,
+        true,
+      ]);
+      // 닉네임 · 회사 · 직무는 그대로 보임
+      expect(result.items[1].graduated.nickname).toBe("철수");
     });
   });
 
@@ -469,6 +489,7 @@ describe("CheersStudentService", () => {
         phone: "01000000000",
         shared_at: "2026-10-25T13:30:00.000Z",
       });
+      expect(result.graduated_withdrawn).toBe(false);
     });
 
     it("does not record the view again", async () => {
@@ -486,20 +507,20 @@ describe("CheersStudentService", () => {
     it.each([
       ["withdrawn (name purged)", { graduatedName: null }],
       ["in the withdrawal grace period", { graduatedName: "김철수" }],
-    ])("shows 탈퇴한 계정 when the graduated is %s", async (_, overrides) => {
+    ])("hides the contact when the graduated is %s", async (_, overrides) => {
       coffeeChatRequestRepository.findSentByPk.mockResolvedValue(
         detailRow({ ...shared, ...overrides, graduatedActive: false }),
       );
 
       const result = await createService().getSentDetail(userPk, requestPk);
 
-      expect(result.shared_contact).toEqual(
-        expect.objectContaining({
-          name: "탈퇴한 계정",
-          email: "chulsoo@example.com",
-          phone: "01000000000",
-        }),
-      );
+      expect(result.graduated_withdrawn).toBe(true);
+      expect(result.shared_contact).toEqual({
+        name: "탈퇴한 계정",
+        email: null,
+        phone: null,
+        shared_at: "2026-10-25T13:30:00.000Z",
+      });
     });
   });
 });
