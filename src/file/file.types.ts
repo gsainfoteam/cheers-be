@@ -6,3 +6,9 @@ export type UploadUrl = {
   headers: Record<string, string>;
   expiresIn: number;
 };
+
+export type FileListPage = {
+  files: { key: string; lastModified?: Date }[];
+  // 다음 페이지 토큰. 마지막 페이지면 undefined
+  nextToken?: string;
+};

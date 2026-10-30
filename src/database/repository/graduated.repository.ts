@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { DatabaseService } from "@src/database/database.service";
 import { TxType } from "@src/global/types/tx.types";
@@ -87,6 +87,21 @@ export class GraduatedRepository {
       .update(graduated)
       .set({ businessCardKey, verifiedAt: now, updatedAt: now })
       .where(eq(graduated.pk, graduatedPk));
+  }
+
+  /*
+  SELECT business_card_key FROM graduated WHERE business_card_key IN (?1, ...);
+   */
+  // 고아 파일 정리: 받은 key 중 DB가 참조하는 것만 돌려줌
+  async findExistingBusinessCardKeys(keys: string[]): Promise<string[]> {
+    if (keys.length === 0) return [];
+
+    const rows = await this.dbService.db
+      .select({ key: graduated.businessCardKey })
+      .from(graduated)
+      .where(inArray(graduated.businessCardKey, keys));
+
+    return rows.flatMap((row) => (row.key ? [row.key] : []));
   }
 
   /*

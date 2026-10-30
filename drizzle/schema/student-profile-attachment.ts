@@ -21,7 +21,7 @@ CREATE TABLE "student_profile_attachment" (
     "file_name"  varchar(255)      NULL
 );
 */
-// CV · 포트폴리오. insert만 함. 이전 버전이 참조하므로 S3 파일을 지우지 않음
+// CV · 포트폴리오. 이전 버전이 참조하므로 프로필 수정 때는 insert만 하고 S3 파일을 지우지 않음. 행과 파일은 탈퇴 만료 처리 때 지움
 export const studentProfileAttachment = pgTable(
   "student_profile_attachment",
   {

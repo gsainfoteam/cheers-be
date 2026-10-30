@@ -4,6 +4,7 @@ import {
   GetObjectCommand,
   HeadObjectCommand,
   HeadObjectCommandOutput,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
   S3ServiceException,
@@ -18,7 +19,7 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { FILE_UPLOAD_POLICIES, FilePurpose } from "./file.constants";
-import { UploadUrl } from "./file.types";
+import { FileListPage, UploadUrl } from "./file.types";
 import {
   detectFileMimeType,
   FILE_SIGNATURE_LENGTH,
@@ -171,7 +172,7 @@ export class FileService {
 
   /**
    * this method deletes a file and only logs when it fails
-   * use it after the DB no longer refers to the file (orphans are cleaned up by CRB-41)
+   * use it after the DB no longer refers to the file (orphans are cleaned up by OrphanFileService)
    * @param key string
    */
   async deleteFileQuietly(key: string): Promise<void> {
@@ -186,6 +187,36 @@ export class FileService {
 
   async deleteFiles(keys: string[]): Promise<void> {
     await Promise.all(keys.map((key) => this.deleteFile(key)));
+  }
+
+  /**
+   * this method lists one page (up to 1000) of the files under a prefix
+   * @param prefix string
+   * @param continuationToken string nextToken of the previous page
+   * @returns FileListPage
+   */
+  async listFiles(
+    prefix: string,
+    continuationToken?: string,
+  ): Promise<FileListPage> {
+    const command = new ListObjectsV2Command({
+      Bucket: this.bucketName,
+      Prefix: prefix,
+      ContinuationToken: continuationToken,
+    });
+
+    const output = await this.s3Client.send(command).catch((err) => {
+      this.logger.error(err);
+      throw new InternalServerErrorException();
+    });
+    return {
+      files: (output.Contents ?? []).flatMap((object) =>
+        object.Key
+          ? [{ key: object.Key, lastModified: object.LastModified }]
+          : [],
+      ),
+      nextToken: output.IsTruncated ? output.NextContinuationToken : undefined,
+    };
   }
 
   /**
