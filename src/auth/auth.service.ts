@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { createHash, randomBytes } from "node:crypto";
 import { StringValue } from "ms";
+import { JwtKeyService } from "@src/auth/jwt-key.service";
 import { DatabaseService } from "@src/database/database.service";
 import { RefreshTokenRepository } from "@src/database/repository/refresh-token.repository";
 import { UserRepository } from "@src/database/repository/user.repository";
@@ -19,27 +20,17 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
-  private readonly privateKey: string;
-  private readonly publicKey: string;
   private readonly accessTokenExpiresIn: StringValue;
   private readonly refreshTokenExpireDays: number;
 
   constructor(
     private readonly configService: ConfigService,
     private readonly jwtService: JwtService,
+    private readonly jwtKeyService: JwtKeyService,
     private readonly dbService: DatabaseService,
     private readonly refreshTokenRepository: RefreshTokenRepository,
     private readonly userRepository: UserRepository,
   ) {
-    const privateKey = this.configService.get<string>("JWT_PRIVATE_KEY");
-    const publicKey = this.configService.get<string>("JWT_PUBLIC_KEY");
-    if (!privateKey || !publicKey) {
-      throw new Error("JWT_PRIVATE_KEY and JWT_PUBLIC_KEY are required.");
-    }
-    // env에 한 줄로 넣을 수 있도록 \n 이스케이프 허용
-    this.privateKey = privateKey.replace(/\\n/g, "\n");
-    this.publicKey = publicKey.replace(/\\n/g, "\n");
-
     // 가드는 DB를 보지 않고 토큰 클레임만 믿으므로, 탈퇴 · 유형 변경 · 가입 미완료 정리 후에도
     // 기존 access token은 만료까지 통과함. 그 최대 노출 시간이 access token 수명이라 1시간으로 유지
     const accessTokenExpiresIn =
@@ -74,7 +65,7 @@ export class AuthService {
     };
     const accessToken = await this.jwtService.signAsync(payload, {
       algorithm: "RS256",
-      privateKey: this.privateKey,
+      privateKey: this.jwtKeyService.privateKey,
       issuer: ISSUER,
       expiresIn: this.accessTokenExpiresIn,
     });
@@ -141,7 +132,7 @@ export class AuthService {
         accessToken,
         {
           algorithms: ["RS256"],
-          publicKey: this.publicKey,
+          publicKey: this.jwtKeyService.publicKey,
           issuer: ISSUER,
         },
       );

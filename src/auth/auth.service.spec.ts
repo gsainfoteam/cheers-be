@@ -2,6 +2,7 @@ import { UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { createHash, generateKeyPairSync } from "node:crypto";
+import { JwtKeyService } from "@src/auth/jwt-key.service";
 import { DatabaseService } from "@src/database/database.service";
 import { RefreshTokenRepository } from "@src/database/repository/refresh-token.repository";
 import { UserRepository } from "@src/database/repository/user.repository";
@@ -46,55 +47,58 @@ describe("AuthService", () => {
     db: { transaction: (fn: (tx: TxType) => unknown) => fn(tx) },
   };
 
-  const createService = (env: Record<string, string | undefined>) =>
+  const createService = (
+    env: Record<string, string | undefined>,
+    jwtKeyService = { privateKey, publicKey } as unknown as JwtKeyService,
+  ) =>
     new AuthService(
       { get: (key: string) => env[key] } as unknown as ConfigService,
       jwtService,
+      jwtKeyService,
       dbService as unknown as DatabaseService,
       refreshTokenRepository as unknown as RefreshTokenRepository,
       userRepository as unknown as UserRepository,
     );
 
-  const keys = {
-    // env에는 \n 이스케이프로 들어오는 경우를 확인
-    JWT_PRIVATE_KEY: privateKey.replace(/\n/g, "\\n"),
-    JWT_PUBLIC_KEY: publicKey,
-  };
-
   let service: AuthService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = createService(keys);
+    service = createService({});
   });
 
-  it("throws on startup when keys are not set", () => {
-    expect(() => createService({})).toThrow(
-      "JWT_PRIVATE_KEY and JWT_PUBLIC_KEY are required.",
-    );
+  it("does not issue tokens when keys are not loaded", async () => {
+    const notLoaded = {
+      get privateKey(): string {
+        throw new Error("JWT signing key is not loaded yet.");
+      },
+    } as unknown as JwtKeyService;
+
+    await expect(
+      createService({}, notLoaded).issueTokens(pendingStudent, tx),
+    ).rejects.toThrow("JWT signing key is not loaded yet.");
   });
 
   it.each(["30", "30 minutes", "1w", "abc", ""])(
     "throws on startup when ACCESS_TOKEN_EXPIRES_IN is %p",
     (value) => {
-      expect(() =>
-        createService({ ...keys, ACCESS_TOKEN_EXPIRES_IN: value }),
-      ).toThrow("ACCESS_TOKEN_EXPIRES_IN must look like 30m, 1h");
+      expect(() => createService({ ACCESS_TOKEN_EXPIRES_IN: value })).toThrow(
+        "ACCESS_TOKEN_EXPIRES_IN must look like 30m, 1h",
+      );
     },
   );
 
   it.each(["30d", "abc", "0", "-1", "1.5", ""])(
     "throws on startup when REFRESH_TOKEN_EXPIRE_DAYS is %p",
     (value) => {
-      expect(() =>
-        createService({ ...keys, REFRESH_TOKEN_EXPIRE_DAYS: value }),
-      ).toThrow("REFRESH_TOKEN_EXPIRE_DAYS must be a positive integer");
+      expect(() => createService({ REFRESH_TOKEN_EXPIRE_DAYS: value })).toThrow(
+        "REFRESH_TOKEN_EXPIRE_DAYS must be a positive integer",
+      );
     },
   );
 
   it("uses the configured expiry values", async () => {
     const configured = createService({
-      ...keys,
       ACCESS_TOKEN_EXPIRES_IN: "15m",
       REFRESH_TOKEN_EXPIRE_DAYS: "7",
     });

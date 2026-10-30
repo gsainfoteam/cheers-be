@@ -36,6 +36,13 @@
       "when": 1793029087465,
       "tag": "0004_insert_data",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793371248382,
+      "tag": "0005_jwt_signing_key",
+      "breakpoints": true
     }
   ]
 }
