@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { eq, sql } from "drizzle-orm";
+import { eq, lt, sql } from "drizzle-orm";
 import { TxType } from "@src/global/types/tx.types";
 import { CheersDBError } from "@src/global/exceptions/cheers-db.error";
 import { studentEmailVerification } from "../../../drizzle/schema/student-email-verification";
@@ -81,5 +81,17 @@ export class StudentEmailVerificationRepository {
     await tx
       .delete(studentEmailVerification)
       .where(eq(studentEmailVerification.studentPk, studentPk));
+  }
+
+  /*
+  DELETE FROM student_email_verification WHERE expires_at < ?1;
+   */
+  // 만료된 인증 요청 정리 (스케줄러). 지운 행 수 반환
+  async deleteExpired(now: Date, tx: TxType): Promise<number> {
+    const result = await tx
+      .delete(studentEmailVerification)
+      .where(lt(studentEmailVerification.expiresAt, now));
+
+    return result.rowCount ?? 0;
   }
 }
