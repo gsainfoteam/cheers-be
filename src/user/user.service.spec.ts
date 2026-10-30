@@ -504,12 +504,14 @@ describe("UserService", () => {
               source: "link",
               url: "https://portfolio.example.com",
               file_name: null,
+              key: null,
             },
             {
               kind: "cv",
               source: "file",
               url: "https://s3/presigned",
               file_name: "이력서.pdf",
+              key: "cv/key.pdf",
             },
           ],
           contact: {

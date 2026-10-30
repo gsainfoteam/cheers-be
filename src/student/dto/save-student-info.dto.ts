@@ -12,6 +12,7 @@ import {
   IsString,
   IsUrl,
   MaxLength,
+  ValidateIf,
   ValidateNested,
 } from "class-validator";
 import { ContactRequestDto } from "@src/user/dto/contact-request.dto";
@@ -29,14 +30,29 @@ export class StudentAttachmentRequestDto {
   @IsIn(["cv", "portfolio"])
   kind: "cv" | "portfolio";
 
-  // 파일 첨부(source = file, key · file_name)는 CRB-38에서 추가
-  @IsIn(["link"])
-  source: "link";
+  @IsIn(["link", "file"])
+  source: "link" | "file";
 
+  // link: url만 받음. file: key · file_name만 받음 (다른 쪽 필드를 섞으면 서비스에서 400)
+  @ValidateIf((o: StudentAttachmentRequestDto) => o.source !== "file")
   @Transform(trim)
   @IsUrl({ protocols: ["http", "https"], require_protocol: true })
   @MaxLength(2048)
-  url: string;
+  url?: string;
+
+  // key: 업로드 URL 발급 때 받은 key(새 파일) 또는 내 정보 조회가 내려준 key(기존 파일 유지)
+  @ValidateIf((o: StudentAttachmentRequestDto) => o.source !== "link")
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(1024)
+  key?: string;
+
+  @ValidateIf((o: StudentAttachmentRequestDto) => o.source !== "link")
+  @Transform(trim)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  file_name?: string;
 }
 
 export class SaveStudentInfoRequestDto {

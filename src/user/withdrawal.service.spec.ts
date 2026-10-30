@@ -7,6 +7,7 @@ import { CoffeeChatContactRepository } from "@src/database/repository/coffee-cha
 import { GraduatedRepository } from "@src/database/repository/graduated.repository";
 import { StudentEmailSendLogRepository } from "@src/database/repository/student-email-send-log.repository";
 import { StudentEmailVerificationRepository } from "@src/database/repository/student-email-verification.repository";
+import { StudentProfileAttachmentRepository } from "@src/database/repository/student-profile-attachment.repository";
 import { StudentRepository } from "@src/database/repository/student.repository";
 import { UserOauthAccountRepository } from "@src/database/repository/user-oauth-account.repository";
 import {
@@ -65,6 +66,9 @@ describe("WithdrawalService", () => {
   };
   const studentEmailVerificationRepository = { deleteByStudentPk: jest.fn() };
   const studentEmailSendLogRepository = { deleteByUserPk: jest.fn() };
+  const studentProfileAttachmentRepository = {
+    deleteFilesByStudentPk: jest.fn(),
+  };
   const graduatedRepository = {
     findByUserPk: jest.fn(),
     clearBusinessCardKey: jest.fn(),
@@ -82,6 +86,7 @@ describe("WithdrawalService", () => {
       studentRepository as unknown as StudentRepository,
       studentEmailVerificationRepository as unknown as StudentEmailVerificationRepository,
       studentEmailSendLogRepository as unknown as StudentEmailSendLogRepository,
+      studentProfileAttachmentRepository as unknown as StudentProfileAttachmentRepository,
       graduatedRepository as unknown as GraduatedRepository,
       coffeeChatContactRepository as unknown as CoffeeChatContactRepository,
     );
@@ -89,6 +94,9 @@ describe("WithdrawalService", () => {
   beforeEach(() => {
     jest.resetAllMocks();
     calls = [];
+    studentProfileAttachmentRepository.deleteFilesByStudentPk.mockResolvedValue(
+      [],
+    );
   });
 
   describe("constructor", () => {
@@ -260,6 +268,39 @@ describe("WithdrawalService", () => {
       expect(graduatedRepository.findByUserPk).not.toHaveBeenCalled();
       expect(userRepository.withdraw).toHaveBeenCalledWith(USER_PK, tx);
       expect(fileService.deleteFileQuietly).not.toHaveBeenCalled();
+    });
+
+    it("deletes the attachment rows of a student in the transaction, then the S3 files", async () => {
+      userRepository.findWithdrawalDuePks
+        .mockResolvedValueOnce([USER_PK])
+        .mockResolvedValueOnce([]);
+      userRepository.lockWithdrawalDue.mockResolvedValue(
+        userRow({ type: "student" }),
+      );
+      studentRepository.findByUserPk.mockResolvedValue({ pk: "student-1" });
+      studentProfileAttachmentRepository.deleteFilesByStudentPk.mockResolvedValue(
+        ["attachment/a.pdf", "attachment/b.pdf"],
+      );
+      const order: string[] = [];
+      userRepository.withdraw.mockImplementation(() => {
+        order.push("withdraw");
+        return Promise.resolve();
+      });
+      fileService.deleteFileQuietly.mockImplementation((key: string) => {
+        order.push(key);
+        return Promise.resolve();
+      });
+
+      await expect(createService().purgeExpired(now)).resolves.toBe(1);
+
+      expect(
+        studentProfileAttachmentRepository.deleteFilesByStudentPk,
+      ).toHaveBeenCalledWith("student-1", tx);
+      expect(order).toEqual([
+        "withdraw",
+        "attachment/a.pdf",
+        "attachment/b.pdf",
+      ]);
     });
 
     it.each(["student", "graduated"] as const)(

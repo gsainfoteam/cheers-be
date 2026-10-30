@@ -20,11 +20,17 @@ export class AttachmentDto {
   file_name: string | null;
 }
 
+// 재학생 본인 조회용. key는 수정 때 기존 파일을 유지하려고 다시 보내는 값 (현업자에게는 내리지 않음)
+export class StudentAttachmentDto extends AttachmentDto {
+  // source = file 일 때만. 비공개 버킷의 최종 key
+  key: string | null;
+}
+
 export class StudentProfileDto {
   department: DepartmentDto;
   interests: string[];
   activities: string[];
-  attachments: AttachmentDto[];
+  attachments: StudentAttachmentDto[];
   contact: ContactDto | null;
 }
 
