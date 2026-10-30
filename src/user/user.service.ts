@@ -98,11 +98,9 @@ export class UserService {
           profile.email,
           tx,
         );
-        await this.userRepository.fillProfileFromOAuth(
-          existing.pk,
-          { name: profile.name, email: profile.email },
-          tx,
-        );
+        if (profile.email) {
+          await this.userRepository.fillEmail(existing.pk, profile.email, tx);
+        }
 
         // active: type 무시 / pending + 같은 type: 이어서 진행
         if (existing.status === "active" || existing.type === req.type) {
@@ -198,7 +196,7 @@ export class UserService {
     tx: TxType,
   ): Promise<UserRow> {
     const user = await this.userRepository.insert(
-      { type, name: profile.name, email: profile.email },
+      { type, email: profile.email },
       tx,
     );
     const account = await this.userOauthAccountRepository.insert(

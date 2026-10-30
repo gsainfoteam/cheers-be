@@ -303,7 +303,7 @@ describe("StudentService", () => {
       expect(userRepository.findByPkForUpdate).not.toHaveBeenCalled();
     });
 
-    it("requires a name when OAuth did not provide one, and stores it", async () => {
+    it("requires a name on the first save, and stores it", async () => {
       userRepository.findByPkForUpdate.mockResolvedValue(user({ name: null }));
 
       await expect(service.saveInfo(userPk, request())).rejects.toThrow(
