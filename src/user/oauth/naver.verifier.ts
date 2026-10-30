@@ -7,7 +7,7 @@ const TIMEOUT_MS = 5000;
 type NaverProfileResponse = {
   resultcode: string;
   message: string;
-  response?: { id?: string; email?: string; name?: string };
+  response?: { id?: string; email?: string };
 };
 
 // Naver는 ID token이 없어 access token으로 프로필 API를 호출해서 확인.
@@ -48,7 +48,6 @@ export class NaverVerifier implements OAuthVerifier {
       provider: "naver",
       sub: profile.id,
       email: profile.email ?? null,
-      name: profile.name ?? null,
     };
   }
 }

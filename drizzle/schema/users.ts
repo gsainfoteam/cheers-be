@@ -51,7 +51,7 @@ export const users = pgTable(
     lastActiveAt: timestamp("last_active_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
-    // OAuth에서 받음, 없으면 추가 정보 입력에서 한 번 받음. 이후 수정 불가
+    // 추가 정보 입력에서 사용자에게 한 번 받음 (OAuth 이름은 쓰지 않음). 이후 수정 불가
     name: varchar("name", { length: 64 }),
     email: varchar("email", { length: 255 }),
     // 회원 탈퇴 요청 시각. 유예기간(active: WITHDRAWAL_GRACE_DAYS, pending: 1일) 동안은 비활성,

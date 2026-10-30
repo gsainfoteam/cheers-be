@@ -72,6 +72,7 @@ group transaction (DatabaseService.db.transaction)
   alt user.name = null 이고 요청에 name 없음
     Service -[#red]-> Client: 400 Name is required
   end
+  note right of Service: OAuth 에서 이름을 받지 않으므로 가입 중에는 항상 null → 첫 저장에 필수
 
   Service -> GraduatedRepository: findByUserPkWithProfile(userPk, tx)
   GraduatedRepository -> PostgreSQL: SELECT graduated LEFT JOIN graduated_profile\nWHERE user_pk = ?

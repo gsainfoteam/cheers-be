@@ -48,7 +48,6 @@ describe("GoogleVerifier", () => {
       provider: "google",
       sub: "g-1",
       email: "a@gmail.com",
-      name: "홍길동",
     });
     expect(mockedJwtVerify).toHaveBeenCalledWith("id-token", "jwks", {
       issuer: ["https://accounts.google.com", "accounts.google.com"],
@@ -149,7 +148,6 @@ describe("AppleVerifier", () => {
       provider: "apple",
       sub: "a-1",
       email: "x@privaterelay.appleid.com",
-      name: null,
     });
     expect(mockedJwtVerify).toHaveBeenCalledWith("id-token", "jwks", {
       issuer: ["https://appleid.apple.com"],
@@ -189,7 +187,6 @@ describe("NaverVerifier", () => {
       provider: "naver",
       sub: "n-1",
       email: "c@naver.com",
-      name: "김철수",
     });
     expect(fetchMock).toHaveBeenCalledWith(
       "https://openapi.naver.com/v1/nid/me",

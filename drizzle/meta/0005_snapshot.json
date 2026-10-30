@@ -1,5 +1,5 @@
 {
-  "id": "565a9b32-e914-4bfa-a42a-2dc15c58f0a6",
+  "id": "c70b297f-1157-4725-9542-bff67f84daba",
   "prevId": "427c70f5-3579-4c1f-a255-31e186c24d9e",
   "version": "7",
   "dialect": "postgresql",
@@ -58,15 +58,15 @@
         "coffee_chat_contact_user_pk_users_pk_fk": {
           "name": "coffee_chat_contact_user_pk_users_pk_fk",
           "tableFrom": "coffee_chat_contact",
-          "tableTo": "users",
           "columnsFrom": [
             "user_pk"
           ],
+          "tableTo": "users",
           "columnsTo": [
             "pk"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -175,9 +175,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "coffee_chat_request_student_pk_index": {
           "name": "coffee_chat_request_student_pk_index",
@@ -190,52 +190,52 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "coffee_chat_request_graduated_pk_graduated_pk_fk": {
           "name": "coffee_chat_request_graduated_pk_graduated_pk_fk",
           "tableFrom": "coffee_chat_request",
-          "tableTo": "graduated",
           "columnsFrom": [
             "graduated_pk"
           ],
+          "tableTo": "graduated",
           "columnsTo": [
             "pk"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "coffee_chat_request_student_pk_student_pk_fk": {
           "name": "coffee_chat_request_student_pk_student_pk_fk",
           "tableFrom": "coffee_chat_request",
-          "tableTo": "student",
           "columnsFrom": [
             "student_pk"
           ],
+          "tableTo": "student",
           "columnsTo": [
             "pk"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "coffee_chat_request_student_profile_fk": {
           "name": "coffee_chat_request_student_profile_fk",
           "tableFrom": "coffee_chat_request",
-          "tableTo": "student_profile",
           "columnsFrom": [
             "student_profile_pk",
             "student_pk"
           ],
+          "tableTo": "student_profile",
           "columnsTo": [
             "pk",
             "student_pk"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -324,26 +324,26 @@
         "department_school_pk_school_pk_fk": {
           "name": "department_school_pk_school_pk_fk",
           "tableFrom": "department",
-          "tableTo": "school",
           "columnsFrom": [
             "school_pk"
           ],
+          "tableTo": "school",
           "columnsTo": [
             "pk"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "department_school_pk_name_unique": {
           "name": "department_school_pk_name_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "school_pk",
             "name"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
       "policies": {},
@@ -416,15 +416,15 @@
         "graduated_profile_graduated_pk_graduated_pk_fk": {
           "name": "graduated_profile_graduated_pk_graduated_pk_fk",
           "tableFrom": "graduated_profile",
-          "tableTo": "graduated",
           "columnsFrom": [
             "graduated_pk"
           ],
+          "tableTo": "graduated",
           "columnsTo": [
             "pk"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -481,25 +481,25 @@
         "graduated_user_pk_users_pk_fk": {
           "name": "graduated_user_pk_users_pk_fk",
           "tableFrom": "graduated",
-          "tableTo": "users",
           "columnsFrom": [
             "user_pk"
           ],
+          "tableTo": "users",
           "columnsTo": [
             "pk"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "graduated_user_pk_unique": {
           "name": "graduated_user_pk_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "user_pk"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
       "policies": {},
@@ -581,24 +581,24 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "notification_log_coffee_chat_request_pk_coffee_chat_request_pk_fk": {
           "name": "notification_log_coffee_chat_request_pk_coffee_chat_request_pk_fk",
           "tableFrom": "notification_log",
-          "tableTo": "coffee_chat_request",
           "columnsFrom": [
             "coffee_chat_request_pk"
           ],
+          "tableTo": "coffee_chat_request",
           "columnsTo": [
             "pk"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -649,24 +649,24 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "refresh_token_user_pk_users_pk_fk": {
           "name": "refresh_token_user_pk_users_pk_fk",
           "tableFrom": "refresh_token",
-          "tableTo": "users",
           "columnsFrom": [
             "user_pk"
           ],
+          "tableTo": "users",
           "columnsTo": [
             "pk"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -704,114 +704,12 @@
       "uniqueConstraints": {
         "school_email_domain_unique": {
           "name": "school_email_domain_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "email_domain"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.student_email_send_log": {
-      "name": "student_email_send_log",
-      "schema": "",
-      "columns": {
-        "pk": {
-          "name": "pk",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "user_pk": {
-          "name": "user_pk",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "failed_attempt_count": {
-          "name": "failed_attempt_count",
-          "type": "smallint",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "email": {
-          "name": "email",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "student_email_send_log_user_pk_created_at_index": {
-          "name": "student_email_send_log_user_pk_created_at_index",
-          "columns": [
-            {
-              "expression": "user_pk",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "student_email_send_log_email_created_at_index": {
-          "name": "student_email_send_log_email_created_at_index",
-          "columns": [
-            {
-              "expression": "email",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "student_email_send_log_user_pk_users_pk_fk": {
-          "name": "student_email_send_log_user_pk_users_pk_fk",
-          "tableFrom": "student_email_send_log",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_pk"
-          ],
-          "columnsTo": [
-            "pk"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -864,15 +762,15 @@
         "student_email_verification_student_pk_student_pk_fk": {
           "name": "student_email_verification_student_pk_student_pk_fk",
           "tableFrom": "student_email_verification",
-          "tableTo": "student",
           "columnsFrom": [
             "student_pk"
           ],
+          "tableTo": "student",
           "columnsTo": [
             "pk"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -942,24 +840,24 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "student_profile_attachment_profile_pk_student_profile_pk_fk": {
           "name": "student_profile_attachment_profile_pk_student_profile_pk_fk",
           "tableFrom": "student_profile_attachment",
-          "tableTo": "student_profile",
           "columnsFrom": [
             "profile_pk"
           ],
+          "tableTo": "student_profile",
           "columnsTo": [
             "pk"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1028,56 +926,56 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "student_profile_student_pk_student_pk_fk": {
           "name": "student_profile_student_pk_student_pk_fk",
           "tableFrom": "student_profile",
-          "tableTo": "student",
           "columnsFrom": [
             "student_pk"
           ],
+          "tableTo": "student",
           "columnsTo": [
             "pk"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "student_profile_department_pk_department_pk_fk": {
           "name": "student_profile_department_pk_department_pk_fk",
           "tableFrom": "student_profile",
-          "tableTo": "department",
           "columnsFrom": [
             "department_pk"
           ],
+          "tableTo": "department",
           "columnsTo": [
             "pk"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "student_profile_student_pk_version_unique": {
           "name": "student_profile_student_pk_version_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "student_pk",
             "version"
-          ]
+          ],
+          "nullsNotDistinct": false
         },
         "student_profile_pk_student_pk_unique": {
           "name": "student_profile_pk_student_pk_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "pk",
             "student_pk"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
       "policies": {},
@@ -1132,32 +1030,32 @@
         "student_user_pk_users_pk_fk": {
           "name": "student_user_pk_users_pk_fk",
           "tableFrom": "student",
-          "tableTo": "users",
           "columnsFrom": [
             "user_pk"
           ],
+          "tableTo": "users",
           "columnsTo": [
             "pk"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "student_user_pk_unique": {
           "name": "student_user_pk_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "user_pk"
-          ]
+          ],
+          "nullsNotDistinct": false
         },
         "student_email_unique": {
           "name": "student_email_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "email"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
       "policies": {},
@@ -1230,10 +1128,10 @@
             }
           ],
           "isUnique": true,
-          "where": "\"user_consent\".\"revoked_at\" IS NULL",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"user_consent\".\"revoked_at\" IS NULL",
+          "concurrently": false
         },
         "user_consent_user_pk_index": {
           "name": "user_consent_user_pk_index",
@@ -1246,39 +1144,39 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "user_consent_user_pk_users_pk_fk": {
           "name": "user_consent_user_pk_users_pk_fk",
           "tableFrom": "user_consent",
-          "tableTo": "users",
           "columnsFrom": [
             "user_pk"
           ],
+          "tableTo": "users",
           "columnsTo": [
             "pk"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "user_consent_consent_fk": {
           "name": "user_consent_consent_fk",
           "tableFrom": "user_consent",
-          "tableTo": "consent",
           "columnsFrom": [
             "consent_type",
             "consent_version"
           ],
+          "tableTo": "consent",
           "columnsTo": [
             "type",
             "version"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1335,15 +1233,15 @@
         "user_oauth_account_user_pk_users_pk_fk": {
           "name": "user_oauth_account_user_pk_users_pk_fk",
           "tableFrom": "user_oauth_account",
-          "tableTo": "users",
           "columnsFrom": [
             "user_pk"
           ],
+          "tableTo": "users",
           "columnsTo": [
             "pk"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {
@@ -1358,11 +1256,11 @@
       "uniqueConstraints": {
         "user_oauth_account_user_pk_provider_unique": {
           "name": "user_oauth_account_user_pk_provider_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "user_pk",
             "provider"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
       "policies": {},
@@ -1453,10 +1351,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"users\".\"status\" = 'pending'",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"users\".\"status\" = 'pending'",
+          "concurrently": false
         },
         "users_withdraw_requested_at_idx": {
           "name": "users_withdraw_requested_at_idx",
@@ -1469,10 +1367,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"users\".\"withdraw_requested_at\" IS NOT NULL AND \"users\".\"is_deleted\" = false",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"users\".\"withdraw_requested_at\" IS NOT NULL AND \"users\".\"is_deleted\" = false",
+          "concurrently": false
         }
       },
       "foreignKeys": {},
@@ -1551,10 +1449,10 @@
     }
   },
   "schemas": {},
+  "views": {},
   "sequences": {},
   "roles": {},
   "policies": {},
-  "views": {},
   "_meta": {
     "columns": {},
     "schemas": {},

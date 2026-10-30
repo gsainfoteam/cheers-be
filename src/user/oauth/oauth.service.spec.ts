@@ -9,7 +9,7 @@ describe("OAuthService", () => {
   beforeEach(() => jest.resetAllMocks());
 
   it("passes google tokens and the nonce to GoogleVerifier", async () => {
-    const profile = { provider: "google", sub: "g-1", email: null, name: null };
+    const profile = { provider: "google", sub: "g-1", email: null };
     googleVerifier.verify.mockResolvedValue(profile);
 
     await expect(

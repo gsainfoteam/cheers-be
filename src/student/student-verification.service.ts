@@ -9,7 +9,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { createHmac, randomInt, timingSafeEqual } from "node:crypto";
-import { ConfigService } from "@nestjs/config";
+import { JwtKeyService } from "@src/auth/jwt-key.service";
 import { DatabaseService } from "@src/database/database.service";
 import { SchoolRepository } from "@src/database/repository/school.repository";
 import {
@@ -48,26 +48,15 @@ type VerifyResult =
 // 재학생 학교 이메일 인증 (가입 단계 verify)
 @Injectable()
 export class StudentVerificationService {
-  // 인증번호는 HMAC으로만 저장. 6자리라 키 없는 해시는 100만 번이면 되돌릴 수 있어서 서버 비밀값을 키로 씀
-  private readonly codeHashKey: Buffer;
-
   constructor(
-    configService: ConfigService,
+    private readonly jwtKeyService: JwtKeyService,
     private readonly dbService: DatabaseService,
     private readonly mailService: MailService,
     private readonly schoolRepository: SchoolRepository,
     private readonly studentRepository: StudentRepository,
     private readonly studentEmailVerificationRepository: StudentEmailVerificationRepository,
     private readonly studentEmailSendLogRepository: StudentEmailSendLogRepository,
-  ) {
-    // 새 env를 늘리지 않으려고 이미 필수인 JWT 서명 키에서 용도별 키를 파생 (AuthService가 존재를 검사)
-    this.codeHashKey = createHmac(
-      "sha256",
-      configService.get<string>("JWT_PRIVATE_KEY") ?? "",
-    )
-      .update("student-email-verification-code")
-      .digest();
-  }
+  ) {}
 
   // 재전송도 같은 API. 이전 코드는 덮어써서 무효
   async sendCode(userPk: string, email: string): Promise<SendCodeResponseDto> {
@@ -280,8 +269,13 @@ export class StudentVerificationService {
     );
   }
 
+  // 인증번호는 HMAC으로만 저장. 6자리라 키 없는 해시는 100만 번이면 되돌릴 수 있어서 서버 비밀값을 키로 씀
+  // 새 비밀값을 늘리지 않으려고 JWT 서명 키에서 용도별 키를 파생
   private hashCode(code: string): string {
-    return createHmac("sha256", this.codeHashKey).update(code).digest("hex");
+    const codeHashKey = createHmac("sha256", this.jwtKeyService.privateKey)
+      .update("student-email-verification-code")
+      .digest();
+    return createHmac("sha256", codeHashKey).update(code).digest("hex");
   }
 
   private async lockStudent(userPk: string, tx: TxType): Promise<StudentRow> {

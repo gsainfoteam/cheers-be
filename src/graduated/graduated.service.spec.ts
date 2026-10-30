@@ -338,7 +338,7 @@ describe("GraduatedService", () => {
       },
     );
 
-    it("fills the name when OAuth did not provide one", async () => {
+    it("fills the name on the first save", async () => {
       userRepository.findByPkForUpdate.mockResolvedValue(
         userRow({ name: null }),
       );

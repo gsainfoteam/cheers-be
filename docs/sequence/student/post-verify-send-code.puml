@@ -116,7 +116,7 @@ group transaction (DatabaseService.db.transaction)
 
   Service -> Service: code = crypto.randomInt(0, 1_000_000)\n6자리 0 채움
   Service -> Service: codeHash = HMAC-SHA256(key, code)
-  note right of Service: key는 JWT_PRIVATE_KEY에서 파생.\n원문 코드는 저장하지 않음
+  note right of Service: key는 JWT 서명 개인키(JwtKeyService)에서 파생.\n원문 코드는 저장하지 않음
   Service -> VerificationRepository: upsert({ studentPk, email, code: codeHash,\ncreated_at: now, expires_at: now + 5분 }, tx)
   VerificationRepository -> PostgreSQL: INSERT student_email_verification ...\nON CONFLICT (student_pk) DO UPDATE
   note right: 학생당 진행 중인 요청 1개.\n덮어쓰므로 이전 코드는 무효

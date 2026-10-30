@@ -17,8 +17,7 @@ const trim = ({ value }: { value: unknown }) =>
   typeof value === "string" ? value.trim() : value;
 
 export class GraduatedInfoRequestDto {
-  // 이름은 OAuth 로그인에서 받아 저장함. OAuth에서 못 받아 users.name이 null일 때만 필수 (서비스에서 검사).
-  // 이미 있으면 무시 (프론트는 내 정보의 name을 채워 두고 수정 불가)
+  // 내 정보의 name이 null일 때(첫 저장)만 필수 (서비스에서 검사). 이미 있으면 무시
   @IsOptional()
   @Transform(trim)
   @IsString()

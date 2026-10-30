@@ -7,8 +7,8 @@ import {
   HttpStatus,
   NotFoundException,
 } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import { createHmac } from "node:crypto";
+import { JwtKeyService } from "@src/auth/jwt-key.service";
 import { DatabaseService } from "@src/database/database.service";
 import { SchoolRepository } from "@src/database/repository/school.repository";
 import {
@@ -32,7 +32,7 @@ const userPk = "690c15dc-0000-4000-8000-000000000001";
 const email = "gildong@gm.gist.ac.kr";
 const now = new Date("2026-10-25T12:00:00.000Z");
 
-// 서비스와 같은 방식으로 HMAC 키를 파생 (JWT_PRIVATE_KEY = "test-jwt-key")
+// 서비스와 같은 방식으로 HMAC 키를 파생 (JwtKeyService.privateKey = "test-jwt-key")
 const hashKey = createHmac("sha256", "test-jwt-key")
   .update("student-email-verification-code")
   .digest();
@@ -107,12 +107,9 @@ describe("StudentVerificationService", () => {
     insert: jest.fn(),
     incrementFailedAttemptCount: jest.fn(),
   };
-  const configService = {
-    get: (key: string) =>
-      key === "JWT_PRIVATE_KEY" ? "test-jwt-key" : undefined,
-  };
+  const jwtKeyService = { privateKey: "test-jwt-key" };
   const service = new StudentVerificationService(
-    configService as unknown as ConfigService,
+    jwtKeyService as unknown as JwtKeyService,
     dbService as unknown as DatabaseService,
     mailService as unknown as MailService,
     schoolRepository as unknown as SchoolRepository,
