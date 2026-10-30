@@ -10,7 +10,7 @@ export class RequestGraduatedDto {
 export class SentRequestDto {
   id: string;
   graduated: RequestGraduatedDto;
-  // 현업자가 탈퇴했거나 탈퇴 유예기간 중이면 true (프론트는 탈퇴 안내를 보여 줌)
+  /** 현업자가 탈퇴했거나 탈퇴 유예기간 중이면 true (프론트는 탈퇴 안내를 보여 줌) */
   graduated_withdrawn: boolean;
   message: string;
   status: CoffeeChatRequestStatus;
@@ -19,7 +19,7 @@ export class SentRequestDto {
 
 // 공유 시점의 현업자 연락처
 export class SharedContactDto {
-  // 현업자가 탈퇴했거나 탈퇴 유예기간 중이면 "탈퇴한 계정", email · phone은 null
+  /** 현업자가 탈퇴했거나 탈퇴 유예기간 중이면 "탈퇴한 계정", email · phone은 null */
   name: string;
   email: string | null;
   phone: string | null;
@@ -27,6 +27,6 @@ export class SharedContactDto {
 }
 
 export class SentRequestDetailDto extends SentRequestDto {
-  // 공유 전이면 null
+  /** 공유 전이면 null */
   shared_contact: SharedContactDto | null;
 }
