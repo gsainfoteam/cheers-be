@@ -12,6 +12,10 @@ import { createHmac, randomInt, timingSafeEqual } from "node:crypto";
 import { ConfigService } from "@nestjs/config";
 import { DatabaseService } from "@src/database/database.service";
 import { SchoolRepository } from "@src/database/repository/school.repository";
+import {
+  StudentEmailSendLogRepository,
+  StudentEmailSendLogRow,
+} from "@src/database/repository/student-email-send-log.repository";
 import { StudentEmailVerificationRepository } from "@src/database/repository/student-email-verification.repository";
 import {
   StudentRepository,
@@ -27,7 +31,11 @@ import {
   VERIFICATION_CODE_TTL_MINUTES,
   VERIFICATION_CODE_TTL_MS,
   VERIFICATION_MAX_ATTEMPTS,
+  VERIFICATION_MAX_FAILED_ATTEMPTS,
+  VERIFICATION_MAX_SENDS_PER_EMAIL,
+  VERIFICATION_MAX_SENDS_PER_USER,
   VERIFICATION_RESEND_COOLDOWN_MS,
+  VERIFICATION_SEND_WINDOW_MS,
 } from "./student.constants";
 import { emailDomain } from "./student.utils";
 
@@ -50,6 +58,7 @@ export class StudentVerificationService {
     private readonly schoolRepository: SchoolRepository,
     private readonly studentRepository: StudentRepository,
     private readonly studentEmailVerificationRepository: StudentEmailVerificationRepository,
+    private readonly studentEmailSendLogRepository: StudentEmailSendLogRepository,
   ) {
     // 새 env를 늘리지 않으려고 이미 필수인 JWT 서명 키에서 용도별 키를 파생 (AuthService가 존재를 검사)
     this.codeHashKey = createHmac(
@@ -87,9 +96,11 @@ export class StudentVerificationService {
         current.createdAt.getTime() + VERIFICATION_RESEND_COOLDOWN_MS >
           createdAt.getTime()
       ) {
-        throw new HttpException(
+        throw tooManyRequests(
           "Resend is not available yet",
-          HttpStatus.TOO_MANY_REQUESTS,
+          new Date(
+            current.createdAt.getTime() + VERIFICATION_RESEND_COOLDOWN_MS,
+          ),
         );
       }
 
@@ -102,6 +113,8 @@ export class StudentVerificationService {
         );
       }
 
+      await this.assertSendAllowed(userPk, email, createdAt, tx);
+
       await this.studentEmailVerificationRepository.upsert(
         {
           studentPk: student.pk,
@@ -110,6 +123,11 @@ export class StudentVerificationService {
           expiresAt,
           createdAt,
         },
+        tx,
+      );
+      // 틀린 횟수를 이 기록에 쌓으려고 인증 요청과 같은 created_at을 씀
+      await this.studentEmailSendLogRepository.insert(
+        { userPk, email, createdAt },
         tx,
       );
     });
@@ -191,6 +209,12 @@ export class StudentVerificationService {
           student.pk,
           tx,
         );
+      // attempt_count는 재전송하면 초기화되므로 전송 기록에도 누적
+      await this.studentEmailSendLogRepository.incrementFailedAttemptCount(
+        userPk,
+        verification.createdAt,
+        tx,
+      );
       return {
         kind: "wrong",
         remainingAttempts: Math.max(
@@ -212,6 +236,50 @@ export class StudentVerificationService {
     return { kind: "ok" };
   }
 
+  // 최근 24시간 상한. 이메일 기준은 학생 행 잠금으로 직렬화되지 않아 계정 여러 개가 동시에 보내면
+  // 조금 넘을 수 있지만, 계정마다 유저 상한이 있어 추가로 잠그지 않음
+  private async assertSendAllowed(
+    userPk: string,
+    email: string,
+    now: Date,
+    tx: TxType,
+  ): Promise<void> {
+    const since = new Date(now.getTime() - VERIFICATION_SEND_WINDOW_MS);
+
+    const userLogs =
+      await this.studentEmailSendLogRepository.findRecentByUserPk(
+        userPk,
+        since,
+        tx,
+      );
+    assertUnderLimit(
+      userLogs,
+      () => 1,
+      VERIFICATION_MAX_SENDS_PER_USER,
+      "Daily send limit exceeded",
+    );
+    // 이메일 기준으로 세면 계정 하나로 일부러 틀려서 피해자의 인증을 막을 수 있어 유저 기준
+    assertUnderLimit(
+      userLogs,
+      (log) => log.failedAttemptCount,
+      VERIFICATION_MAX_FAILED_ATTEMPTS,
+      "Too many failed attempts",
+    );
+
+    const emailLogs =
+      await this.studentEmailSendLogRepository.findRecentByEmail(
+        email,
+        since,
+        tx,
+      );
+    assertUnderLimit(
+      emailLogs,
+      () => 1,
+      VERIFICATION_MAX_SENDS_PER_EMAIL,
+      "Daily send limit exceeded for this email",
+    );
+  }
+
   private hashCode(code: string): string {
     return createHmac("sha256", this.codeHashKey).update(code).digest("hex");
   }
@@ -228,6 +296,33 @@ export class StudentVerificationService {
     return student;
   }
 }
+
+const tooManyRequests = (message: string, retryAvailableAt: Date) =>
+  new HttpException(
+    { message, retry_available_at: retryAvailableAt },
+    HttpStatus.TOO_MANY_REQUESTS,
+  );
+
+// logs는 오래된 순. 상한에 닿았으면 오래된 기록부터 기간이 지나 상한 아래로 내려가는 시각을 알려 줌
+const assertUnderLimit = (
+  logs: StudentEmailSendLogRow[],
+  weight: (log: StudentEmailSendLogRow) => number,
+  limit: number,
+  message: string,
+): void => {
+  let total = logs.reduce((sum, log) => sum + weight(log), 0);
+  if (total < limit) return;
+
+  for (const log of logs) {
+    total -= weight(log);
+    if (total < limit) {
+      throw tooManyRequests(
+        message,
+        new Date(log.createdAt.getTime() + VERIFICATION_SEND_WINDOW_MS),
+      );
+    }
+  }
+};
 
 const hashEquals = (expected: string, actual: string): boolean => {
   const a = Buffer.from(expected);
