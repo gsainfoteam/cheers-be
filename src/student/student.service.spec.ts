@@ -403,16 +403,6 @@ describe("StudentService", () => {
             file_name: "a.pdf",
           },
         ],
-        [
-          "a file with a url",
-          {
-            kind: "cv",
-            source: "file",
-            key: tempKey,
-            file_name: "a.pdf",
-            url: "https://a.com",
-          },
-        ],
       ])("returns 400 for %s", async (_, attachment) => {
         await expect(
           service.saveInfo(
@@ -462,13 +452,100 @@ describe("StudentService", () => {
 
       it("keeps the confirmed file when the transaction fails", async () => {
         fileService.confirmUpload.mockResolvedValue(finalKey);
+        contactRepository.upsert.mockRejectedValueOnce(new Error("db down"));
+
+        await expect(
+          service.saveInfo(userPk, fileRequest(tempKey)),
+        ).rejects.toThrow("db down");
+
+        expect(fileService.confirmUpload).toHaveBeenCalled();
+        expect(fileService.deleteFile).not.toHaveBeenCalled();
+      });
+
+      it("does not move new files when the department is invalid", async () => {
         departmentRepository.findByPkAndEmailDomain.mockResolvedValue(null);
 
         await expect(
           service.saveInfo(userPk, fileRequest(tempKey)),
-        ).rejects.toBeInstanceOf(BadRequestException);
+        ).rejects.toThrow(
+          new BadRequestException("Department does not belong to your school"),
+        );
 
-        expect(fileService.deleteFile).not.toHaveBeenCalled();
+        expect(fileService.confirmUpload).not.toHaveBeenCalled();
+      });
+
+      it("does not move new files when a reused key is not in my current attachments", async () => {
+        await expect(
+          service.saveInfo(
+            userPk,
+            request({
+              attachments: [
+                {
+                  kind: "cv",
+                  source: "file",
+                  key: tempKey,
+                  file_name: "a.pdf",
+                },
+                {
+                  kind: "portfolio",
+                  source: "file",
+                  key: `attachment/${userPk}/gone.pdf`,
+                  file_name: "b.pdf",
+                },
+              ],
+            }),
+          ),
+        ).rejects.toThrow(new BadRequestException("Invalid file key"));
+
+        expect(fileService.confirmUpload).not.toHaveBeenCalled();
+      });
+
+      it("accepts the attachments of the info response sent back as they are", async () => {
+        studentRepository.findByUserPkWithLatestProfile.mockResolvedValue({
+          student: studentRow,
+          latest: {
+            ...latest,
+            attachments: [
+              {
+                kind: "portfolio",
+                source: "link",
+                url: "https://portfolio.example.com",
+                fileName: null,
+              },
+              {
+                kind: "cv",
+                source: "file",
+                url: finalKey,
+                fileName: "이력서.pdf",
+              },
+            ],
+          },
+        });
+
+        await service.saveInfo(
+          userPk,
+          request({
+            attachments: [
+              {
+                kind: "portfolio",
+                source: "link",
+                url: "https://portfolio.example.com",
+                file_name: null,
+                key: null,
+              },
+              {
+                kind: "cv",
+                source: "file",
+                url: "https://s3/presigned",
+                file_name: "이력서.pdf",
+                key: finalKey,
+              },
+            ] as unknown as SaveStudentInfoRequestDto["attachments"],
+          }),
+        );
+
+        expect(fileService.confirmUpload).not.toHaveBeenCalled();
+        expect(profileRepository.insert).not.toHaveBeenCalled();
       });
 
       it("returns the confirmUpload error and does not open the transaction", async () => {

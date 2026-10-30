@@ -47,6 +47,31 @@ describe("SaveStudentInfoRequestDto", () => {
     expect(dto.attachments?.[0].file_name).toBe("이력서.pdf");
   });
 
+  it("accepts the attachments of the info response sent back as they are", async () => {
+    const { errors } = await validateBody(
+      body({
+        attachments: [
+          {
+            kind: "portfolio",
+            source: "link",
+            url: "https://a.com",
+            file_name: null,
+            key: null,
+          },
+          {
+            kind: "cv",
+            source: "file",
+            url: "https://s3/presigned?X-Amz-Signature=a",
+            file_name: "이력서.pdf",
+            key: "attachment/u/a.pdf",
+          },
+        ],
+      }),
+    );
+
+    expect(errors).toEqual([]);
+  });
+
   it("trims interest and activity entries", async () => {
     const { dto, errors } = await validateBody(
       body({ interests: [" 반도체 "], activities: [" 학부 연구생"] }),
