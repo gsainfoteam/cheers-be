@@ -7,6 +7,7 @@ import { SignupStepGuard } from "@src/auth/guard/signup-step.guard";
 import { UserTypeGuard } from "@src/auth/guard/user-type.guard";
 import { BaseResultDto } from "@src/global/dto/base-result.dto";
 import { DepartmentListResponseDto } from "./dto/departments.dto";
+import { InterestListResponseDto } from "./dto/interests.dto";
 import { SignupCompleteResponseDto } from "@src/user/dto/signup-complete.dto";
 import { SaveStudentInfoRequestDto } from "./dto/save-student-info.dto";
 import { SendCodeRequestDto, SendCodeResponseDto } from "./dto/send-code.dto";
@@ -48,6 +49,12 @@ export class StudentController {
     @CurrentUser() user: UserContext,
   ): Promise<DepartmentListResponseDto> {
     return this.studentService.getDepartments(user.userPk);
+  }
+
+  @Get("/interests")
+  @SignupStep({ step: "profile", allowActive: true })
+  getInterests(): InterestListResponseDto {
+    return this.studentService.getInterests();
   }
 
   @Post("/info")

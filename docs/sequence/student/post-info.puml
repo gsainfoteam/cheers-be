@@ -40,7 +40,8 @@ alt body 검증 실패
 end
 note right of Pipe
   name 1~64자 / department_id 정수
-  interests 1~20개 / activities 0~20개: 항목마다 trim 후 1~50자, 중복 불가
+  interests(string[]) 1~20개 / activities 0~20개: 항목마다 trim 후 1~50자, 중복 불가
+  interests 는 GET /interests 목록 밖의 값(사용자가 직접 입력)도 받음
   attachments 최대 10개: kind cv | portfolio, source = link 만 (file 은 CRB-38),
     url http(s) 2048자 이하
   contact: email_enabled · kakao_enabled boolean, email 형식,
