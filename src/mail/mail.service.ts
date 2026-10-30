@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { isEmail } from "class-validator";
 import { SlackService } from "nestjs-slack";
 import { createTransport, Transporter } from "nodemailer";
 import { MailResult, SendMailInput } from "./mail.types";
@@ -19,7 +20,15 @@ export class MailService {
     const fromName =
       this.configService.get<string>("MAIL_FROM_NAME") ?? "취얼스";
 
-    this.from = `"${fromName}" <${user}>`;
+    // 빈 값은 미설정으로 봄
+    const fromAddress = this.configService
+      .get<string>("MAIL_FROM_ADDRESS")
+      ?.trim();
+    if (fromAddress && !isEmail(fromAddress)) {
+      throw new Error("MAIL_FROM_ADDRESS must be a valid email address.");
+    }
+
+    this.from = `"${fromName}" <${fromAddress || user}>`;
 
     if (!user || !pass) {
       // 배포 환경에서는 메일 없이 서버가 뜨지 않게 막음
