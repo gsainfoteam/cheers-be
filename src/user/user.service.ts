@@ -235,29 +235,33 @@ export class UserService {
     return businessCardKey;
   }
 
-  // FK cascade가 없으므로 자식부터 삭제.
-  // 커피챗 요청은 가입을 마친(active) 재학생만 만들 수 있어 가입 중 유형 변경에서는 없음
-  private async deleteStudent(userPk: string, tx: TxType): Promise<void> {
+  // FK cascade가 없으므로 자식부터 삭제 (가입 미완료 계정 정리 CleanupService도 사용).
+  // 커피챗 요청은 가입을 마친(active) 재학생만 만들 수 있어 가입 중에는 없음
+  // 반환값: 지운 첨부 중 S3 파일의 key (유형 변경은 이전 동작대로 파일을 지우지 않고, 정리 스케줄러만 커밋 뒤 지움)
+  async deleteStudent(userPk: string, tx: TxType): Promise<string[]> {
     const student = await this.studentRepository.findByUserPk(userPk, tx);
-    if (!student) return;
+    if (!student) return [];
 
     await this.studentEmailVerificationRepository.deleteByStudentPk(
       student.pk,
       tx,
     );
+    const fileKeys =
+      await this.studentProfileAttachmentRepository.findFileKeysByStudentPk(
+        student.pk,
+        tx,
+      );
     await this.studentProfileAttachmentRepository.deleteByStudentPk(
       student.pk,
       tx,
     );
     await this.studentProfileRepository.deleteByStudentPk(student.pk, tx);
     await this.studentRepository.deleteByPk(student.pk, tx);
+    return fileKeys;
   }
 
   // 반환값: 지운 명함의 S3 key. 커피챗 요청은 active 현업자만 받을 수 있어 여기서는 없음
-  private async deleteGraduated(
-    userPk: string,
-    tx: TxType,
-  ): Promise<string | null> {
+  async deleteGraduated(userPk: string, tx: TxType): Promise<string | null> {
     const graduated = await this.graduatedRepository.findByUserPk(userPk, tx);
     if (!graduated) return null;
 

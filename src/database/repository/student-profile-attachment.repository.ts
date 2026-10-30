@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { TxType } from "@src/global/types/tx.types";
 import { studentProfileAttachment } from "../../../drizzle/schema/student-profile-attachment";
@@ -40,7 +40,7 @@ export class StudentProfileAttachmentRepository {
   DELETE FROM student_profile_attachment
   WHERE profile_pk IN (SELECT pk FROM student_profile WHERE student_pk = ?1);
    */
-  // 가입 중 유형 변경 때만 사용. 학생의 모든 프로필 버전에 속한 첨부를 지움
+  // 가입 중 유형 변경 · 가입 미완료 계정 정리 때만 사용. 학생의 모든 프로필 버전에 속한 첨부를 지움
   async deleteByStudentPk(studentPk: string, tx: TxType): Promise<void> {
     await tx
       .delete(studentProfileAttachment)
@@ -53,5 +53,33 @@ export class StudentProfileAttachmentRepository {
             .where(eq(studentProfile.studentPk, studentPk)),
         ),
       );
+  }
+
+  /*
+  SELECT url FROM student_profile_attachment
+  WHERE source = 'file' AND profile_pk IN (SELECT pk FROM student_profile WHERE student_pk = ?1);
+   */
+  // 학생의 모든 프로필 버전에 있는 S3 파일 key. 첨부를 지우기 전에 조회해 커밋 뒤 S3에서 지움
+  async findFileKeysByStudentPk(
+    studentPk: string,
+    tx: TxType,
+  ): Promise<string[]> {
+    const result = await tx
+      .select({ url: studentProfileAttachment.url })
+      .from(studentProfileAttachment)
+      .where(
+        and(
+          eq(studentProfileAttachment.source, "file"),
+          inArray(
+            studentProfileAttachment.profilePk,
+            tx
+              .select({ pk: studentProfile.pk })
+              .from(studentProfile)
+              .where(eq(studentProfile.studentPk, studentPk)),
+          ),
+        ),
+      );
+
+    return result.map((row) => row.url);
   }
 }

@@ -100,6 +100,7 @@ describe("UserService", () => {
   };
   const studentProfileRepository = { deleteByStudentPk: jest.fn() };
   const studentProfileAttachmentRepository = {
+    findFileKeysByStudentPk: jest.fn().mockResolvedValue([]),
     deleteByStudentPk: jest.fn(),
   };
   const studentEmailVerificationRepository = { deleteByStudentPk: jest.fn() };

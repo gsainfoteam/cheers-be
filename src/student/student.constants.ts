@@ -8,6 +8,9 @@ export const VERIFICATION_RESEND_COOLDOWN_MS = 60 * 1000;
 export const VERIFICATION_MAX_ATTEMPTS = 5;
 // 아래 상한을 세는 기간 (최근 24시간)
 export const VERIFICATION_SEND_WINDOW_MS = 24 * 60 * 60 * 1000;
+// 전송 기록 보존 기간 (스케줄러가 지움). 상한을 세는 기간보다 길게 둬서 경계의 기록이 먼저 지워지지 않게 함
+export const VERIFICATION_SEND_LOG_RETENTION_MS =
+  2 * VERIFICATION_SEND_WINDOW_MS;
 // 기간 안에 한 유저가 보낼 수 있는 횟수
 export const VERIFICATION_MAX_SENDS_PER_USER = 5;
 // 기간 안에 한 이메일로 보낼 수 있는 횟수 (모든 계정 합산)

@@ -42,6 +42,15 @@ const isWithdrawalDue = (cutoffs: WithdrawalCutoffs) =>
     ),
   );
 
+// 가입 미완료 계정 정리 대상: 가입 후 · 마지막 활동 후 모두 일정 시간이 지난 pending 유저.
+// 탈퇴 요청 여부와 soft delete 여부는 보지 않음 (탈퇴 스케줄러가 먼저 처리했어도 남은 행까지 지움)
+const isIncompleteSignupDue = (cutoff: Date) =>
+  and(
+    eq(users.status, "pending"),
+    lte(users.createdAt, cutoff),
+    lte(users.lastActiveAt, cutoff),
+  );
+
 // 이 pk의 사용 중인 계정 (조건은 user.sql.ts의 isActiveAccount)
 const isActiveAccountPk = (userPk: string) =>
   and(eq(users.pk, userPk), isActiveAccount);
@@ -224,6 +233,59 @@ export class UserRepository {
       .for("update", { skipLocked: true });
 
     return result[0] ?? null;
+  }
+
+  /*
+  SELECT pk FROM users WHERE status = 'pending' AND created_at <= ?1 AND last_active_at <= ?1
+  AND pk NOT IN (?3) ORDER BY created_at LIMIT ?2;
+   */
+  // 가입 미완료 계정 정리 스케줄러. 이번 실행에서 이미 시도한 유저는 빼고 조회
+  async findIncompleteSignupPks(
+    cutoff: Date,
+    limit: number,
+    excludePks: string[],
+  ): Promise<string[]> {
+    const result = await this.dbService.db
+      .select({ pk: users.pk })
+      .from(users)
+      .where(
+        and(
+          isIncompleteSignupDue(cutoff),
+          excludePks.length > 0 ? notInArray(users.pk, excludePks) : undefined,
+        ),
+      )
+      .orderBy(asc(users.createdAt))
+      .limit(limit);
+
+    return result.map((row) => row.pk);
+  }
+
+  /*
+  SELECT * FROM users WHERE pk = ?1 AND status = 'pending' AND created_at <= ?2 AND last_active_at <= ?2
+  FOR UPDATE SKIP LOCKED;
+   */
+  // 삭제할 유저를 잠금. 다른 인스턴스 · 탈퇴 스케줄러가 처리 중이거나 같은 유저가 로그인 · 가입 진행 중이면
+  // 기다리지 않고 null. 잠근 뒤 다시 확인하므로 그 사이 가입을 마치거나 활동했으면 null
+  async lockIncompleteSignup(
+    userPk: string,
+    cutoff: Date,
+    tx: TxType,
+  ): Promise<UserRow | null> {
+    const result = await tx
+      .select()
+      .from(users)
+      .where(and(eq(users.pk, userPk), isIncompleteSignupDue(cutoff)))
+      .for("update", { skipLocked: true });
+
+    return result[0] ?? null;
+  }
+
+  /*
+  DELETE FROM users WHERE pk = ?1;
+   */
+  // 가입 미완료 계정 정리: hard delete. FK가 NO ACTION이라 자식 행을 모두 지운 뒤에 호출
+  async deleteByPk(userPk: string, tx: TxType): Promise<void> {
+    await tx.delete(users).where(eq(users.pk, userPk));
   }
 
   /*
