@@ -24,7 +24,12 @@ import {
   GRADUATED_FALLBACK_NAME,
   WITHDRAWN_ACCOUNT_NAME,
 } from "./cheers.constants";
-import { randomSeed, toOffset, toRequestStatus } from "./cheers.utils";
+import {
+  randomSeed,
+  resolveWebBaseUrl,
+  toOffset,
+  toRequestStatus,
+} from "./cheers.utils";
 import {
   CreateRequestDto,
   CreateRequestResponseDto,
@@ -33,7 +38,7 @@ import { CheersCardDto, GraduatedListQueryDto } from "./dto/graduated-list.dto";
 import { PageResponseDto, PaginationQueryDto } from "./dto/pagination.dto";
 import { SentRequestDetailDto, SentRequestDto } from "./dto/sent-request.dto";
 
-// API 명세 "커피챗 · 재학생" 섹션. 받은 요청 · 연락처 공유(현업자)는 CRB-42
+// API 명세 "커피챗 · 재학생" 섹션. 받은 요청 · 연락처 공유(현업자)는 CheersGraduatedService
 @Injectable()
 export class CheersStudentService {
   private readonly logger = new Logger(CheersStudentService.name);
@@ -49,20 +54,7 @@ export class CheersStudentService {
     private readonly coffeeChatRequestRepository: CoffeeChatRequestRepository,
     private readonly notificationService: NotificationService,
   ) {
-    const webBaseUrl = configService
-      .get<string>("WEB_BASE_URL")
-      ?.trim()
-      .replace(/\/+$/, "");
-    if (!webBaseUrl) {
-      // 배포 환경에서는 링크 없는 알림 메일이 나가지 않게 막음
-      if (configService.get<string>("NODE_ENV") === "production") {
-        throw new Error("WEB_BASE_URL is required in production.");
-      }
-      this.logger.warn(
-        "WEB_BASE_URL is not set. Coffee chat mails will be sent without a link.",
-      );
-    }
-    this.webBaseUrl = webBaseUrl || null;
+    this.webBaseUrl = resolveWebBaseUrl(configService, this.logger);
 
     // 빈 값은 미설정으로 봄
     const raw = configService.get<string>("CHEERS_RANDOM_SEED_MINUTES")?.trim();

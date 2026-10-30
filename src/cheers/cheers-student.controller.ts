@@ -23,7 +23,7 @@ import { PageResponseDto, PaginationQueryDto } from "./dto/pagination.dto";
 import { SentRequestDetailDto, SentRequestDto } from "./dto/sent-request.dto";
 
 // API 명세 "커피챗 · 재학생" 섹션. 가입을 마친 재학생만 (현업자 → 403).
-// 현업자 쪽(/api/v1/cheers/received)은 별도 컨트롤러 (CRB-42)
+// 현업자 쪽(/api/v1/cheers/received)은 CheersGraduatedController
 @Controller("/api/v1/cheers")
 export class CheersStudentController {
   constructor(private readonly cheersStudentService: CheersStudentService) {}
