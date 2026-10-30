@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { and, asc, eq, gt, sql } from "drizzle-orm";
+import { and, asc, eq, gt, lt, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { TxType } from "@src/global/types/tx.types";
 import { studentEmailSendLog } from "../../../drizzle/schema/student-email-send-log";
@@ -86,10 +86,23 @@ export class StudentEmailSendLogRepository {
   /*
   DELETE FROM student_email_send_log WHERE user_pk = ?1;
    */
-  // 회원 탈퇴: 입력한 gist 이메일이 남아 있어 같이 지움
+  // 회원 탈퇴 · 가입 미완료 계정 정리: 입력한 gist 이메일이 남아 있어 같이 지움
   async deleteByUserPk(userPk: string, tx: TxType): Promise<void> {
     await tx
       .delete(studentEmailSendLog)
       .where(eq(studentEmailSendLog.userPk, userPk));
+  }
+
+  /*
+  DELETE FROM student_email_send_log WHERE created_at < ?1;
+   */
+  // 보존 기간이 지난 기록 정리 (스케줄러). 상한 계산은 최근 24시간만 보고, 행에 이메일 원문이 있어 오래 두지 않음.
+  // 유형 변경에서는 지우지 않음 (지우면 상한이 초기화됨). 지운 행 수 반환
+  async deleteOlderThan(before: Date, tx: TxType): Promise<number> {
+    const result = await tx
+      .delete(studentEmailSendLog)
+      .where(lt(studentEmailSendLog.createdAt, before));
+
+    return result.rowCount ?? 0;
   }
 }

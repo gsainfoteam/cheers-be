@@ -57,4 +57,12 @@ export class UserConsentRepository {
         ),
       );
   }
+
+  /*
+  DELETE FROM user_consent WHERE user_pk = ?1;
+   */
+  // 가입 미완료 계정 정리 (hard delete)
+  async deleteByUserPk(userPk: string, tx: TxType): Promise<void> {
+    await tx.delete(userConsent).where(eq(userConsent.userPk, userPk));
+  }
 }
