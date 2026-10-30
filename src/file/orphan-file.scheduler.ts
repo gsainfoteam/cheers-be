@@ -18,7 +18,7 @@ export class OrphanFileScheduler {
     try {
       const result = await this.orphanFileService.cleanup();
       this.logger.log(
-        `Orphan files: scanned ${result.scanned}, orphan ${result.orphans}, deleted ${result.deleted}, failed ${result.failed}`,
+        `Orphan files: scanned ${result.scanned}, orphan ${result.orphans}, deleted ${result.deleted}, failed ${result.failed}, stopped ${result.stopped}`,
       );
     } catch (e) {
       this.logger.error(

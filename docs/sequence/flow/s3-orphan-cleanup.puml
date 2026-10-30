@@ -18,9 +18,10 @@ participant "GraduatedRepository" as GraduatedRepository
 participant "StudentProfileAttachmentRepository" as AttachmentRepository
 database PostgreSQL
 participant "S3"
+participant "Slack"
 
 Scheduler -> Service: cleanup()
-Service -> Service: cutoff = now - 24시간\ndeleteEnabled = S3_ORPHAN_DELETE_ENABLED === "true" (기본 false: 로그만)\nmaxDeletes = S3_ORPHAN_MAX_DELETES (기본 1000)
+Service -> Service: cutoff = now - 24시간\ndeleteEnabled = S3_ORPHAN_DELETE_ENABLED === "true" (기본 false: 로그만)\nmaxDeletes = S3_ORPHAN_MAX_DELETES (기본 1000)\nmaxRatio = S3_ORPHAN_MAX_RATIO (기본 0.5)
 note right of Service
   허용한 prefix만 처리: business-card/ · attachment/.
   Record<FileDirectory, 참조 조회 함수>라 새 디렉터리를 추가하면 조회 함수 없이는 컴파일되지 않음.
@@ -64,25 +65,34 @@ loop prefix마다 (business-card/, attachment/)
         note over Service: 참조를 모르면 지우지 않음. 삭제 없이 실행 중단 → 로그, 다음 주 재시도
       end
       PostgreSQL --> Service: 참조 중인 key
-      Service -> Service: 후보에 추가 (오래됐고 참조 없는 key)
-    end
-
-    opt 후보 수 > maxDeletes
-      note over Service
-        하나도 지우지 않고 중단, 에러 로그.
-        DB와 버킷이 어긋난 설정(로컬 DB + 실제 버킷 등)이면 전부 고아로 보이므로
-        일부만 지우지 않고 사람이 확인. 정상적으로 많으면 env를 올려서 실행
-      end note
-      Service --> Scheduler: 예외 (Too many orphan candidates)
+      Service -> Service: 오래된 파일 수 · 고아 수를 더함
+      alt deleteEnabled = false
+        Service -> Service: 고아 key를 전부 로그로 남김 (Dry run)
+      else deleteEnabled = true
+        Service -> Service: 지울 key에 추가 (최대 maxDeletes개만 보관)
+      end
     end
   end
 end
-note over Service, S3: 목록 · DB 조회를 모두 마친 뒤에만 삭제 단계로 넘어감
+note over Service, S3: 목록 · DB 조회를 모두 마친 뒤에만 아래로 넘어감
+
+Service -> Service: 설정 오류 검사
+note right of Service
+  DB가 비었거나 다른 환경을 가리키면 쿼리는 성공하고 파일이 전부 고아로 보임.
+  버킷 버전 관리가 꺼져 있어 지우면 복구할 수 없음. 아래 중 하나면 중단:
+  - 오래된 파일 중 참조가 하나도 없음 (env로 끌 수 없음)
+  - 고아 10개 이상 + 고아 / 오래된 파일 > maxRatio
+end note
 
 alt deleteEnabled = false (기본)
-  Service -> Service: 후보 key를 로그로 남김 (Dry run)
-else deleteEnabled = true
-  loop 후보 key마다
+  opt 설정 오류 검사에 걸림
+    Service -> Service: 경고 로그 (Dry run: would stop)
+  end
+else 설정 오류 검사에 걸림
+  Service -> Slack: 알림 (Orphan file cleanup stopped)
+  note right of Service: 하나도 지우지 않음. 원인을 해결할 때까지 다음 실행에서도 중단. 알림 실패는 로그만
+else 삭제
+  loop 지울 key마다 (최대 maxDeletes개)
     Service -> FileService: deleteFile(key)
     FileService -> S3: DeleteObject
     alt 삭제 실패
@@ -91,11 +101,15 @@ else deleteEnabled = true
       note over Service: 실패 건수를 세고 다음 key로. DB에 참조가 없어 다음 주에 다시 후보가 됨
     end
   end
+  opt 고아 수 > maxDeletes
+    Service -> Slack: 알림 (Orphan files exceed the limit)
+    note right of Service: 지운 만큼 진행. 나머지는 다음 실행에서 지움
+  end
 end
 
-Service --> Scheduler: { 확인 수, 후보 수, 삭제 수, 실패 수 }
-Scheduler -> Scheduler: 로그 (Orphan files: scanned N, orphan N, deleted N, failed N)
-alt cleanup 자체가 실패 (S3 · DB 오류, 후보 상한 초과)
+Service --> Scheduler: { 확인 수, 고아 수, 삭제 수, 실패 수, 중단 여부 }
+Scheduler -> Scheduler: 로그 (Orphan files: scanned N, orphan N, deleted N, failed N, stopped B)
+alt cleanup 자체가 실패 (S3 · DB 오류)
   note over Scheduler: 에러 로그만 남기고 다음 주에 다시 실행
 end
 

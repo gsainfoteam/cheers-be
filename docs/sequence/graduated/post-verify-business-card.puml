@@ -90,7 +90,8 @@ alt 트랜잭션 실패 (401 · 403 포함)
   note right of Service
     새 파일을 지우지 않고 남김 (재학생 첨부와 같은 방식).
     COMMIT 직후 연결이 끊겨 예외가 나면 DB 는 커밋됐는데 파일만 지워지기 때문.
-    참조가 없는 파일은 flow/s3-orphan-cleanup.puml 이 정리
+    참조가 없는 파일은 flow/s3-orphan-cleanup.puml 이 정리.
+    같은 key 로 다시 보내면 tmp/ 원본이 이미 이동돼 400 File not uploaded (새 업로드 URL 필요)
   end note
   Service -[#red]-> Client: 원래 예외 (401 / 403 / 500)
 end
