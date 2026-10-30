@@ -113,15 +113,6 @@ export class StudentService {
         throw new NotFoundException("Verified student email not found");
       }
 
-      // 고정 목록 밖의 값은 거부. 목록이 생기기 전에 직접 입력해 저장된 값은 현재 버전에 있으면 그대로 허용
-      const kept = new Set(current.latest?.profile.interests ?? []);
-      const unknown = this.interestService
-        .findUnknown(values.interests)
-        .find((v) => !kept.has(v));
-      if (unknown !== undefined) {
-        throw new BadRequestException(`Invalid interest: ${unknown}`);
-      }
-
       const department = await this.departmentRepository.findByPkAndEmailDomain(
         values.departmentPk,
         emailDomain(current.student.email),

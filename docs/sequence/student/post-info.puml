@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title POST /api/v1/user/student/info
-caption CRB-31, CRB-52, CRB-55 · 재학생 추가 정보 저장 · 수정 (바뀌었을 때만 새 버전), 이름은 첫 저장 때 입력 후 수정 불가, 연락 설정, 가입 완료 시 토큰 재발급
+caption CRB-31, CRB-52 · 재학생 추가 정보 저장 · 수정 (바뀌었을 때만 새 버전), 이름은 첫 저장 때 입력 후 수정 불가, 연락 설정, 가입 완료 시 토큰 재발급
 
 actor Client
 participant "SignupStepGuard\nUserTypeGuard" as Guard
@@ -19,7 +19,6 @@ participant "StudentService" as Service
 participant "UserRepository" as UserRepository
 participant "StudentRepository" as StudentRepository
 participant "DepartmentRepository" as DepartmentRepository
-participant "InterestService" as InterestService
 participant "StudentProfileRepository" as ProfileRepository
 participant "StudentProfileAttachmentRepository" as AttachmentRepository
 participant "CoffeeChatContactRepository" as ContactRepository
@@ -42,7 +41,7 @@ end
 note right of Pipe
   name 1~64자 / department_id 정수
   interests(string[]) 1~20개 / activities 0~20개: 항목마다 trim 후 1~50자, 중복 불가
-  (interests 가 interest 테이블 목록 안의 값인지는 서비스에서 검사)
+  interests 는 GET /interests 목록 밖의 값(사용자가 직접 입력)도 받음
   attachments 최대 10개: kind cv | portfolio, source = link 만 (file 은 CRB-38),
     url http(s) 2048자 이하
   contact: email_enabled · kakao_enabled boolean, email 형식,
@@ -84,16 +83,6 @@ group transaction (DatabaseService.db.transaction)
   alt 재학생 행 없음 (가드 통과 뒤 다른 기기에서 현업자로 유형 변경)
     Service -[#red]-> Client: 403 User type not allowed
   end
-
-  Service -> InterestService: findUnknown(interests)
-  InterestService --> Service: 메모리 목록에 없는 값[] (DB 조회 없음)
-  alt 목록에 없고, 내 현재 버전(latest)의 interests 에도 없는 값이 있음
-    Service -[#red]-> Client: 400 Invalid interest: <value>
-  end
-  note right of Service
-    CRB-55 이전에 직접 입력해 저장된 값은 목록 밖이라도,
-    내 현재 버전에 이미 있으면 그대로 다시 보낼 수 있음 (마이페이지 수정 호환)
-  end note
 
   Service -> DepartmentRepository: findByPkAndEmailDomain(department_id, student.email 의 @ 뒤, tx)
   DepartmentRepository -> PostgreSQL: SELECT d.* FROM department d JOIN school s ON s.pk = d.school_pk\nWHERE d.pk = ? AND s.email_domain = ?

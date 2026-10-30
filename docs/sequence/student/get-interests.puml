@@ -33,7 +33,8 @@ InterestService --> Service: name[]
 note right of InterestService
   서버 기동 시 interest 테이블에서 한 번 읽어 메모리에 보관한 목록 (DB 조회 없음)
   flow/interest-cache-bootstrap.puml
-  표시 이름 = 저장 값 (문자열 그대로), 순서는 sort_order
+  화면에 띄울 추천 목록일 뿐, 저장 API 가 이 값만 받는 것은 아님
+  순서는 sort_order
 end note
 Service --> Controller: { interests: string[] }
 Controller --> Client: 200 { interests: ["반도체", "소프트웨어", ...] }

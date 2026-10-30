@@ -31,22 +31,11 @@ describe("InterestService", () => {
     expect(service.getNames()).toEqual(["반도체"]);
   });
 
-  it("findUnknown returns the values outside the list in the sent order", async () => {
-    interestRepository.findAllNames.mockResolvedValue(["반도체", "소프트웨어"]);
-    await service.onModuleInit();
-
-    expect(service.findUnknown(["소프트웨어", "b", "반도체", "a"])).toEqual([
-      "b",
-      "a",
-    ]);
-  });
-
-  it("starts with an empty list so every value is unknown", async () => {
+  it("starts with an empty list", async () => {
     interestRepository.findAllNames.mockResolvedValue([]);
     await service.onModuleInit();
 
     expect(service.getNames()).toEqual([]);
-    expect(service.findUnknown(["반도체"])).toEqual(["반도체"]);
   });
 
   it("fails startup when the DB read fails", async () => {
