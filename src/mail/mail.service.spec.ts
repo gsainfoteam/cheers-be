@@ -57,6 +57,50 @@ describe("MailService", () => {
     expect(result).toEqual({ success: true, messageId: "<id@gmail.com>" });
   });
 
+  it("sends from MAIL_FROM_ADDRESS while authenticating as MAIL_USER", async () => {
+    sendMail.mockResolvedValue({ messageId: "<id@gmail.com>" });
+    const service = createService({
+      ...credentials,
+      MAIL_FROM_ADDRESS: "hello@cheers.example.com",
+    });
+
+    await service.send(input);
+
+    expect(createTransport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        auth: { user: "cheers@gmail.com", pass: "app-password" },
+      }),
+    );
+    expect(sendMail).toHaveBeenCalledWith({
+      from: '"취얼스" <hello@cheers.example.com>',
+      ...input,
+    });
+  });
+
+  it.each(["", "   "])(
+    "falls back to MAIL_USER when MAIL_FROM_ADDRESS is blank (%j)",
+    async (blank) => {
+      sendMail.mockResolvedValue({ messageId: "<id@gmail.com>" });
+      const service = createService({
+        ...credentials,
+        MAIL_FROM_ADDRESS: blank,
+      });
+
+      await service.send(input);
+
+      expect(sendMail).toHaveBeenCalledWith({
+        from: '"취얼스" <cheers@gmail.com>',
+        ...input,
+      });
+    },
+  );
+
+  it("throws on startup when MAIL_FROM_ADDRESS is not an email", () => {
+    expect(() =>
+      createService({ ...credentials, MAIL_FROM_ADDRESS: "not-an-email" }),
+    ).toThrow("MAIL_FROM_ADDRESS must be a valid email address.");
+  });
+
   it("returns failure instead of throwing when sending fails", async () => {
     sendMail.mockRejectedValue(new Error("SMTP error"));
     const service = createService(credentials);
