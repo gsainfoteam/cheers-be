@@ -10,6 +10,7 @@
 | [flow/withdrawal-purge.puml](flow/withdrawal-purge.puml)                                               | 스케줄러: 탈퇴 유예기간 만료 처리                  |
 | [flow/file-upload.puml](flow/file-upload.puml)                                                         | 파일 업로드 · 확정 · 조회 · 삭제                   |
 | [flow/jwt-signing-key-bootstrap.puml](flow/jwt-signing-key-bootstrap.puml)                             | 서버 기동 시 JWT 서명 키 로드 · 생성               |
+| [flow/interest-cache-bootstrap.puml](flow/interest-cache-bootstrap.puml)                               | 서버 기동 시 관심 분야 목록을 메모리에 로드        |
 | [user/post-oauth-login.puml](user/post-oauth-login.puml)                                               | `POST /api/v1/user/oauth/login`                    |
 | [user/post-refresh.puml](user/post-refresh.puml)                                                       | `POST /api/v1/user/refresh`                        |
 | [user/get-info.puml](user/get-info.puml)                                                               | `GET /api/v1/user/info`                            |
@@ -20,6 +21,7 @@
 | [student/post-verify-send-code.puml](student/post-verify-send-code.puml)                               | `POST /api/v1/user/student/verify/send-code`       |
 | [student/post-verify-code.puml](student/post-verify-code.puml)                                         | `POST /api/v1/user/student/verify/code`            |
 | [student/get-departments.puml](student/get-departments.puml)                                           | `GET /api/v1/user/student/departments`             |
+| [student/get-interests.puml](student/get-interests.puml)                                               | `GET /api/v1/user/student/interests`               |
 | [student/post-info.puml](student/post-info.puml)                                                       | `POST /api/v1/user/student/info`                   |
 | [file/post-business-card-upload-url.puml](file/post-business-card-upload-url.puml)                     | `POST /api/v1/file/business-card/upload-url`       |
 | [file/post-attachment-upload-url.puml](file/post-attachment-upload-url.puml)                           | `POST /api/v1/file/attachment/upload-url`          |

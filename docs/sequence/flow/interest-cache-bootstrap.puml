@@ -1,0 +1,37 @@
+@startuml interest-cache-bootstrap
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title 공통 흐름: 서버 기동 시 관심 분야 목록을 메모리에 로드
+caption CRB-55 · src/student/interest.service.ts
+
+participant "start:prod" as Entrypoint
+participant "InterestService" as InterestService
+participant "InterestRepository" as InterestRepository
+database PostgreSQL
+
+== onModuleInit — 요청을 받기 전에 끝남 ==
+
+Entrypoint -> InterestService: app.listen → init → onModuleInit()
+InterestService -> InterestRepository: findAll()
+InterestRepository -> PostgreSQL: SELECT name FROM interest ORDER BY sort_order, pk
+alt DB 오류
+  PostgreSQL -[#red]-> Entrypoint: 예외 → 기동 실패 → K8s가 재시작
+end
+PostgreSQL --> InterestRepository: rows
+InterestRepository --> InterestService: name[]
+InterestService -> InterestService: 메모리에 보관 (읽기 전용 배열 + Set)
+note right of InterestService
+  이후 요청은 DB를 조회하지 않음.
+  목록 추가 · 수정 · 삭제는 어드민 페이지(CRB-58)에서 하고,
+  바뀐 목록은 서버를 다시 띄우거나 캐시를 갱신해야 반영됨
+  빈 목록이면 경고 로그만 남기고 기동 (재학생 정보 저장은 모두 400)
+end note
+
+@enduml
