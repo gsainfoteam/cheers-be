@@ -40,7 +40,7 @@ export class StudentAttachmentRequestDto {
 }
 
 export class SaveStudentInfoRequestDto {
-  // 내 정보의 name이 null일 때만 필수 (서비스에서 검사). 이미 있으면 무시
+  // 내 정보의 name이 null일 때(첫 저장)만 필수 (서비스에서 검사). 이미 있으면 무시
   @IsOptional()
   @Transform(trim)
   @IsString()

@@ -33,7 +33,6 @@ export class GoogleVerifier implements OAuthVerifier {
         typeof payload.email === "string" && payload.email_verified === true
           ? payload.email
           : null,
-      name: typeof payload.name === "string" ? payload.name : null,
     };
   }
 }
