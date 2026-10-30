@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   GoneException,
+  HttpException,
   HttpStatus,
   NotFoundException,
 } from "@nestjs/common";
@@ -10,6 +11,10 @@ import { createHmac } from "node:crypto";
 import { JwtKeyService } from "@src/auth/jwt-key.service";
 import { DatabaseService } from "@src/database/database.service";
 import { SchoolRepository } from "@src/database/repository/school.repository";
+import {
+  StudentEmailSendLogRepository,
+  StudentEmailSendLogRow,
+} from "@src/database/repository/student-email-send-log.repository";
 import {
   StudentEmailVerificationRepository,
   StudentEmailVerificationRow,
@@ -55,6 +60,20 @@ const verification = (
   ...overrides,
 });
 
+const HOUR_MS = 60 * 60 * 1000;
+
+// n시간 전 전송 기록
+const sendLog = (
+  hoursAgo: number,
+  failedAttemptCount = 0,
+): StudentEmailSendLogRow => ({
+  pk: `log-${hoursAgo}`,
+  userPk,
+  email,
+  failedAttemptCount,
+  createdAt: new Date(now.getTime() - hoursAgo * HOUR_MS),
+});
+
 describe("StudentVerificationService", () => {
   const tx = {} as TxType;
   const order: string[] = [];
@@ -82,6 +101,12 @@ describe("StudentVerificationService", () => {
     incrementAttemptCount: jest.fn(),
     deleteByStudentPk: jest.fn(),
   };
+  const sendLogRepository = {
+    findRecentByUserPk: jest.fn(),
+    findRecentByEmail: jest.fn(),
+    insert: jest.fn(),
+    incrementFailedAttemptCount: jest.fn(),
+  };
   const jwtKeyService = { privateKey: "test-jwt-key" };
   const service = new StudentVerificationService(
     jwtKeyService as unknown as JwtKeyService,
@@ -90,7 +115,25 @@ describe("StudentVerificationService", () => {
     schoolRepository as unknown as SchoolRepository,
     studentRepository as unknown as StudentRepository,
     verificationRepository as unknown as StudentEmailVerificationRepository,
+    sendLogRepository as unknown as StudentEmailSendLogRepository,
   );
+
+  const expectTooManyRequests = async (
+    message: string,
+    retryAvailableAt: Date,
+  ) => {
+    const error = (await service
+      .sendCode(userPk, email)
+      .catch((e) => e)) as HttpException;
+    expect(error.getStatus()).toBe(HttpStatus.TOO_MANY_REQUESTS);
+    expect(error.getResponse()).toEqual({
+      message,
+      retry_available_at: retryAvailableAt,
+    });
+    expect(verificationRepository.upsert).not.toHaveBeenCalled();
+    expect(sendLogRepository.insert).not.toHaveBeenCalled();
+    expect(mailService.sendAsync).not.toHaveBeenCalled();
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -104,6 +147,8 @@ describe("StudentVerificationService", () => {
     studentRepository.findByUserPkForUpdate.mockResolvedValue(student);
     studentRepository.existsByEmailExcept.mockResolvedValue(false);
     verificationRepository.findByStudentPk.mockResolvedValue(null);
+    sendLogRepository.findRecentByUserPk.mockResolvedValue([]);
+    sendLogRepository.findRecentByEmail.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -147,6 +192,11 @@ describe("StudentVerificationService", () => {
       expect(mailedCode).toBeDefined();
       expect(row.code).toBe(hash(mailedCode!));
       expect(order).toEqual(["commit", "sendAsync"]);
+      // 틀린 횟수를 찾아 쌓을 수 있도록 인증 요청과 같은 시각으로 기록
+      expect(sendLogRepository.insert).toHaveBeenCalledWith(
+        { userPk, email, createdAt: now },
+        tx,
+      );
     });
 
     it("returns 400 for a domain that is not a registered school", async () => {
@@ -169,6 +219,10 @@ describe("StudentVerificationService", () => {
 
       const error = await service.sendCode(userPk, email).catch((e) => e);
       expect(error.getStatus()).toBe(HttpStatus.TOO_MANY_REQUESTS);
+      expect(error.getResponse()).toEqual({
+        message: "Resend is not available yet",
+        retry_available_at: new Date(now.getTime() + 1_000),
+      });
       expect(verificationRepository.upsert).not.toHaveBeenCalled();
       expect(mailService.sendAsync).not.toHaveBeenCalled();
     });
@@ -200,7 +254,93 @@ describe("StudentVerificationService", () => {
         ConflictException,
       );
       expect(verificationRepository.upsert).not.toHaveBeenCalled();
+      expect(sendLogRepository.insert).not.toHaveBeenCalled();
       expect(mailService.sendAsync).not.toHaveBeenCalled();
+    });
+
+    describe("daily limits", () => {
+      const hoursAgo = (count: number) =>
+        Array.from({ length: count }, (_, i) => sendLog(count - i));
+
+      it("looks only at the last 24 hours, with no reset at midnight", async () => {
+        await service.sendCode(userPk, email);
+
+        const since = new Date(now.getTime() - 24 * HOUR_MS);
+        expect(sendLogRepository.findRecentByUserPk).toHaveBeenCalledWith(
+          userPk,
+          since,
+          tx,
+        );
+        expect(sendLogRepository.findRecentByEmail).toHaveBeenCalledWith(
+          email,
+          since,
+          tx,
+        );
+      });
+
+      it("allows the 5th send of a user and the 10th send to an email", async () => {
+        sendLogRepository.findRecentByUserPk.mockResolvedValue(hoursAgo(4));
+        sendLogRepository.findRecentByEmail.mockResolvedValue(hoursAgo(9));
+
+        await service.sendCode(userPk, email);
+
+        expect(mailService.sendAsync).toHaveBeenCalled();
+      });
+
+      it("returns 429 on the 6th send of a user, retrying when the oldest send leaves the window", async () => {
+        sendLogRepository.findRecentByUserPk.mockResolvedValue(hoursAgo(5));
+
+        await expectTooManyRequests(
+          "Daily send limit exceeded",
+          new Date(now.getTime() + 19 * HOUR_MS),
+        );
+        expect(sendLogRepository.findRecentByEmail).not.toHaveBeenCalled();
+      });
+
+      it("returns 429 on the 11th send to an email across accounts", async () => {
+        sendLogRepository.findRecentByEmail.mockResolvedValue(hoursAgo(10));
+
+        await expectTooManyRequests(
+          "Daily send limit exceeded for this email",
+          new Date(now.getTime() + 14 * HOUR_MS),
+        );
+        expect(sendLogRepository.findRecentByEmail).toHaveBeenCalled();
+      });
+
+      it("allows a send with 9 failures across resends", async () => {
+        sendLogRepository.findRecentByUserPk.mockResolvedValue([
+          sendLog(3, 5),
+          sendLog(2, 4),
+        ]);
+
+        await service.sendCode(userPk, email);
+
+        expect(mailService.sendAsync).toHaveBeenCalled();
+      });
+
+      it("keeps failures across resends, retrying when enough of them leave the window", async () => {
+        sendLogRepository.findRecentByUserPk.mockResolvedValue([
+          sendLog(3, 5),
+          sendLog(2, 5),
+          sendLog(1, 0),
+        ]);
+
+        await expectTooManyRequests(
+          "Too many failed attempts",
+          new Date(now.getTime() + 21 * HOUR_MS),
+        );
+        expect(sendLogRepository.findRecentByEmail).not.toHaveBeenCalled();
+      });
+
+      it("does not count a 409 toward the limits", async () => {
+        studentRepository.existsByEmailExcept.mockResolvedValue(true);
+
+        await expect(service.sendCode(userPk, email)).rejects.toThrow(
+          ConflictException,
+        );
+        expect(sendLogRepository.findRecentByUserPk).not.toHaveBeenCalled();
+        expect(sendLogRepository.insert).not.toHaveBeenCalled();
+      });
     });
   });
 
@@ -220,6 +360,9 @@ describe("StudentVerificationService", () => {
         student.pk,
         tx,
       );
+      expect(
+        sendLogRepository.incrementFailedAttemptCount,
+      ).not.toHaveBeenCalled();
     });
 
     it.each([
@@ -244,6 +387,9 @@ describe("StudentVerificationService", () => {
       );
       expect(
         verificationRepository.incrementAttemptCount,
+      ).not.toHaveBeenCalled();
+      expect(
+        sendLogRepository.incrementFailedAttemptCount,
       ).not.toHaveBeenCalled();
     });
 
@@ -271,6 +417,10 @@ describe("StudentVerificationService", () => {
         });
         // 트랜잭션 안에서 던지지 않아야 시도 횟수가 커밋됨
         expect(order).toEqual(["commit"]);
+        // 재전송해도 남도록 그 코드의 전송 기록에 누적
+        expect(
+          sendLogRepository.incrementFailedAttemptCount,
+        ).toHaveBeenCalledWith(userPk, now, tx);
         expect(verificationRepository.deleteByStudentPk).not.toHaveBeenCalled();
         expect(studentRepository.markVerified).not.toHaveBeenCalled();
       },

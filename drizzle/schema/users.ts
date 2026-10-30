@@ -14,6 +14,7 @@ import { userConsent } from "./user-consent";
 import { student } from "./student";
 import { graduated } from "./graduated";
 import { coffeeChatContact } from "./coffee-chat-contact";
+import { studentEmailSendLog } from "./student-email-send-log";
 
 /*
 CREATE TABLE "users" (
@@ -80,4 +81,5 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   student: one(student),
   graduated: one(graduated),
   coffeeChatContact: one(coffeeChatContact),
+  studentEmailSendLogs: many(studentEmailSendLog),
 }));

@@ -5,6 +5,7 @@ import { UserContext } from "@src/auth/context/user-context";
 import { DatabaseService } from "@src/database/database.service";
 import { CoffeeChatContactRepository } from "@src/database/repository/coffee-chat-contact.repository";
 import { GraduatedRepository } from "@src/database/repository/graduated.repository";
+import { StudentEmailSendLogRepository } from "@src/database/repository/student-email-send-log.repository";
 import { StudentEmailVerificationRepository } from "@src/database/repository/student-email-verification.repository";
 import { StudentRepository } from "@src/database/repository/student.repository";
 import { UserOauthAccountRepository } from "@src/database/repository/user-oauth-account.repository";
@@ -38,6 +39,7 @@ export class WithdrawalService {
     private readonly userOauthAccountRepository: UserOauthAccountRepository,
     private readonly studentRepository: StudentRepository,
     private readonly studentEmailVerificationRepository: StudentEmailVerificationRepository,
+    private readonly studentEmailSendLogRepository: StudentEmailSendLogRepository,
     private readonly graduatedRepository: GraduatedRepository,
     private readonly coffeeChatContactRepository: CoffeeChatContactRepository,
   ) {
@@ -108,7 +110,7 @@ export class WithdrawalService {
   }
 
   // 지움: OAuth 계정, refresh token, 연락 설정(coffee_chat_contact), 명함 S3 파일 + key,
-  //       users.name / email, student.email (같은 학교 이메일로 재가입 가능하도록)과 진행 중인 학교 이메일 인증 요청
+  //       users.name / email, student.email (같은 학교 이메일로 재가입 가능하도록)과 진행 중인 학교 이메일 인증 요청 · 전송 기록
   // 남김: 약관 동의 이력, student / graduated 행, 재학생 프로필 버전과 첨부(링크), 현업자 프로필(닉네임 · 회사 · 부서 · 직무 · 해시태그 · 링크),
   //       커피챗 요청(공유된 연락처 shared_phone / shared_email 포함)과 알림 로그 — 상대방의 커피챗 기록이 참조함.
   //       첨부 파일 업로드가 생기면(CRB-18) S3 파일 처리를 함께 정할 것
@@ -128,6 +130,8 @@ export class WithdrawalService {
       await this.userOauthAccountRepository.deleteByUserPk(user.pk, tx);
       await this.authService.revokeAllTokens(user.pk, tx);
       await this.coffeeChatContactRepository.deleteByUserPk(user.pk, tx);
+      // 재학생이었다가 유형을 바꾼 유저에게도 기록이 남아 있어 유형과 상관없이 지움
+      await this.studentEmailSendLogRepository.deleteByUserPk(user.pk, tx);
       let businessCardKey: string | null = null;
       if (user.type === "student") {
         const student = await this.studentRepository.findByUserPk(user.pk, tx);
