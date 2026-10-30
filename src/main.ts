@@ -6,6 +6,7 @@ import { AllExceptionsFilter } from "./global/filters/all-exception.filter";
 import { LoggerService } from "@src/global/logger/logger.service";
 import { HttpLoggingInterceptor } from "@src/global/interceptors/http-logging.interceptor";
 import { SlackService } from "nestjs-slack";
+import { createCorsOptions } from "@src/global/cors/cors.config";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -15,6 +16,8 @@ async function bootstrap() {
 
   const slackService: SlackService = app.get(SlackService);
   const configService: ConfigService = app.get(ConfigService);
+
+  app.enableCors(createCorsOptions(configService));
 
   app.useGlobalPipes(
     new ValidationPipe({
