@@ -144,7 +144,7 @@ export class WithdrawalService {
             tx,
           );
           await this.studentRepository.clearEmailByUserPk(user.pk, tx);
-          // 탈퇴한 학생의 커피챗 상세는 410이라 이력서를 볼 사람이 없음. 행까지 지워야 파일 삭제 실패분을 CRB-41이 정리함
+          // 탈퇴한 학생의 커피챗 상세는 410이라 이력서를 볼 사람이 없음. 행까지 지워야 파일 삭제 실패분을 OrphanFileService가 정리함
           attachmentKeys =
             await this.studentProfileAttachmentRepository.deleteFilesByStudentPk(
               student.pk,

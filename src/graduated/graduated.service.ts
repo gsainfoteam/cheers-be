@@ -38,41 +38,29 @@ export class GraduatedService {
     tempKey: string,
   ): Promise<BaseResultDto> {
     // S3 확인 · 이동은 트랜잭션 밖에서 먼저 해서 DB 잠금을 오래 잡지 않음
+    // 트랜잭션이 실패해도 확정한 새 파일은 지우지 않음: COMMIT 직후 연결이 끊겨 예외가 나면
+    // DB는 커밋됐는데 파일만 지워지기 때문. 참조 없는 파일은 OrphanFileService가 정리
     const key = await this.fileService.confirmUpload(
       userPk,
       FilePurpose.BUSINESS_CARD,
       tempKey,
     );
 
-    let previousKey: string | null;
-    try {
-      previousKey = await this.dbService.db.transaction(async (tx) => {
-        // 같은 유저의 로그인(유형 변경) · 탈퇴 요청 · 동시 등록과 직렬화
-        const user = await this.userRepository.findByPkForUpdate(userPk, tx);
-        if (!user) {
-          throw new UnauthorizedException("User not found");
-        }
-        const graduated = await this.graduatedRepository.findByUserPk(
-          userPk,
-          tx,
-        );
-        if (!graduated) {
-          // 가드 통과 직후 다른 기기에서 재학생으로 유형 변경
-          throw new ForbiddenException("User type not allowed");
-        }
+    const previousKey = await this.dbService.db.transaction(async (tx) => {
+      // 같은 유저의 로그인(유형 변경) · 탈퇴 요청 · 동시 등록과 직렬화
+      const user = await this.userRepository.findByPkForUpdate(userPk, tx);
+      if (!user) {
+        throw new UnauthorizedException("User not found");
+      }
+      const graduated = await this.graduatedRepository.findByUserPk(userPk, tx);
+      if (!graduated) {
+        // 가드 통과 직후 다른 기기에서 재학생으로 유형 변경
+        throw new ForbiddenException("User type not allowed");
+      }
 
-        await this.graduatedRepository.updateBusinessCard(
-          graduated.pk,
-          key,
-          tx,
-        );
-        return graduated.businessCardKey;
-      });
-    } catch (e) {
-      // DB에 참조가 없는 새 파일을 지움 (남은 고아 파일은 CRB-41)
-      await this.fileService.deleteFileQuietly(key);
-      throw e;
-    }
+      await this.graduatedRepository.updateBusinessCard(graduated.pk, key, tx);
+      return graduated.businessCardKey;
+    });
 
     // 커밋 뒤에 지움. 실패해도 DB는 새 key를 가리키므로 로그만 남김
     if (previousKey && previousKey !== key) {

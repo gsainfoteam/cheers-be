@@ -1,9 +1,11 @@
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  ListObjectsV2Command,
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { InternalServerErrorException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Test } from "@nestjs/testing";
 import { FileService } from "./file.service";
@@ -50,6 +52,48 @@ describe("FileService", () => {
       ([command]) => (command as DeleteObjectCommand).input.Key,
     );
     expect(keys).toEqual(["a.jpg", "b.png"]);
+  });
+
+  it("listFiles passes the prefix and token and returns the next token", async () => {
+    const lastModified = new Date("2026-10-01T00:00:00Z");
+    send.mockResolvedValue({
+      Contents: [{ Key: "attachment/u/a.pdf", LastModified: lastModified }],
+      IsTruncated: true,
+      NextContinuationToken: "next",
+    } as never);
+
+    const page = await service.listFiles("attachment/", "token");
+
+    const input = (send.mock.calls[0][0] as ListObjectsV2Command).input;
+    expect(input).toEqual({
+      Bucket: "test-bucket",
+      Prefix: "attachment/",
+      ContinuationToken: "token",
+    });
+    expect(page).toEqual({
+      files: [{ key: "attachment/u/a.pdf", lastModified }],
+      nextToken: "next",
+    });
+  });
+
+  it("listFiles returns no token on the last page and handles an empty prefix", async () => {
+    send.mockResolvedValue({
+      IsTruncated: false,
+      NextContinuationToken: "ignored",
+    } as never);
+
+    await expect(service.listFiles("attachment/")).resolves.toEqual({
+      files: [],
+      nextToken: undefined,
+    });
+  });
+
+  it("listFiles throws when S3 fails", async () => {
+    send.mockRejectedValue(new Error("S3 down"));
+
+    await expect(service.listFiles("attachment/")).rejects.toThrow(
+      InternalServerErrorException,
+    );
   });
 
   it("deleteFileQuietly deletes the file", async () => {
