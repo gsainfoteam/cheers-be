@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title POST /api/v1/user/student/verify/code
-caption CRB-31 · CRB-48 · 인증코드 확인. 성공 시 student.email · verified_at 기록, 5회 틀리면 무효. 실패는 전송 기록에 누적
+caption CRB-31 · CRB-48 · CRB-53 · 인증코드 확인. 성공 시 student.email · verified_at 기록, 5회 틀리면 무효. 실패는 전송 기록에 누적
 
 actor Client
 participant "SignupStepGuard\nUserTypeGuard" as Guard
@@ -76,7 +76,8 @@ group transaction (DatabaseService.db.transaction)
     alt student.email UNIQUE 위반 (23505: 다른 계정이 같은 이메일을 방금 인증)
       PostgreSQL -[#red]-> Service: DrizzleQueryError (cause.code = 23505)
       note right of Service: 트랜잭션 rollback 후\nisUniqueViolation(e)로 판별
-      Service -[#red]-> Client: 409 Email already verified by another account
+      Service -[#red]-> Client: 409 Email already verified by another account\n{ statusCode, message, error_code = EMAIL_ALREADY_REGISTERED }
+      note right of Service: CRB-53: send-code와 같은 응답 형식.\n코드 발송 뒤에 다른 계정이 먼저 인증한 경우에만 여기까지 옴
     end
     Service -> VerificationRepository: deleteByStudentPk(studentPk, tx)
     VerificationRepository -> PostgreSQL: DELETE student_email_verification WHERE student_pk = ?

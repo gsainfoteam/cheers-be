@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title POST /api/v1/user/student/verify/send-code
-caption CRB-31 · CRB-48 · gist 이메일로 6자리 인증코드 전송 (재전송도 같은 API, 이전 코드 무효). 최근 24시간 전송 상한 적용
+caption CRB-31 · CRB-48 · CRB-53 · gist 이메일로 6자리 인증코드 전송 (재전송도 같은 API, 이전 코드 무효). 최근 24시간 전송 상한 적용
 
 actor Client
 participant "SignupStepGuard\nUserTypeGuard" as Guard
@@ -75,10 +75,13 @@ group transaction (DatabaseService.db.transaction)
   PostgreSQL --> StudentRepository: row?
   StudentRepository --> Service: boolean
   alt 다른 계정이 이미 인증한 이메일
-    Service -[#red]-> Client: 409 Email already verified by another account
+    Service -[#red]-> Client: 409 Email already verified by another account\n{ statusCode, message, error_code = EMAIL_ALREADY_REGISTERED }
   end
   note right of Service
-    탈퇴 유예기간 중인 계정도 student.email을 갖고 있어 409.
+    CRB-53: 코드를 보내기 전에 미리 알림 (메일 발송 · 전송 상한 소모 없음).
+    409는 쿨다운 · 전송 상한 · 기록 어디에도 걸리지 않음 (횟수 제한 없음, 열거 위험은 PR에 명시).\n    프론트는 error_code로 "이미 가입된 계정이 있습니다" 안내를 띄움.
+    어느 계정인지(가입 방식 등)는 알려 주지 않음.
+    탈퇴 유예기간 중인 계정도 student.email을 갖고 있어 같은 응답.
     유예기간이 끝나 탈퇴 처리되면 student.email = NULL 로 풀림
   end note
 
