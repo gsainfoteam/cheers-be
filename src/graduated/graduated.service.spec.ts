@@ -177,33 +177,33 @@ describe("GraduatedService", () => {
       expect(fileService.deleteFileQuietly).not.toHaveBeenCalled();
     });
 
-    it("throws 401 and deletes the new file when the user is gone", async () => {
+    it("throws 401 and keeps the new file when the user is gone", async () => {
       userRepository.findByPkForUpdate.mockResolvedValue(null);
 
       await expect(
         service.verifyBusinessCard(USER_PK, TEMP_KEY),
       ).rejects.toThrow(UnauthorizedException);
-      expect(fileService.deleteFileQuietly).toHaveBeenCalledWith(NEW_KEY);
+      expect(fileService.deleteFileQuietly).not.toHaveBeenCalled();
       expect(graduatedRepository.updateBusinessCard).not.toHaveBeenCalled();
     });
 
-    it("throws 403 and deletes the new file when the graduated row is gone", async () => {
+    it("throws 403 and keeps the new file when the graduated row is gone", async () => {
       graduatedRepository.findByUserPk.mockResolvedValue(null);
 
       await expect(
         service.verifyBusinessCard(USER_PK, TEMP_KEY),
       ).rejects.toThrow(ForbiddenException);
-      expect(fileService.deleteFileQuietly).toHaveBeenCalledWith(NEW_KEY);
+      expect(fileService.deleteFileQuietly).not.toHaveBeenCalled();
     });
 
-    it("rethrows the original error after deleting the new file", async () => {
-      const dbError = new Error("db down");
+    it("keeps the new file when the transaction fails, since the commit may have succeeded", async () => {
+      const dbError = new Error("connection lost");
       graduatedRepository.updateBusinessCard.mockRejectedValueOnce(dbError);
 
       await expect(service.verifyBusinessCard(USER_PK, TEMP_KEY)).rejects.toBe(
         dbError,
       );
-      expect(fileService.deleteFileQuietly).toHaveBeenCalledWith(NEW_KEY);
+      expect(fileService.deleteFileQuietly).not.toHaveBeenCalled();
     });
   });
 

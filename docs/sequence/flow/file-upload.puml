@@ -49,21 +49,18 @@ Service -> S3: CopyObject(key → <directory>/<userPk>/<uuid>.<감지한 확장�
 Service -> S3: DeleteObject(key)
 Service --> Feature: 최종 key
 Feature -> PostgreSQL: 최종 key 저장 (예: graduated.business_card_key)
-opt DB 저장 실패
-  Feature -> Service: deleteFile(최종 key)
-  Service -> S3: DeleteObject
-end
 opt 이전 파일이 있었음 (교체)
   Feature -> Service: deleteFile(이전 key)
   Service -> S3: DeleteObject
 end
 note over Feature, S3
-  재학생 첨부(student/post-info.puml)는 위 "DB 저장 실패 → 삭제"를 하지 않음 (고아 파일은 CRB-41).
-  이전 버전이 같은 파일을 참조할 수 있어 교체해도 이전 파일을 지우지 않음
+  DB 저장이 실패해도 새 파일을 지우지 않음: COMMIT 직후 연결이 끊겨 예외가 나면 DB는 커밋됐는데 파일만 지워지기 때문.
+  참조 없는 파일은 flow/s3-orphan-cleanup.puml이 정리.
+  재학생 첨부(student/post-info.puml)는 이전 버전이 같은 파일을 참조할 수 있어 교체해도 이전 파일을 지우지 않음
 end note
 note over Service, S3
   S3 호출 실패는 로그 + 500 Internal Server Error
-  최종 경로로 옮긴 뒤 남는 고아 파일 정리는 CRB-41
+  최종 경로로 옮긴 뒤 남는 고아 파일 정리는 flow/s3-orphan-cleanup.puml
 end note
 
 == 3. 조회 ==
