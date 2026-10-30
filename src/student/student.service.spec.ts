@@ -17,6 +17,7 @@ import {
   UserRepository,
   UserRow,
 } from "@src/database/repository/user.repository";
+import { FileService } from "@src/file/file.service";
 import { TxType } from "@src/global/types/tx.types";
 import { SaveStudentInfoRequestDto } from "./dto/save-student-info.dto";
 import { StudentService } from "./student.service";
@@ -95,6 +96,7 @@ describe("StudentService", () => {
     db: { transaction: (fn: (tx: TxType) => unknown) => fn(tx) },
   };
   const authService = { issueTokens: jest.fn() };
+  const fileService = { confirmUpload: jest.fn(), deleteFile: jest.fn() };
   const userRepository = {
     findByPkForUpdate: jest.fn(),
     fillName: jest.fn(),
@@ -114,6 +116,7 @@ describe("StudentService", () => {
   const service = new StudentService(
     dbService as unknown as DatabaseService,
     authService as unknown as AuthService,
+    fileService as unknown as FileService,
     userRepository as unknown as UserRepository,
     studentRepository as unknown as StudentRepository,
     departmentRepository as unknown as DepartmentRepository,
@@ -259,6 +262,215 @@ describe("StudentService", () => {
       );
       expect(userRepository.activate).not.toHaveBeenCalled();
       expect(authService.issueTokens).not.toHaveBeenCalled();
+    });
+
+    describe("file attachments", () => {
+      const tempKey = `tmp/attachment/${userPk}/aaaa.pdf`;
+      const finalKey = `attachment/${userPk}/aaaa.pdf`;
+      const fileRequest = (key: string, file_name = "이력서.pdf") =>
+        request({
+          attachments: [{ kind: "cv", source: "file", key, file_name }],
+        });
+      const latestWithFile: typeof latest = {
+        ...latest,
+        attachments: [
+          {
+            kind: "cv",
+            source: "file",
+            url: finalKey,
+            fileName: "이력서.pdf",
+          },
+        ],
+      };
+
+      it("confirms a new upload before the transaction and stores the final key", async () => {
+        const order: string[] = [];
+        fileService.confirmUpload.mockImplementation(() => {
+          order.push("confirm");
+          return Promise.resolve(finalKey);
+        });
+        userRepository.findByPkForUpdate.mockImplementation(() => {
+          order.push("transaction");
+          return Promise.resolve(user());
+        });
+
+        await service.saveInfo(userPk, fileRequest(tempKey));
+
+        expect(order).toEqual(["confirm", "transaction"]);
+        expect(fileService.confirmUpload).toHaveBeenCalledWith(
+          userPk,
+          "attachment",
+          tempKey,
+        );
+        expect(attachmentRepository.insertMany).toHaveBeenCalledWith(
+          "new-profile",
+          [
+            {
+              kind: "cv",
+              source: "file",
+              url: finalKey,
+              fileName: "이력서.pdf",
+            },
+          ],
+          tx,
+        );
+      });
+
+      it("keeps an existing file without a new version when its key is sent back", async () => {
+        studentRepository.findByUserPkWithLatestProfile.mockResolvedValue({
+          student: studentRow,
+          latest: latestWithFile,
+        });
+
+        await service.saveInfo(userPk, fileRequest(finalKey));
+
+        expect(fileService.confirmUpload).not.toHaveBeenCalled();
+        expect(profileRepository.insert).not.toHaveBeenCalled();
+      });
+
+      it("inserts a new version when only the file name changes", async () => {
+        studentRepository.findByUserPkWithLatestProfile.mockResolvedValue({
+          student: studentRow,
+          latest: latestWithFile,
+        });
+
+        await service.saveInfo(userPk, fileRequest(finalKey, "새이름.pdf"));
+
+        expect(profileRepository.insert).toHaveBeenCalled();
+      });
+
+      it.each([
+        ["another user's temp key", "tmp/attachment/other-user/aaaa.pdf"],
+        ["another user's final key", "attachment/other-user/aaaa.pdf"],
+        ["another directory", `tmp/business-card/${userPk}/aaaa.jpg`],
+        ["an arbitrary key", "../etc/passwd"],
+      ])("returns 400 for %s before touching S3", async (_, key) => {
+        await expect(
+          service.saveInfo(userPk, fileRequest(key)),
+        ).rejects.toThrow(new BadRequestException("Invalid file key"));
+
+        expect(fileService.confirmUpload).not.toHaveBeenCalled();
+        expect(userRepository.findByPkForUpdate).not.toHaveBeenCalled();
+      });
+
+      it("returns 400 for my own final key that is not in my current attachments", async () => {
+        await expect(
+          service.saveInfo(userPk, fileRequest(finalKey)),
+        ).rejects.toThrow(new BadRequestException("Invalid file key"));
+
+        expect(profileRepository.insert).not.toHaveBeenCalled();
+      });
+
+      it("returns 400 when the same key is sent twice", async () => {
+        const dup = { kind: "cv", source: "file", key: tempKey } as const;
+        await expect(
+          service.saveInfo(
+            userPk,
+            request({
+              attachments: [
+                { ...dup, file_name: "a.pdf" },
+                { ...dup, kind: "portfolio", file_name: "b.pdf" },
+              ],
+            }),
+          ),
+        ).rejects.toThrow(new BadRequestException("Duplicate file key"));
+
+        expect(fileService.confirmUpload).not.toHaveBeenCalled();
+      });
+
+      it.each([
+        [
+          "a link with a key",
+          { kind: "cv", source: "link", url: "https://a.com", key: tempKey },
+        ],
+        [
+          "a link with a file name",
+          {
+            kind: "cv",
+            source: "link",
+            url: "https://a.com",
+            file_name: "a.pdf",
+          },
+        ],
+        [
+          "a file with a url",
+          {
+            kind: "cv",
+            source: "file",
+            key: tempKey,
+            file_name: "a.pdf",
+            url: "https://a.com",
+          },
+        ],
+      ])("returns 400 for %s", async (_, attachment) => {
+        await expect(
+          service.saveInfo(
+            userPk,
+            request({
+              attachments: [
+                attachment as SaveStudentInfoRequestDto["attachments"] extends
+                  | (infer T)[]
+                  | undefined
+                  ? T
+                  : never,
+              ],
+            }),
+          ),
+        ).rejects.toBeInstanceOf(BadRequestException);
+
+        expect(fileService.confirmUpload).not.toHaveBeenCalled();
+      });
+
+      it("saves links and files together, in order", async () => {
+        fileService.confirmUpload.mockResolvedValue(finalKey);
+
+        await service.saveInfo(
+          userPk,
+          request({
+            attachments: [
+              { kind: "portfolio", source: "link", url: "https://a.com" },
+              { kind: "cv", source: "file", key: tempKey, file_name: "a.pdf" },
+            ],
+          }),
+        );
+
+        expect(attachmentRepository.insertMany).toHaveBeenCalledWith(
+          "new-profile",
+          [
+            {
+              kind: "portfolio",
+              source: "link",
+              url: "https://a.com",
+              fileName: null,
+            },
+            { kind: "cv", source: "file", url: finalKey, fileName: "a.pdf" },
+          ],
+          tx,
+        );
+      });
+
+      it("keeps the confirmed file when the transaction fails", async () => {
+        fileService.confirmUpload.mockResolvedValue(finalKey);
+        departmentRepository.findByPkAndEmailDomain.mockResolvedValue(null);
+
+        await expect(
+          service.saveInfo(userPk, fileRequest(tempKey)),
+        ).rejects.toBeInstanceOf(BadRequestException);
+
+        expect(fileService.deleteFile).not.toHaveBeenCalled();
+      });
+
+      it("returns the confirmUpload error and does not open the transaction", async () => {
+        fileService.confirmUpload.mockRejectedValue(
+          new BadRequestException("File not uploaded"),
+        );
+
+        await expect(
+          service.saveInfo(userPk, fileRequest(tempKey)),
+        ).rejects.toThrow(new BadRequestException("File not uploaded"));
+
+        expect(userRepository.findByPkForUpdate).not.toHaveBeenCalled();
+      });
     });
 
     it.each([

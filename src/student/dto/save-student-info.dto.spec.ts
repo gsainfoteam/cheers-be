@@ -28,6 +28,25 @@ describe("SaveStudentInfoRequestDto", () => {
     expect(dto.contact.phone).toBe("01012345678");
   });
 
+  it("accepts file attachments and trims the file name", async () => {
+    const { dto, errors } = await validateBody(
+      body({
+        attachments: [
+          {
+            kind: "cv",
+            source: "file",
+            key: "tmp/attachment/u/a.pdf",
+            file_name: " 이력서.pdf ",
+          },
+          { kind: "portfolio", source: "link", url: "https://a.com" },
+        ],
+      }),
+    );
+
+    expect(errors).toEqual([]);
+    expect(dto.attachments?.[0].file_name).toBe("이력서.pdf");
+  });
+
   it("trims interest and activity entries", async () => {
     const { dto, errors } = await validateBody(
       body({ interests: [" 반도체 "], activities: [" 학부 연구생"] }),
@@ -54,8 +73,54 @@ describe("SaveStudentInfoRequestDto", () => {
     ["a blank interest", { interests: ["반도체", "   "] }],
     ["duplicate activities", { activities: ["동아리", " 동아리 "] }],
     [
-      "a file attachment (CRB-38)",
-      { attachments: [{ kind: "cv", source: "file", url: "https://a.com" }] },
+      "a file attachment without key and file name",
+      { attachments: [{ kind: "cv", source: "file" }] },
+    ],
+    [
+      "a file attachment without a file name",
+      { attachments: [{ kind: "cv", source: "file", key: "tmp/a.pdf" }] },
+    ],
+    [
+      "a blank file name",
+      {
+        attachments: [
+          { kind: "cv", source: "file", key: "tmp/a.pdf", file_name: "  " },
+        ],
+      },
+    ],
+    [
+      "a file name over 255 characters",
+      {
+        attachments: [
+          {
+            kind: "cv",
+            source: "file",
+            key: "tmp/a.pdf",
+            file_name: "a".repeat(256),
+          },
+        ],
+      },
+    ],
+    [
+      "a key over 1024 characters",
+      {
+        attachments: [
+          {
+            kind: "cv",
+            source: "file",
+            key: "a".repeat(1025),
+            file_name: "a.pdf",
+          },
+        ],
+      },
+    ],
+    [
+      "a link attachment without a url",
+      { attachments: [{ kind: "cv", source: "link" }] },
+    ],
+    [
+      "an unknown source",
+      { attachments: [{ kind: "cv", source: "s3", key: "k" }] },
     ],
     [
       "a non-http link",

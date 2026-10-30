@@ -340,6 +340,7 @@ export class UserService {
                 ? await this.fileService.getPresignedUrl(attachment.url)
                 : attachment.url,
             file_name: attachment.fileName,
+            key: attachment.source === "file" ? attachment.url : null,
           })),
         ),
         contact,

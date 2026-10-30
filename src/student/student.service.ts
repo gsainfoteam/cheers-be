@@ -17,6 +17,9 @@ import {
   StudentWithLatestProfile,
 } from "@src/database/repository/student.repository";
 import { UserRepository } from "@src/database/repository/user.repository";
+import { FileDirectory, FilePurpose } from "@src/file/file.constants";
+import { FileService } from "@src/file/file.service";
+import { isUserTempFileKey } from "@src/file/file.utils";
 import { DepartmentListResponseDto } from "./dto/departments.dto";
 import {
   assertContactValues,
@@ -24,7 +27,10 @@ import {
   toContactRow,
 } from "@src/user/dto/contact-request.dto";
 import { SignupCompleteResponseDto } from "@src/user/dto/signup-complete.dto";
-import { SaveStudentInfoRequestDto } from "./dto/save-student-info.dto";
+import {
+  SaveStudentInfoRequestDto,
+  StudentAttachmentRequestDto,
+} from "./dto/save-student-info.dto";
 import { emailDomain } from "./student.utils";
 
 type ProfileValues = {
@@ -40,6 +46,7 @@ export class StudentService {
   constructor(
     private readonly dbService: DatabaseService,
     private readonly authService: AuthService,
+    private readonly fileService: FileService,
     private readonly userRepository: UserRepository,
     private readonly studentRepository: StudentRepository,
     private readonly departmentRepository: DepartmentRepository,
@@ -74,16 +81,18 @@ export class StudentService {
   ): Promise<SignupCompleteResponseDto> {
     validateContact(req.contact);
 
+    // S3 확인 · 이동은 트랜잭션 밖에서 먼저 해서 DB 잠금을 오래 잡지 않음
+    // 트랜잭션이 실패해도 확정한 새 파일은 지우지 않음: COMMIT 직후 연결이 끊겨 예외가 나면
+    // DB는 커밋됐는데 파일만 지워지기 때문. 남은 고아 파일은 CRB-41
+    const { attachments, reusedKeys } = await this.resolveAttachments(
+      userPk,
+      req.attachments ?? [],
+    );
     const values: ProfileValues = {
       departmentPk: req.department_id,
       interests: req.interests,
       activities: req.activities ?? [],
-      attachments: (req.attachments ?? []).map((a) => ({
-        kind: a.kind,
-        source: a.source,
-        url: a.url,
-        fileName: null,
-      })),
+      attachments,
     };
 
     const tokens = await this.dbService.db.transaction(async (tx) => {
@@ -115,6 +124,16 @@ export class StudentService {
         throw new BadRequestException(
           "Department does not belong to your school",
         );
+      }
+
+      // 새로 올린 파일이 아닌 key는 내 현재 첨부의 파일이어야 함 (남의 파일 · 임의 key 거부)
+      const currentFileKeys = new Set(
+        (current.latest?.attachments ?? [])
+          .filter((a) => a.source === "file")
+          .map((a) => a.url),
+      );
+      if (reusedKeys.some((key) => !currentFileKeys.has(key))) {
+        throw new BadRequestException("Invalid file key");
       }
 
       // 이전 버전은 커피챗 요청이 참조하므로 수정 · 삭제하지 않음
@@ -160,6 +179,70 @@ export class StudentService {
       access_token: tokens.accessToken,
       refresh_token: tokens.refreshToken,
     };
+  }
+
+  // 첨부를 저장 값으로 바꿈. file key는 두 종류
+  // - 새로 올린 파일 (tmp/attachment/<내 userPk>/...): confirmUpload로 확정한 최종 key
+  // - 기존 파일 유지 (attachment/<내 userPk>/...): 그대로 쓰되 내 현재 첨부인지는 트랜잭션에서 검사
+  private async resolveAttachments(
+    userPk: string,
+    requests: StudentAttachmentRequestDto[],
+  ): Promise<{ attachments: StudentAttachment[]; reusedKeys: string[] }> {
+    const finalPrefix = `${FileDirectory.ATTACHMENT}/${userPk}/`;
+    const seen = new Set<string>();
+    for (const a of requests) {
+      if (a.source === "link") {
+        if (a.key !== undefined || a.file_name !== undefined) {
+          throw new BadRequestException("Link attachment cannot have a file");
+        }
+        continue;
+      }
+      if (a.url !== undefined) {
+        throw new BadRequestException("File attachment cannot have a url");
+      }
+      const key = a.key as string;
+      if (seen.has(key)) {
+        throw new BadRequestException("Duplicate file key");
+      }
+      seen.add(key);
+      // S3를 부르기 전에 형식부터 거름
+      if (
+        !isUserTempFileKey(FileDirectory.ATTACHMENT, userPk, key) &&
+        !key.startsWith(finalPrefix)
+      ) {
+        throw new BadRequestException("Invalid file key");
+      }
+    }
+
+    const reusedKeys: string[] = [];
+    const attachments: StudentAttachment[] = [];
+    for (const a of requests) {
+      if (a.source === "link") {
+        attachments.push({
+          kind: a.kind,
+          source: "link",
+          url: a.url as string,
+          fileName: null,
+        });
+        continue;
+      }
+      const key = a.key as string;
+      const isNew = isUserTempFileKey(FileDirectory.ATTACHMENT, userPk, key);
+      if (!isNew) reusedKeys.push(key);
+      attachments.push({
+        kind: a.kind,
+        source: "file",
+        url: isNew
+          ? await this.fileService.confirmUpload(
+              userPk,
+              FilePurpose.ATTACHMENT,
+              key,
+            )
+          : key,
+        fileName: a.file_name as string,
+      });
+    }
+    return { attachments, reusedKeys };
   }
 }
 
