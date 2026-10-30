@@ -7,6 +7,7 @@ import { CoffeeChatContactRepository } from "@src/database/repository/coffee-cha
 import { GraduatedRepository } from "@src/database/repository/graduated.repository";
 import { StudentEmailSendLogRepository } from "@src/database/repository/student-email-send-log.repository";
 import { StudentEmailVerificationRepository } from "@src/database/repository/student-email-verification.repository";
+import { StudentProfileAttachmentRepository } from "@src/database/repository/student-profile-attachment.repository";
 import { StudentRepository } from "@src/database/repository/student.repository";
 import { UserOauthAccountRepository } from "@src/database/repository/user-oauth-account.repository";
 import {
@@ -40,6 +41,7 @@ export class WithdrawalService {
     private readonly studentRepository: StudentRepository,
     private readonly studentEmailVerificationRepository: StudentEmailVerificationRepository,
     private readonly studentEmailSendLogRepository: StudentEmailSendLogRepository,
+    private readonly studentProfileAttachmentRepository: StudentProfileAttachmentRepository,
     private readonly graduatedRepository: GraduatedRepository,
     private readonly coffeeChatContactRepository: CoffeeChatContactRepository,
   ) {
@@ -109,11 +111,10 @@ export class WithdrawalService {
     return purged;
   }
 
-  // 지움: OAuth 계정, refresh token, 연락 설정(coffee_chat_contact), 명함 S3 파일 + key,
+  // 지움: OAuth 계정, refresh token, 연락 설정(coffee_chat_contact), 명함 S3 파일 + key, 이력서 · 포트폴리오 파일 + 첨부 행,
   //       users.name / email, student.email (같은 학교 이메일로 재가입 가능하도록)과 진행 중인 학교 이메일 인증 요청 · 전송 기록
-  // 남김: 약관 동의 이력, student / graduated 행, 재학생 프로필 버전과 첨부(링크), 현업자 프로필(닉네임 · 회사 · 부서 · 직무 · 해시태그 · 링크),
+  // 남김: 약관 동의 이력, student / graduated 행, 재학생 프로필 버전과 링크 첨부, 현업자 프로필(닉네임 · 회사 · 부서 · 직무 · 해시태그 · 링크),
   //       커피챗 요청(공유된 연락처 shared_phone / shared_email 포함)과 알림 로그 — 상대방의 커피챗 기록이 참조함.
-  //       첨부 파일 업로드가 생기면(CRB-18) S3 파일 처리를 함께 정할 것
   // 반환값: 처리했으면 true, 다른 인스턴스가 처리 중이거나 그 사이 탈퇴가 취소됐으면 false
   private async purge(
     userPk: string,
@@ -133,6 +134,7 @@ export class WithdrawalService {
       // 재학생이었다가 유형을 바꾼 유저에게도 기록이 남아 있어 유형과 상관없이 지움
       await this.studentEmailSendLogRepository.deleteByUserPk(user.pk, tx);
       let businessCardKey: string | null = null;
+      let attachmentKeys: string[] = [];
       if (user.type === "student") {
         const student = await this.studentRepository.findByUserPk(user.pk, tx);
         if (student) {
@@ -142,6 +144,12 @@ export class WithdrawalService {
             tx,
           );
           await this.studentRepository.clearEmailByUserPk(user.pk, tx);
+          // 탈퇴한 학생의 커피챗 상세는 410이라 이력서를 볼 사람이 없음. 행까지 지워야 파일 삭제 실패분을 CRB-41이 정리함
+          attachmentKeys =
+            await this.studentProfileAttachmentRepository.deleteFilesByStudentPk(
+              student.pk,
+              tx,
+            );
         }
       } else {
         const graduated = await this.graduatedRepository.findByUserPk(
@@ -154,7 +162,7 @@ export class WithdrawalService {
         }
       }
       await this.userRepository.withdraw(user.pk, tx);
-      return { businessCardKey };
+      return { businessCardKey, attachmentKeys };
     });
     if (!result) return false;
 
@@ -162,6 +170,11 @@ export class WithdrawalService {
     if (result.businessCardKey) {
       await this.fileService.deleteFileQuietly(result.businessCardKey);
     }
+    await Promise.all(
+      result.attachmentKeys.map((key) =>
+        this.fileService.deleteFileQuietly(key),
+      ),
+    );
     return true;
   }
 }

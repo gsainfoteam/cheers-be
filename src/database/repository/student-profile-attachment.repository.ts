@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { TxType } from "@src/global/types/tx.types";
 import { studentProfileAttachment } from "../../../drizzle/schema/student-profile-attachment";
@@ -53,5 +53,35 @@ export class StudentProfileAttachmentRepository {
             .where(eq(studentProfile.studentPk, studentPk)),
         ),
       );
+  }
+
+  /*
+  DELETE FROM student_profile_attachment
+  WHERE source = 'file'
+    AND profile_pk IN (SELECT pk FROM student_profile WHERE student_pk = ?1)
+  RETURNING url;
+   */
+  // 탈퇴 처리 때 사용. 학생의 모든 버전의 파일 첨부를 지우고 S3 key를 돌려줌 (버전끼리 같은 파일을 참조하면 중복 제거)
+  async deleteFilesByStudentPk(
+    studentPk: string,
+    tx: TxType,
+  ): Promise<string[]> {
+    const rows = await tx
+      .delete(studentProfileAttachment)
+      .where(
+        and(
+          eq(studentProfileAttachment.source, "file"),
+          inArray(
+            studentProfileAttachment.profilePk,
+            tx
+              .select({ pk: studentProfile.pk })
+              .from(studentProfile)
+              .where(eq(studentProfile.studentPk, studentPk)),
+          ),
+        ),
+      )
+      .returning({ url: studentProfileAttachment.url });
+
+    return [...new Set(rows.map((row) => row.url))];
   }
 }

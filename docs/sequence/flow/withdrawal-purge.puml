@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title 스케줄러: 탈퇴 유예기간 만료 처리
-caption CRB-10 · src/user/withdrawal.scheduler.ts · 매일 04:00 (Asia/Seoul)
+caption CRB-10, CRB-38 · src/user/withdrawal.scheduler.ts · 매일 04:00 (Asia/Seoul)
 
 participant "WithdrawalScheduler" as Scheduler
 participant "WithdrawalService" as Service
@@ -20,6 +20,7 @@ participant "RefreshTokenRepository" as RefreshTokenRepository
 participant "CoffeeChatContactRepository" as CoffeeChatContactRepository
 participant "StudentRepository" as StudentRepository
 participant "StudentEmailVerificationRepository" as StudentEmailVerificationRepository
+participant "StudentProfileAttachmentRepository" as AttachmentRepository
 participant "GraduatedRepository" as GraduatedRepository
 database PostgreSQL
 participant "S3"
@@ -59,6 +60,13 @@ loop 더 처리할 유저가 없을 때까지
             Service -> StudentRepository: clearEmailByUserPk(pk, tx)
             StudentRepository -> PostgreSQL: UPDATE student SET email = NULL
             note right: UQ를 풀어 같은 gist 이메일로 재가입 가능
+            Service -> AttachmentRepository: deleteFilesByStudentPk(studentPk, tx)
+            AttachmentRepository -> PostgreSQL: DELETE student_profile_attachment\nWHERE source = 'file' AND 이 학생의 모든 프로필 버전\nRETURNING url
+            note right
+              탈퇴한 학생의 커피챗 상세는 410이라 볼 사람이 없음.
+              행까지 지워야 S3 삭제 실패분을 CRB-41이 정리할 수 있음.
+              링크 첨부는 남김
+            end note
           end
         else type = graduated
           Service -> GraduatedRepository: findByUserPk(pk, tx)
@@ -75,6 +83,10 @@ loop 더 처리할 유저가 없을 때까지
       Service -> S3: deleteFile(businessCardKey)
       note right: 실패하면 로그만 (DB에는 이미 참조가 없음)
     end
+    opt 첨부 파일 행을 지웠음
+      Service -> S3: deleteFileQuietly(key) (key마다)
+      note right: 실패하면 로그만 (DB에는 이미 참조가 없음)
+    end
     alt 이 유저 처리 중 예외
       note over Service: 로그만 남기고 다음 유저로. 이번 실행에서는 다시 시도하지 않고 다음 날 재시도
     end
@@ -82,7 +94,7 @@ loop 더 처리할 유저가 없을 때까지
 end
 
 note over Service, PostgreSQL
-  남기는 것: 약관 동의 이력, student / graduated · 프로필 행, 커피챗 요청(공유된 연락처 포함)과 알림 로그
+  남기는 것: 약관 동의 이력, student / graduated · 프로필 행, 링크 첨부, 커피챗 요청(공유된 연락처 포함)과 알림 로그
   — 상대방의 커피챗 기록이 참조함. withdraw_requested_at도 기록으로 남김
 end note
 
