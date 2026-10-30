@@ -3,7 +3,7 @@ import { and, eq, lt } from "drizzle-orm";
 import { DatabaseService } from "@src/database/database.service";
 import { TxType } from "@src/global/types/tx.types";
 import { CheersDBError } from "@src/global/exceptions/cheers-db.error";
-import { refreshToken } from "../../../drizzle/schema/refresh-token";
+import { refreshToken } from "@drizzle/schema/refresh-token";
 
 export type RefreshTokenRow = typeof refreshToken.$inferSelect;
 

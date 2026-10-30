@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { eq } from "drizzle-orm";
 import { TxType } from "@src/global/types/tx.types";
-import { graduatedProfile } from "../../../drizzle/schema/graduated-profile";
+import { graduatedProfile } from "@drizzle/schema/graduated-profile";
 
 export type GraduatedProfileRow = typeof graduatedProfile.$inferSelect;
 

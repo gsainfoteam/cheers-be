@@ -6,10 +6,10 @@ import { TxType } from "@src/global/types/tx.types";
 import { CheersDBError } from "@src/global/exceptions/cheers-db.error";
 import { StudentProfileRow } from "@src/database/repository/student-profile.repository";
 import { StudentProfileAttachmentRow } from "@src/database/repository/student-profile-attachment.repository";
-import { student } from "../../../drizzle/schema/student";
-import { studentProfile } from "../../../drizzle/schema/student-profile";
-import { studentProfileAttachment } from "../../../drizzle/schema/student-profile-attachment";
-import { department } from "../../../drizzle/schema/department";
+import { student } from "@drizzle/schema/student";
+import { studentProfile } from "@drizzle/schema/student-profile";
+import { studentProfileAttachment } from "@drizzle/schema/student-profile-attachment";
+import { department } from "@drizzle/schema/department";
 
 export type StudentRow = typeof student.$inferSelect;
 

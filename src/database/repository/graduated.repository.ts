@@ -5,8 +5,8 @@ import { DatabaseService } from "@src/database/database.service";
 import { TxType } from "@src/global/types/tx.types";
 import { CheersDBError } from "@src/global/exceptions/cheers-db.error";
 import { GraduatedProfileRow } from "@src/database/repository/graduated-profile.repository";
-import { graduated } from "../../../drizzle/schema/graduated";
-import { graduatedProfile } from "../../../drizzle/schema/graduated-profile";
+import { graduated } from "@drizzle/schema/graduated";
+import { graduatedProfile } from "@drizzle/schema/graduated-profile";
 
 export type GraduatedRow = typeof graduated.$inferSelect;
 

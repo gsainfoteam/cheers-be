@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { eq } from "drizzle-orm";
 import { DatabaseService } from "@src/database/database.service";
 import { TxType } from "@src/global/types/tx.types";
-import { coffeeChatContact } from "../../../drizzle/schema/coffee-chat-contact";
+import { coffeeChatContact } from "@drizzle/schema/coffee-chat-contact";
 
 export type CoffeeChatContactRow = typeof coffeeChatContact.$inferSelect;
 

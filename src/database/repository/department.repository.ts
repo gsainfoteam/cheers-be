@@ -2,8 +2,8 @@ import { Injectable } from "@nestjs/common";
 import { and, asc, eq } from "drizzle-orm";
 import { DatabaseService } from "@src/database/database.service";
 import { TxType } from "@src/global/types/tx.types";
-import { department } from "../../../drizzle/schema/department";
-import { school } from "../../../drizzle/schema/school";
+import { department } from "@drizzle/schema/department";
+import { school } from "@drizzle/schema/school";
 
 export type DepartmentRow = typeof department.$inferSelect;
 

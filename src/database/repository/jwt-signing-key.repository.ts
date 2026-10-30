@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { DatabaseService } from "@src/database/database.service";
-import { jwtSigningKey } from "../../../drizzle/schema/jwt-signing-key";
+import { jwtSigningKey } from "@drizzle/schema/jwt-signing-key";
 
 export type JwtSigningKeyRow = typeof jwtSigningKey.$inferSelect;
 
