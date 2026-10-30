@@ -9,13 +9,14 @@ autonumber
 hide footbox
 
 title POST /api/v1/user/student/info
-caption CRB-31, CRB-52 · 재학생 추가 정보 저장 · 수정 (바뀌었을 때만 새 버전), 이름은 첫 저장 때 입력 후 수정 불가, 연락 설정, 가입 완료 시 토큰 재발급
+caption CRB-31, CRB-52, CRB-38 · 재학생 추가 정보 저장 · 수정 (바뀌었을 때만 새 버전), 이름은 첫 저장 때 입력 후 수정 불가, 연락 설정, 가입 완료 시 토큰 재발급
 
 actor Client
 participant "SignupStepGuard\nUserTypeGuard" as Guard
 participant "ValidationPipe" as Pipe
 participant "StudentController" as Controller
 participant "StudentService" as Service
+participant "FileService" as FileService
 participant "UserRepository" as UserRepository
 participant "StudentRepository" as StudentRepository
 participant "DepartmentRepository" as DepartmentRepository
@@ -24,6 +25,7 @@ participant "StudentProfileAttachmentRepository" as AttachmentRepository
 participant "CoffeeChatContactRepository" as ContactRepository
 participant "AuthService" as AuthService
 database PostgreSQL
+participant "S3"
 
 Client -> Guard: POST /api/v1/user/student/info\nAuthorization: Bearer <access token>\n{ name?, department_id, interests, activities?, attachments?, contact }
 ref over Client, Guard
@@ -41,8 +43,10 @@ end
 note right of Pipe
   name 1~64자 / department_id 정수
   interests 1~20개 / activities 0~20개: 항목마다 trim 후 1~50자, 중복 불가
-  attachments 최대 10개: kind cv | portfolio, source = link 만 (file 은 CRB-38),
-    url http(s) 2048자 이하
+  attachments 최대 10개: kind cv | portfolio, source link | file
+    link: url http(s) 2048자 이하 (key · file_name 은 받지 않음)
+    file: key 1024자 이하, file_name 1~255자 (url 은 받지 않음)
+    같은 key 를 두 번 보내면 불가
   contact: email_enabled · kakao_enabled boolean, email 형식,
     phone 은 "-" · 공백 제거 후 01로 시작하는 10~11자리
 end note
@@ -57,6 +61,17 @@ else kakao_enabled 인데 contact.phone 없음
   Service -[#red]-> Client: 400 Contact phone is required
 end
 note right of Service: 재학생은 "희망하지 않음"(둘 다 false)을 고를 수 없음
+
+loop source = file 이고 key 가 tmp/attachment/<내 userPk>/ 아래인 첨부 (새로 올린 파일)
+  Service -> FileService: confirmUpload(userPk, "attachment", key)
+  ref over FileService, S3: 확정 — flow/file-upload.puml 2번\n400 Invalid file key / File not uploaded / Uploaded file does not match the policy
+  FileService --> Service: 최종 key (attachment/<userPk>/<uuid>.pdf)
+end
+note right of Service
+  S3 확인 · 이동은 트랜잭션 밖에서 먼저 해서 DB 행 잠금을 S3 호출 동안 잡지 않음
+  (graduated/post-verify-business-card.puml 과 같은 순서)
+  tmp/ 가 아닌 key 는 확정하지 않고 아래 트랜잭션에서 기존 첨부인지 검사
+end note
 
 group transaction (DatabaseService.db.transaction)
   Service -> UserRepository: findByPkForUpdate(userPk, tx)
@@ -91,17 +106,29 @@ group transaction (DatabaseService.db.transaction)
     Service -[#red]-> Client: 400 Department does not belong to your school
   end
 
+  Service -> Service: tmp/ 가 아닌 file key 가 latest.attachments 의 file key 중 하나인지 확인
+  alt 내 현재 첨부가 아닌 key (남의 파일 · 이미 지나간 버전의 파일 · 임의 key)
+    Service -[#red]-> Client: 400 Invalid file key
+  end
+  note right of Service
+    마이페이지에서 다른 항목만 고칠 때 기존 파일을 유지하는 방법:
+    GET /api/v1/user/info 가 내려주는 file 첨부의 key 를 그대로 다시 보냄
+    (그래서 AttachmentDto 에 key 를 추가 — get-info.puml)
+    이 경우 새 파일이 없으니 key · file_name 이 같으면 "바뀐 내용 없음"
+  end note
+
   alt latest = null (첫 저장) 또는 학과 · interests · activities · attachments 중 하나라도 다름
     note right of Service
       비교 기준: interests · attachments 는 순서까지 같아야 같음,
-      activities 는 없음 = 빈 배열, attachment 는 kind · source · url · file_name
+      activities 는 없음 = 빈 배열, attachment 는 kind · source · url(file 이면 최종 key) · file_name
+      방금 확정한 파일은 key 가 새로 만들어지므로 항상 "다름" → 새 버전
     end note
     Service -> ProfileRepository: insert({ studentPk, version: (latest?.version ?? 0) + 1,\ndepartmentPk, interests, activities }, tx)
     ProfileRepository -> PostgreSQL: INSERT student_profile RETURNING pk
     note right: UNIQUE (student_pk, version)
     opt attachments 있음
       Service -> AttachmentRepository: insertMany(profilePk, attachments, tx)
-      AttachmentRepository -> PostgreSQL: INSERT student_profile_attachment\n(sort_order = 배열 순서)
+      AttachmentRepository -> PostgreSQL: INSERT student_profile_attachment\n(sort_order = 배열 순서, file: url = 최종 key + file_name)
     end
   else 바뀐 내용 없음
     note over Service: 새 버전을 만들지 않음
@@ -131,6 +158,15 @@ group transaction (DatabaseService.db.transaction)
   end
 end
 note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
+
+opt 트랜잭션 실패 (위 확정으로 최종 경로에 옮긴 새 파일이 있었음)
+  note over Service, S3
+    새 파일을 지우지 않고 남김 (정리는 CRB-41).
+    COMMIT 직후 연결이 끊겨 예외가 나면 DB 는 커밋됐는데 파일만 지워지는 문제(CRB-32 리뷰 4번)를 피하려는 선택.
+    같은 요청을 다시 보내려면 새 업로드 URL 이 필요 (tmp/ 원본은 이미 이동됨)
+  end note
+end
+note over Service, S3: 이전 버전이 같은 파일을 참조할 수 있어 파일을 바꾸거나 첨부를 지워도 S3 파일은 지우지 않음
 
 alt 가입 완료
   Service --> Controller: { result: "OK", access_token, refresh_token }
