@@ -64,7 +64,7 @@ loop 더 처리할 유저가 없을 때까지
             AttachmentRepository -> PostgreSQL: DELETE student_profile_attachment\nWHERE source = 'file' AND 이 학생의 모든 프로필 버전\nRETURNING url
             note right
               탈퇴한 학생의 커피챗 상세는 410이라 볼 사람이 없음.
-              행까지 지워야 S3 삭제 실패분을 CRB-41이 정리할 수 있음.
+              행까지 지워야 S3 삭제 실패분을 flow/s3-orphan-cleanup.puml이 정리할 수 있음.
               링크 첨부는 남김
             end note
           end

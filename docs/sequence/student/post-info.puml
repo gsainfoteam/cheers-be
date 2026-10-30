@@ -97,7 +97,7 @@ end
 note right of Service
   S3 확인 · 이동은 트랜잭션 밖에서 먼저 해서 DB 행 잠금을 S3 호출 동안 잡지 않음
   (graduated/post-verify-business-card.puml 과 같은 순서)
-  뒤쪽 파일이 실패하면 앞쪽 파일은 이미 이동된 채 남음 (재시도 처리 · 정리는 CRB-41)
+  뒤쪽 파일이 실패하면 앞쪽 파일은 이미 이동된 채 남음 (정리는 flow/s3-orphan-cleanup.puml)
 end note
 
 group transaction (DatabaseService.db.transaction)
@@ -188,7 +188,7 @@ note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후
 
 opt 트랜잭션 실패 (위 확정으로 최종 경로에 옮긴 새 파일이 있었음)
   note over Service, S3
-    새 파일을 지우지 않고 남김 (정리는 CRB-41).
+    새 파일을 지우지 않고 남김 (정리는 flow/s3-orphan-cleanup.puml).
     COMMIT 직후 연결이 끊겨 예외가 나면 DB 는 커밋됐는데 파일만 지워지는 문제(CRB-32 리뷰 4번)를 피하려는 선택.
     같은 요청을 다시 보내려면 새 업로드 URL 이 필요 (tmp/ 원본은 이미 이동됨)
   end note

@@ -9,6 +9,7 @@
 | [flow/auth-guards.puml](flow/auth-guards.puml)                                                         | 공통 인증 · 가입 단계 · 유형 가드                  |
 | [flow/withdrawal-purge.puml](flow/withdrawal-purge.puml)                                               | 스케줄러: 탈퇴 유예기간 만료 처리                  |
 | [flow/cleanup-schedulers.puml](flow/cleanup-schedulers.puml)                                           | 스케줄러: 미완료 가입 · 만료 인증 데이터 정리      |
+| [flow/s3-orphan-cleanup.puml](flow/s3-orphan-cleanup.puml)                                             | 스케줄러: DB에서 참조하지 않는 S3 파일 정리        |
 | [flow/file-upload.puml](flow/file-upload.puml)                                                         | 파일 업로드 · 확정 · 조회 · 삭제                   |
 | [flow/jwt-signing-key-bootstrap.puml](flow/jwt-signing-key-bootstrap.puml)                             | 서버 기동 시 JWT 서명 키 로드 · 생성               |
 | [flow/interest-cache-bootstrap.puml](flow/interest-cache-bootstrap.puml)                               | 서버 기동 시 관심 분야 목록을 메모리에 로드        |

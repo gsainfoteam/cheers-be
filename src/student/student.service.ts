@@ -99,7 +99,7 @@ export class StudentService {
 
     // S3 확인 · 이동은 트랜잭션 밖에서 먼저 해서 DB 잠금을 오래 잡지 않음
     // 트랜잭션이 실패해도 확정한 새 파일은 지우지 않음: COMMIT 직후 연결이 끊겨 예외가 나면
-    // DB는 커밋됐는데 파일만 지워지기 때문. 남은 고아 파일은 CRB-41
+    // DB는 커밋됐는데 파일만 지워지기 때문. 참조 없는 파일은 OrphanFileService가 정리
     const attachments = await this.toAttachmentValues(userPk, requests);
     const values: ProfileValues = {
       departmentPk: req.department_id,

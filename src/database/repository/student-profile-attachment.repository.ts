@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { and, eq, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
+import { DatabaseService } from "@src/database/database.service";
 import { TxType } from "@src/global/types/tx.types";
 import { studentProfileAttachment } from "../../../drizzle/schema/student-profile-attachment";
 import { studentProfile } from "../../../drizzle/schema/student-profile";
@@ -11,6 +12,28 @@ export type StudentProfileAttachmentRow =
 // 첨부 조회는 StudentRepository.findByUserPkWithLatestProfile (json_agg로 한 쿼리)
 @Injectable()
 export class StudentProfileAttachmentRepository {
+  constructor(private readonly dbService: DatabaseService) {}
+
+  /*
+  SELECT url FROM student_profile_attachment WHERE source = 'file' AND url IN (?1, ...);
+   */
+  // 고아 파일 정리: 받은 key 중 DB가 참조하는 것만 돌려줌. 이전 버전의 첨부도 커피챗 요청이 참조하므로 모든 버전을 봄
+  async findExistingFileKeys(keys: string[]): Promise<string[]> {
+    if (keys.length === 0) return [];
+
+    const rows = await this.dbService.db
+      .select({ url: studentProfileAttachment.url })
+      .from(studentProfileAttachment)
+      .where(
+        and(
+          eq(studentProfileAttachment.source, "file"),
+          inArray(studentProfileAttachment.url, keys),
+        ),
+      );
+
+    return rows.map((row) => row.url);
+  }
+
   /*
   INSERT INTO student_profile_attachment (pk, profile_pk, kind, source, sort_order, url, file_name)
   VALUES ...;
