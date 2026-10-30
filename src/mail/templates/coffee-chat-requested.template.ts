@@ -1,4 +1,5 @@
 import { SendMailInput } from "../mail.types";
+import { escapeHtml } from "./escape-html";
 
 // 현업자에게 가는 커피챗 요청 알림 (알림톡 템플릿 coffee_chat_requested와 같은 문구).
 // 재학생 정보는 넣지 않고, 링크의 요청 상세에서 로그인 후 확인
@@ -22,12 +23,4 @@ export function buildCoffeeChatRequestedMail(
 </div>`;
 
   return { to, subject, html, text };
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
 }

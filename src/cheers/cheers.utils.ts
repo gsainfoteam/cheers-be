@@ -1,3 +1,5 @@
+import { Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { CoffeeChatRequestRow } from "@src/database/repository/coffee-chat-request.repository";
 
 export type CoffeeChatRequestStatus = "requested" | "viewed" | "contact_shared";
@@ -18,4 +20,25 @@ export function randomSeed(now: Date, intervalMinutes: number): string {
 
 export function toOffset(page: number, size: number): number {
   return (page - 1) * size;
+}
+
+// 알림 메일의 요청 상세 링크 기준 주소 (끝의 / 제거). 로컬에서 비어 있으면 null이고 링크 없이 발송
+export function resolveWebBaseUrl(
+  configService: ConfigService,
+  logger: Logger,
+): string | null {
+  const webBaseUrl = configService
+    .get<string>("WEB_BASE_URL")
+    ?.trim()
+    .replace(/\/+$/, "");
+  if (webBaseUrl) return webBaseUrl;
+
+  // 배포 환경에서는 링크 없는 알림 메일이 나가지 않게 막음
+  if (configService.get<string>("NODE_ENV") === "production") {
+    throw new Error("WEB_BASE_URL is required in production.");
+  }
+  logger.warn(
+    "WEB_BASE_URL is not set. Coffee chat mails will be sent without a link.",
+  );
+  return null;
 }

@@ -1,0 +1,119 @@
+@startuml post-cheers-received-id-share-contact
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title POST /api/v1/cheers/received/{id}/share-contact
+caption CRB-42 · 현업자 연락처를 공유 시점 값으로 저장 + 재학생 연락 설정으로 비동기 알림. 이미 공유했으면 다시 보내지 않음
+
+actor Client
+participant "UserGuard\n+ UserTypeGuard" as Guard
+participant "ParseUUIDPipe" as Pipe
+participant "CheersGraduatedController" as Controller
+participant "CheersGraduatedService" as Service
+participant "CoffeeChatRequestRepository" as CoffeeChatRequestRepository
+participant "CoffeeChatContactRepository" as CoffeeChatContactRepository
+participant "UserRepository" as UserRepository
+participant "NotificationService" as NotificationService
+database PostgreSQL
+participant "SMTP"
+participant "Solapi"
+participant "Slack"
+
+Client -> Guard: POST /api/v1/cheers/received/<id>/share-contact\nAuthorization: Bearer <access token>
+ref over Client, Guard
+  UserGuard, UserTypeGuard — flow/auth-guards.puml
+  @UserTypes(["graduated"]). 가입을 마친(active) 현업자만
+  401 Missing access token / Token expired / Invalid token
+  403 Signup is not completed / User type not allowed (재학생)
+end ref
+Guard -> Pipe: 통과
+alt id가 UUID 형식이 아님
+  Pipe -[#red]-> Client: 400 Validation failed (uuid is expected)
+end
+Pipe -> Controller: shareContact(id, user)
+Controller -> Service: shareContact(userPk, id)
+
+par 동시에 조회 — 내 데이터 (트랜잭션 밖)
+  Service -> CoffeeChatContactRepository: findByUserPk(userPk)
+  CoffeeChatContactRepository -> PostgreSQL: SELECT * FROM coffee_chat_contact WHERE user_pk = ?
+  CoffeeChatContactRepository --> Service: 내 연락 설정 | null
+else
+  Service -> UserRepository: findByPk(userPk)
+  UserRepository -> PostgreSQL: SELECT * FROM users WHERE pk = ? AND isActiveAccount
+  UserRepository --> Service: 내 이름 (알림 문구에 사용)
+end
+note right of Service: 요청 행과 원자적으로 묶을 필요가 없어 밖에서 읽음.\n행 잠금을 짧게 유지함
+Service -> Service: shared_email = email_enabled ? email : null\nshared_phone = kakao_enabled ? phone : null
+
+group transaction (DatabaseService.db.transaction)
+  Service -> CoffeeChatRequestRepository: findReceivedForShare(id, userPk, tx)
+  CoffeeChatRequestRepository -> PostgreSQL: SELECT r.pk, r.contact_shared_at, r.shared_email, r.shared_phone,\nu.name, isActiveAccount AS student_active, c.*\nFROM coffee_chat_request r\nJOIN graduated g ON g.pk = r.graduated_pk AND g.user_pk = ?\nJOIN student s ON s.pk = r.student_pk\nJOIN users u ON u.pk = s.user_pk\nLEFT JOIN coffee_chat_contact c ON c.user_pk = s.user_pk\nWHERE r.pk = ?\nFOR UPDATE OF r
+  note right
+    요청 행을 잠가, 동시에 두 번 눌러도
+    뒤의 호출은 커밋된 공유 결과를 보고 알림을 보내지 않음
+  end note
+  CoffeeChatRequestRepository --> Service: row | null
+  alt 요청 없음 또는 내가 받은 요청이 아님
+    Service -[#red]-> Client: 404 Coffee chat request not found
+  else 이미 공유함 (contact_shared_at 있음)
+    Service --> Client: 200 { contact_shared_at, shared_email, shared_phone }
+    note right: 처음 공유한 결과를 그대로 반환. 알림 없음.\n이후 재학생이 탈퇴했어도 내 연락처만 담기므로 같은 응답
+  else 재학생이 탈퇴했거나 탈퇴 유예기간 중 (student_active = false)
+    Service -[#red]-> Client: 410 Student has withdrawn
+  else 연락 설정이 없거나 "희망하지 않음" (shared_email · shared_phone 모두 null)
+    Service -[#red]-> Client: 409 No contact to share
+    note right
+      조회는 트랜잭션 밖이지만 판단은 여기서 함: 남의 요청이면 404가 먼저이고,
+      공유 후 연락 설정을 꺼도 다시 호출하면 처음 결과를 반환해야 함
+    end note
+  end
+
+  Service -> CoffeeChatRequestRepository: markContactShared(id, { sharedEmail, sharedPhone }, tx)
+  CoffeeChatRequestRepository -> PostgreSQL: UPDATE coffee_chat_request\nSET contact_shared_at = now(), shared_email = ?, shared_phone = ?,\nupdated_at = now() WHERE pk = ?\nRETURNING contact_shared_at
+  note right: 공유 시점의 값을 저장. 이후 연락 설정을 바꿔도 재학생에게는 이 값이 보임
+  CoffeeChatRequestRepository --> Service: contact_shared_at
+end
+note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
+
+== 커밋 뒤 ==
+
+Service -> Service: 재학생이 켠 채널만 담음\nemail_enabled → buildContactSharedMail(c.email, studentName, graduatedName,\n  link = WEB_BASE_URL/cheers/sent/<id>)\nkakao_enabled → { to: c.phone,\n  variables: { recipientName, graduatedName, coffeeChatRequestPk } }
+note right of Service
+  연락처 자체는 알림에 넣지 않음 (링크의 상세에서 로그인 후 확인).
+  WEB_BASE_URL: production에서 비어 있으면 서버 시작 실패,
+  로컬에서 비어 있으면 링크 없이 발송.
+  이름이 null이면 "재학생" · "현업자"로 대체
+end note
+Service ->> NotificationService: notifyAsync({ coffeeChatRequestPk, event: "contact_shared", email?, alimtalk? })
+note right
+  응답을 기다리지 않음. 로그 insert가 트랜잭션 밖 connection에서
+  coffee_chat_request FK를 참조하므로 반드시 커밋 뒤 호출
+end note
+Service --> Controller: { contact_shared_at, shared_email, shared_phone }
+Controller --> Client: 200 { contact_shared_at, shared_email, shared_phone }
+
+== 비동기 알림 (NotificationService.notify) ==
+
+par 채널별 독립 발송
+  NotificationService -> SMTP: MailService.send
+  SMTP --> NotificationService: MailResult
+else
+  NotificationService -> Solapi: AlimtalkService.send (템플릿 contact_shared)
+  Solapi --> NotificationService: AlimtalkResult
+end
+alt 실제 발송 안 함 (로컬 메일 · 솔라피 키 미설정 → skipped)
+  note over NotificationService: notification_log 기록 안 함
+else 발송 시도함
+  NotificationService -> PostgreSQL: INSERT notification_log\n(event = contact_shared, channel, status sent | failed, recipient)
+  opt 발송 실패 또는 로그 insert 실패
+    NotificationService ->> Slack: [NOTIFICATION ERROR] (수신자 마스킹)
+  end
+end
+
+@enduml
