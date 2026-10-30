@@ -6,12 +6,12 @@ export type OAuthProvider = UserOauthAccountRow["provider"];
 // 여는 법: 여기에 추가 + UserModule providers에 해당 Verifier 등록 + OAuthService 생성자에서 연결 (+ APPLE_CLIENT_ID)
 export const ENABLED_OAUTH_PROVIDERS: OAuthProvider[] = ["google"];
 
-// provider가 확인해 준 계정 정보. sub는 user_oauth_account.provider_sub
+// provider가 확인해 준 계정 정보. sub는 user_oauth_account.provider_sub.
+// 이름은 받지 않음 (추가 정보 입력에서 사용자에게 받음)
 export type OAuthProfile = {
   provider: OAuthProvider;
   sub: string;
   email: string | null;
-  name: string | null;
 };
 
 export interface OAuthVerifier {

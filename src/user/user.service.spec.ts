@@ -42,7 +42,6 @@ const googleProfile: OAuthProfile = {
   provider: "google",
   sub: "g-1",
   email: "a@gmail.com",
-  name: "홍길동",
 };
 
 const progress = (overrides: Partial<SignupProgress> = {}): SignupProgress => ({
@@ -82,7 +81,7 @@ describe("UserService", () => {
     findByPk: jest.fn(),
     insert: jest.fn(),
     updateType: jest.fn(),
-    fillProfileFromOAuth: jest.fn(),
+    fillEmail: jest.fn(),
     cancelWithdrawal: jest.fn(),
     findSignupProgress: jest.fn(),
   };
@@ -153,7 +152,7 @@ describe("UserService", () => {
       });
 
     it("creates a pending user, oauth account and type row on first login", async () => {
-      const created = userRow({ type: "graduated", name: "홍길동" });
+      const created = userRow({ type: "graduated" });
       userOauthAccountRepository.findUserForLogin.mockResolvedValue(null);
       userRepository.insert.mockResolvedValue(created);
       userOauthAccountRepository.insert.mockResolvedValue({});
@@ -169,7 +168,7 @@ describe("UserService", () => {
         "raw-nonce",
       );
       expect(userRepository.insert).toHaveBeenCalledWith(
-        { type: "graduated", name: "홍길동", email: "a@gmail.com" },
+        { type: "graduated", email: "a@gmail.com" },
         tx,
       );
       expect(userOauthAccountRepository.insert).toHaveBeenCalledWith(
@@ -208,15 +207,26 @@ describe("UserService", () => {
         "a@gmail.com",
         tx,
       );
-      expect(userRepository.fillProfileFromOAuth).toHaveBeenCalledWith(
+      expect(userRepository.fillEmail).toHaveBeenCalledWith(
         USER_PK,
-        { name: "홍길동", email: "a@gmail.com" },
+        "a@gmail.com",
         tx,
       );
       expect(userRepository.updateType).not.toHaveBeenCalled();
       expect(graduatedRepository.insert).not.toHaveBeenCalled();
       expect(userRepository.cancelWithdrawal).not.toHaveBeenCalled();
       expect(authService.issueTokens).toHaveBeenCalledWith(active, tx);
+    });
+
+    it("does not fill the email when OAuth did not provide one", async () => {
+      oauthService.verify.mockResolvedValue({ ...googleProfile, email: null });
+      userOauthAccountRepository.findUserForLogin.mockResolvedValue(
+        userRow({ status: "active" }),
+      );
+
+      await login("student");
+
+      expect(userRepository.fillEmail).not.toHaveBeenCalled();
     });
 
     it("cancels a pending withdrawal when the user logs in during the grace period", async () => {

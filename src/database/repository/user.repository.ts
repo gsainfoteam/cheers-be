@@ -81,11 +81,11 @@ export class UserRepository {
   }
 
   /*
-  INSERT INTO users (pk, type, name, email) VALUES (?1, ?2, ?3, ?4) RETURNING *;
+  INSERT INTO users (pk, type, email) VALUES (?1, ?2, ?3) RETURNING *;
    */
-  // 최초 OAuth 로그인. status는 기본값 pending
+  // 최초 OAuth 로그인. status는 기본값 pending, name은 추가 정보 입력에서 채움
   async insert(
-    row: Pick<UserRow, "type" | "name" | "email">,
+    row: Pick<UserRow, "type" | "email">,
     tx: TxType,
   ): Promise<UserRow> {
     const result = await tx
@@ -115,21 +115,14 @@ export class UserRepository {
   }
 
   /*
-  UPDATE users SET name = COALESCE(name, ?2), email = COALESCE(email, ?3), updated_at = now()
-  WHERE pk = ?1;
+  UPDATE users SET email = COALESCE(email, ?2), updated_at = now() WHERE pk = ?1;
    */
-  // 이름은 한 번 저장하면 수정 불가라 비어 있을 때만 OAuth 값으로 채움 (Apple은 최초 로그인에만 줌)
-  async fillProfileFromOAuth(
-    userPk: string,
-    profile: Pick<UserRow, "name" | "email">,
-    tx: TxType,
-  ): Promise<void> {
-    if (!profile.name && !profile.email) return;
+  // 재로그인: 비어 있을 때만 OAuth 이메일로 채움
+  async fillEmail(userPk: string, email: string, tx: TxType): Promise<void> {
     await tx
       .update(users)
       .set({
-        name: sql`COALESCE(${users.name}, ${profile.name})`,
-        email: sql`COALESCE(${users.email}, ${profile.email})`,
+        email: sql`COALESCE(${users.email}, ${email})`,
         updatedAt: new Date(),
       })
       .where(eq(users.pk, userPk));
@@ -138,7 +131,7 @@ export class UserRepository {
   /*
   UPDATE users SET name = COALESCE(name, ?2), updated_at = now() WHERE pk = ?1;
    */
-  // 추가 정보 입력: OAuth에서 이름을 못 받았을 때 한 번만 저장. 이미 있으면 그대로
+  // 추가 정보 입력: 첫 저장 때 한 번만 저장. 이미 있으면 그대로 (수정 불가)
   async fillName(userPk: string, name: string, tx: TxType): Promise<void> {
     await tx
       .update(users)
