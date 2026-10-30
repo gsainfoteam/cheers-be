@@ -1,0 +1,93 @@
+@startuml jwt-signing-key-bootstrap
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title 공통 흐름: 서버 기동 시 JWT 서명 키 로드 · 생성
+caption CRB-56 · src/auth/jwt-key.service.ts
+
+participant "start:prod" as Entrypoint
+participant "JwtKeyService" as JwtKeyService
+participant "JwtSigningKeyRepository" as JwtSigningKeyRepository
+database PostgreSQL
+participant "AuthService" as AuthService
+participant "StudentVerificationService" as StudentVerificationService
+
+== 마이그레이션 (replica마다 실행) ==
+
+Entrypoint -> PostgreSQL: bun run db:migrate
+alt 마이그레이션 실패
+  PostgreSQL -[#red]-> Entrypoint: 프로세스 종료 → K8s가 재시작
+end
+note right of PostgreSQL: 여기까지 끝나야 키 테이블이 있음
+
+== onModuleInit — 요청을 받기 전에 끝남 ==
+
+Entrypoint -> JwtKeyService: app.listen → init → onModuleInit()
+JwtKeyService -> JwtSigningKeyRepository: find()
+JwtSigningKeyRepository -> PostgreSQL: SELECT jwt_signing_key
+alt DB 오류 (연결 실패, 비밀번호 rotation 직후 인증 실패 등)
+  PostgreSQL -[#red]-> Entrypoint: 예외 → 기동 실패 → K8s가 재시작
+  note right of JwtKeyService
+    "키를 못 읽음"과 "키가 없음"은 다름.
+    읽기 실패로 새 키를 만들면 기존 토큰이 전부 무효가 되므로
+    조회가 성공해서 0행일 때만 생성
+  end note
+end
+PostgreSQL --> JwtKeyService: row | 없음
+
+alt row 있음 (두 번째 기동부터 항상 여기)
+  note right of JwtKeyService: 개인키는 평문 저장. DB가 유출되면 access token을 위조할 수 있음
+else row 없음 (빈 DB 최초 기동)
+  JwtKeyService -> JwtKeyService: generateKeyPair (RSA 2048, 비동기)
+  note right: env는 읽지 않음
+  JwtKeyService -> JwtSigningKeyRepository: insertIfAbsent(키쌍)
+  JwtSigningKeyRepository -> PostgreSQL: INSERT ... ON CONFLICT DO NOTHING RETURNING
+  note right of PostgreSQL
+    행이 1개만 있을 수 있는 제약으로
+    동시에 뜬 replica 중 하나만 성공.
+    진 쪽은 승자가 커밋할 때까지 기다린 뒤 0행을 받음
+  end note
+  alt 내가 삽입함
+    PostgreSQL --> JwtKeyService: 삽입한 row
+    JwtKeyService -> JwtKeyService: log "created" (키 값은 남기지 않음)
+  else 다른 replica가 먼저 삽입 (0행 반환)
+    PostgreSQL --> JwtKeyService: 0행
+    JwtKeyService -> JwtSigningKeyRepository: find()
+    JwtSigningKeyRepository -> PostgreSQL: SELECT jwt_signing_key
+    PostgreSQL --> JwtKeyService: 승자의 row
+    note right of JwtKeyService: 내가 만든 키쌍은 버림. 모든 replica가 같은 키를 씀
+  end
+end
+
+JwtKeyService -> JwtKeyService: 키쌍 일치 검증
+alt 일치하지 않음
+  JwtKeyService -[#red]-> Entrypoint: 예외 → 기동 실패
+  note right of JwtKeyService: 조용히 새로 만들지 않음
+end
+JwtKeyService -> JwtKeyService: 메모리에 보관 (이후 DB 조회 없음)
+
+== 기동 완료 후 사용 ==
+
+Entrypoint -> Entrypoint: HTTP 서버 listen(PORT)
+note right: 키 준비 전에는 요청을 받지 않음
+
+AuthService -> JwtKeyService: privateKey / publicKey
+note right of AuthService
+  issueTokens: RS256 서명
+  verifyAccessToken: 공개키 검증
+  (생성자에서 env를 읽던 부분을 대체)
+end note
+
+StudentVerificationService -> JwtKeyService: privateKey
+note right of StudentVerificationService
+  인증번호 HMAC 키를 개인키에서 파생.
+  키를 교체하면 진행 중인 인증번호도 무효 (최대 5분)
+end note
+
+@enduml
