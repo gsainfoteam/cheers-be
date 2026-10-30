@@ -97,9 +97,7 @@ export class StudentVerificationService {
       if (
         await this.studentRepository.existsByEmailExcept(email, student.pk, tx)
       ) {
-        throw new ConflictException(
-          "Email already verified by another account",
-        );
+        throw emailAlreadyRegistered();
       }
 
       await this.assertSendAllowed(userPk, email, createdAt, tx);
@@ -144,10 +142,7 @@ export class StudentVerificationService {
     } catch (e) {
       // 다른 계정이 같은 이메일을 방금 인증함 (student.email UNIQUE)
       if (isUniqueViolation(e)) {
-        throw new ConflictException(
-          "Email already verified by another account",
-          { cause: e },
-        );
+        throw emailAlreadyRegistered(e);
       }
       throw e;
     }
@@ -290,6 +285,16 @@ export class StudentVerificationService {
     return student;
   }
 }
+
+// 프론트가 "이미 가입된 계정이 있습니다" 안내를 띄울 수 있도록 error_code를 같이 내려 줌 (CRB-53)
+const emailAlreadyRegistered = (cause?: unknown) =>
+  new ConflictException(
+    {
+      message: "Email already verified by another account",
+      error_code: "EMAIL_ALREADY_REGISTERED",
+    },
+    { cause },
+  );
 
 const tooManyRequests = (message: string, retryAvailableAt: Date) =>
   new HttpException(

@@ -250,9 +250,14 @@ describe("StudentVerificationService", () => {
     it("returns 409 when another account already verified the email", async () => {
       studentRepository.existsByEmailExcept.mockResolvedValue(true);
 
-      await expect(service.sendCode(userPk, email)).rejects.toThrow(
-        ConflictException,
-      );
+      const error = (await service
+        .sendCode(userPk, email)
+        .catch((e) => e)) as ConflictException;
+      expect(error).toBeInstanceOf(ConflictException);
+      expect(error.getResponse()).toMatchObject({
+        message: "Email already verified by another account",
+        error_code: "EMAIL_ALREADY_REGISTERED",
+      });
       expect(verificationRepository.upsert).not.toHaveBeenCalled();
       expect(sendLogRepository.insert).not.toHaveBeenCalled();
       expect(mailService.sendAsync).not.toHaveBeenCalled();
@@ -439,6 +444,9 @@ describe("StudentVerificationService", () => {
         .catch((e) => e)) as ConflictException;
       expect(error).toBeInstanceOf(ConflictException);
       expect(error.message).toBe("Email already verified by another account");
+      expect(error.getResponse()).toMatchObject({
+        error_code: "EMAIL_ALREADY_REGISTERED",
+      });
     });
   });
 });
