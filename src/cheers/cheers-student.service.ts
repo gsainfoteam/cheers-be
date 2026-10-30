@@ -195,8 +195,9 @@ export class CheersStudentService {
             name: row.graduatedActive
               ? (row.graduatedName ?? GRADUATED_FALLBACK_NAME)
               : WITHDRAWN_ACCOUNT_NAME,
-            email: row.sharedEmail,
-            phone: row.sharedPhone,
+            // 탈퇴한 현업자의 연락처는 내리지 않음 (유예기간 중 탈퇴를 취소하면 다시 내려감)
+            email: row.graduatedActive ? row.sharedEmail : null,
+            phone: row.graduatedActive ? row.sharedPhone : null,
             shared_at: row.contactSharedAt.toISOString(),
           }
         : null,
@@ -212,6 +213,7 @@ export class CheersStudentService {
         company: row.graduated.company,
         job: row.graduated.job,
       },
+      graduated_withdrawn: !row.graduatedActive,
       message: row.message ?? "",
       status: toRequestStatus(row),
       created_at: row.createdAt.toISOString(),
