@@ -3,10 +3,10 @@ import { and, asc, count, desc, eq, SQL, sql } from "drizzle-orm";
 import { DatabaseService } from "@src/database/database.service";
 import { TxType } from "@src/global/types/tx.types";
 import { CoffeeChatContactRow } from "@src/database/repository/coffee-chat-contact.repository";
-import { graduated } from "../../../drizzle/schema/graduated";
-import { graduatedProfile } from "../../../drizzle/schema/graduated-profile";
-import { users } from "../../../drizzle/schema/users";
-import { coffeeChatContact } from "../../../drizzle/schema/coffee-chat-contact";
+import { graduated } from "@drizzle/schema/graduated";
+import { graduatedProfile } from "@drizzle/schema/graduated-profile";
+import { users } from "@drizzle/schema/users";
+import { coffeeChatContact } from "@drizzle/schema/coffee-chat-contact";
 import { isActiveAccount } from "./user.sql";
 
 export type GraduatedCardSort = "recent_joined" | "recent_active" | "random";

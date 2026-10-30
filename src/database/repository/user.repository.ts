@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { DatabaseService } from "@src/database/database.service";
 import { TxType } from "@src/global/types/tx.types";
 import { CheersDBError } from "@src/global/exceptions/cheers-db.error";
-import { users } from "../../../drizzle/schema/users";
+import { users } from "@drizzle/schema/users";
 import { hasMissingRequiredConsent } from "./consent.sql";
 import { isActiveAccount } from "./user.sql";
 

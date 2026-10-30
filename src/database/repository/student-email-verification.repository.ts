@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { eq, lt, sql } from "drizzle-orm";
 import { TxType } from "@src/global/types/tx.types";
 import { CheersDBError } from "@src/global/exceptions/cheers-db.error";
-import { studentEmailVerification } from "../../../drizzle/schema/student-email-verification";
+import { studentEmailVerification } from "@drizzle/schema/student-email-verification";
 
 export type StudentEmailVerificationRow =
   typeof studentEmailVerification.$inferSelect;

@@ -75,7 +75,8 @@
       "ts"
     ],
     "moduleNameMapper": {
-      "^@src/(.*)$": "<rootDir>/$1"
+      "^@src/(.*)$": "<rootDir>/$1",
+      "^@drizzle/(.*)$": "<rootDir>/../drizzle/$1"
     },
     "rootDir": "src",
     "testEnvironment": "node",

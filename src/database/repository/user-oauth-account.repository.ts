@@ -2,8 +2,8 @@ import { Injectable } from "@nestjs/common";
 import { and, eq } from "drizzle-orm";
 import { TxType } from "@src/global/types/tx.types";
 import { UserRow } from "@src/database/repository/user.repository";
-import { userOauthAccount } from "../../../drizzle/schema/user-oauth-account";
-import { users } from "../../../drizzle/schema/users";
+import { userOauthAccount } from "@drizzle/schema/user-oauth-account";
+import { users } from "@drizzle/schema/users";
 
 export type UserOauthAccountRow = typeof userOauthAccount.$inferSelect;
 

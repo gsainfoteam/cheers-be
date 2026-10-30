@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { TxType } from "@src/global/types/tx.types";
 import { CheersDBError } from "@src/global/exceptions/cheers-db.error";
-import { studentProfile } from "../../../drizzle/schema/student-profile";
+import { studentProfile } from "@drizzle/schema/student-profile";
 
 export type StudentProfileRow = typeof studentProfile.$inferSelect;
 

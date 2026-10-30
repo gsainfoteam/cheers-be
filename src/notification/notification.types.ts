@@ -3,7 +3,7 @@ import {
   notificationChannel,
   notificationEvent,
   notificationStatus,
-} from "../../drizzle/schema/enums";
+} from "@drizzle/schema/enums";
 import { AlimtalkVariablesMap } from "./alimtalk.types";
 
 export type NotificationEvent = (typeof notificationEvent.enumValues)[number];

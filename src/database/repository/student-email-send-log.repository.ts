@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { and, asc, eq, gt, lt, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { TxType } from "@src/global/types/tx.types";
-import { studentEmailSendLog } from "../../../drizzle/schema/student-email-send-log";
+import { studentEmailSendLog } from "@drizzle/schema/student-email-send-log";
 
 export type StudentEmailSendLogRow = typeof studentEmailSendLog.$inferSelect;
 
