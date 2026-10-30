@@ -24,6 +24,8 @@ import {
   toContactRow,
 } from "@src/user/dto/contact-request.dto";
 import { SignupCompleteResponseDto } from "@src/user/dto/signup-complete.dto";
+import { InterestListResponseDto } from "./dto/interests.dto";
+import { InterestService } from "./interest.service";
 import { SaveStudentInfoRequestDto } from "./dto/save-student-info.dto";
 import { emailDomain } from "./student.utils";
 
@@ -46,6 +48,7 @@ export class StudentService {
     private readonly studentProfileRepository: StudentProfileRepository,
     private readonly studentProfileAttachmentRepository: StudentProfileAttachmentRepository,
     private readonly coffeeChatContactRepository: CoffeeChatContactRepository,
+    private readonly interestService: InterestService,
   ) {}
 
   async getDepartments(userPk: string): Promise<DepartmentListResponseDto> {
@@ -65,6 +68,10 @@ export class StudentService {
     return {
       departments: departments.map((d) => ({ id: d.pk, name: d.name })),
     };
+  }
+
+  getInterests(): InterestListResponseDto {
+    return { interests: this.interestService.getNames() };
   }
 
   // 보낸 값으로 전체 교체. 학과 · 관심 분야 · 참여 활동 · 첨부가 바뀌었을 때만 새 버전
@@ -104,6 +111,15 @@ export class StudentService {
       }
       if (!current.student.email) {
         throw new NotFoundException("Verified student email not found");
+      }
+
+      // 고정 목록 밖의 값은 거부. 목록이 생기기 전에 직접 입력해 저장된 값은 현재 버전에 있으면 그대로 허용
+      const kept = new Set(current.latest?.profile.interests ?? []);
+      const unknown = this.interestService
+        .findUnknown(values.interests)
+        .find((v) => !kept.has(v));
+      if (unknown !== undefined) {
+        throw new BadRequestException(`Invalid interest: ${unknown}`);
       }
 
       const department = await this.departmentRepository.findByPkAndEmailDomain(

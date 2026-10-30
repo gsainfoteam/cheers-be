@@ -24,6 +24,7 @@ describe("StudentController", () => {
     ["sendCode", { step: "verify" }],
     ["verifyCode", { step: "verify" }],
     ["getDepartments", { step: "profile", allowActive: true }],
+    ["getInterests", { step: "profile", allowActive: true }],
     ["saveInfo", { step: "profile", allowActive: true }],
   ] as const)("%s runs at signup step %j", (method, options) => {
     expect(signupStepOf(handlers[method])).toEqual(options);

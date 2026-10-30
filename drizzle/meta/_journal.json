@@ -57,6 +57,13 @@
       "when": 1793373331646,
       "tag": "0007_student_email_send_log",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793384948965,
+      "tag": "0008_interest",
+      "breakpoints": true
     }
   ]
 }

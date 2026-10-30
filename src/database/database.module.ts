@@ -19,6 +19,7 @@ import { SchoolRepository } from "@src/database/repository/school.repository";
 import { DepartmentRepository } from "@src/database/repository/department.repository";
 import { GraduatedCardRepository } from "@src/database/repository/graduated-card.repository";
 import { CoffeeChatRequestRepository } from "@src/database/repository/coffee-chat-request.repository";
+import { InterestRepository } from "@src/database/repository/interest.repository";
 import { JwtSigningKeyRepository } from "@src/database/repository/jwt-signing-key.repository";
 
 const repositories = [
@@ -40,6 +41,7 @@ const repositories = [
   GraduatedCardRepository,
   CoffeeChatRequestRepository,
   JwtSigningKeyRepository,
+  InterestRepository,
 ];
 
 @Module({

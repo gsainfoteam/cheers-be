@@ -19,6 +19,7 @@ import {
 } from "@src/database/repository/user.repository";
 import { TxType } from "@src/global/types/tx.types";
 import { SaveStudentInfoRequestDto } from "./dto/save-student-info.dto";
+import { InterestService } from "./interest.service";
 import { StudentService } from "./student.service";
 
 const userPk = "690c15dc-0000-4000-8000-000000000001";
@@ -111,6 +112,7 @@ describe("StudentService", () => {
   const profileRepository = { insert: jest.fn() };
   const attachmentRepository = { insertMany: jest.fn() };
   const contactRepository = { upsert: jest.fn() };
+  const interestService = { getNames: jest.fn(), findUnknown: jest.fn() };
   const service = new StudentService(
     dbService as unknown as DatabaseService,
     authService as unknown as AuthService,
@@ -120,11 +122,13 @@ describe("StudentService", () => {
     profileRepository as unknown as StudentProfileRepository,
     attachmentRepository as unknown as StudentProfileAttachmentRepository,
     contactRepository as unknown as CoffeeChatContactRepository,
+    interestService as unknown as InterestService,
   );
 
   beforeEach(() => {
     jest.clearAllMocks();
     userRepository.findByPkForUpdate.mockResolvedValue(user());
+    interestService.findUnknown.mockReturnValue([]);
     studentRepository.findByUserPkWithLatestProfile.mockResolvedValue({
       student: studentRow,
       latest: null,
@@ -167,7 +171,42 @@ describe("StudentService", () => {
     );
   });
 
+  it("getInterests returns the fixed interest list", () => {
+    interestService.getNames.mockReturnValue(["반도체", "소프트웨어"]);
+
+    expect(service.getInterests()).toEqual({
+      interests: ["반도체", "소프트웨어"],
+    });
+  });
+
   describe("saveInfo", () => {
+    it("returns 400 for an interest outside the fixed list", async () => {
+      interestService.findUnknown.mockReturnValue(["직접입력"]);
+
+      await expect(
+        service.saveInfo(userPk, request({ interests: ["직접입력"] })),
+      ).rejects.toThrow(new BadRequestException("Invalid interest: 직접입력"));
+      expect(profileRepository.insert).not.toHaveBeenCalled();
+    });
+
+    it("allows an interest outside the list when the current version already has it", async () => {
+      studentRepository.findByUserPkWithLatestProfile.mockResolvedValue({
+        student: studentRow,
+        latest: {
+          ...latest,
+          profile: { ...latest.profile, interests: ["직접입력"] },
+        },
+      });
+      userRepository.findByPkForUpdate.mockResolvedValue(
+        user({ status: "active" }),
+      );
+      interestService.findUnknown.mockReturnValue(["직접입력"]);
+
+      await expect(
+        service.saveInfo(userPk, request({ interests: ["직접입력"] })),
+      ).resolves.toEqual({ result: "OK" });
+    });
+
     it("inserts version 1, saves the contact and completes signup with new tokens", async () => {
       await expect(service.saveInfo(userPk, request())).resolves.toEqual({
         result: "OK",
