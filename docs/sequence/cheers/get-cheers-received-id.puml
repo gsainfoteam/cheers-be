@@ -1,0 +1,78 @@
+@startuml get-cheers-received-id
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/v1/cheers/received/{id}
+caption CRB-42 · 받은 요청 상세 (요청 당시 재학생 정보 + 현재 연락처). 처음 열람 시 graduated_viewed_at 기록
+
+actor Client
+participant "UserGuard\n+ UserTypeGuard" as Guard
+participant "ParseUUIDPipe" as Pipe
+participant "CheersGraduatedController" as Controller
+participant "CheersGraduatedService" as Service
+participant "CoffeeChatRequestRepository" as CoffeeChatRequestRepository
+participant "FileService" as FileService
+database PostgreSQL
+participant "S3"
+
+Client -> Guard: GET /api/v1/cheers/received/<id>\nAuthorization: Bearer <access token>
+ref over Client, Guard
+  UserGuard, UserTypeGuard — flow/auth-guards.puml
+  @UserTypes(["graduated"]). 가입을 마친(active) 현업자만
+  401 Missing access token / Token expired / Invalid token
+  403 Signup is not completed / User type not allowed (재학생)
+end ref
+Guard -> Pipe: 통과
+alt id가 UUID 형식이 아님
+  Pipe -[#red]-> Client: 400 Validation failed (uuid is expected)
+end
+Pipe -> Controller: getReceivedDetail(id, user)
+Controller -> Service: getReceivedDetail(userPk, id)
+
+group transaction (DatabaseService.db.transaction)
+  Service -> CoffeeChatRequestRepository: findReceivedByPk(id, userPk, tx)
+  CoffeeChatRequestRepository -> PostgreSQL: SELECT r.*, sp.interests, sp.activities, d.name, u.name,\nisActiveAccount AS student_active, c.*, (첨부 json_agg)\nFROM coffee_chat_request r\nJOIN graduated g ON g.pk = r.graduated_pk AND g.user_pk = ?\nJOIN student_profile sp ON sp.pk = r.student_profile_pk\nJOIN department d ON d.pk = sp.department_pk\nJOIN student s ON s.pk = r.student_pk\nJOIN users u ON u.pk = s.user_pk\nLEFT JOIN coffee_chat_contact c ON c.user_pk = s.user_pk\nWHERE r.pk = ?
+  note right
+    내가 받은 요청만 (다른 현업자의 요청은 없는 것으로 봄).
+    학과 · 관심 분야 · 활동 · 첨부는 요청 당시 버전, 연락처는 현재 값
+  end note
+  CoffeeChatRequestRepository --> Service: row | null
+  alt 요청 없음 또는 내가 받은 요청이 아님
+    Service -[#red]-> Client: 404 Coffee chat request not found
+  else 재학생이 탈퇴했거나 탈퇴 유예기간 중 (student_active = false)
+    Service -[#red]-> Client: 410 Student has withdrawn
+    note right
+      상세 내용을 내리지 않고, 열람 기록도 남기지 않음.
+      목록은 프론트가 클릭을 막지만, 알림 링크로 바로 들어올 수 있어
+      서버도 막고 이 응답으로 탈퇴 안내를 보여 줌
+    end note
+  end
+
+  opt graduated_viewed_at 없음 (처음 열람)
+    Service -> CoffeeChatRequestRepository: markGraduatedViewed(id, tx)
+    CoffeeChatRequestRepository -> PostgreSQL: UPDATE coffee_chat_request\nSET graduated_viewed_at = now(), updated_at = now()\nWHERE pk = ? AND graduated_viewed_at IS NULL
+    note right: 처음 시각만 남김.\n동시에 두 번 열어도 조건 때문에 덮어쓰지 않음
+  end
+end
+note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
+
+== 커밋 뒤 ==
+
+loop source = file 인 첨부마다 (link는 url 그대로)
+  Service -> FileService: getPresignedUrl(key)
+  FileService -> S3: presign GET (비공개 버킷)
+  FileService --> Service: url
+end
+note right of Service: S3 서명은 트랜잭션 밖에서 처리해 DB 연결을 오래 잡지 않음
+
+Service -> Service: status 계산 ("viewed" | "contact_shared")\nstudent.email = c.email_enabled ? c.email : null\nstudent.phone = c.kakao_enabled ? c.phone : null\nactivities, attachments는 없으면 []
+Service --> Controller: ReceivedRequestDetailDto
+Controller --> Client: 200 { id, message, status, created_at, contact_shared_at,\nstudent: { name, department, interests, activities, attachments, email, phone } }
+
+@enduml

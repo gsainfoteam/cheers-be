@@ -1,0 +1,68 @@
+@startuml get-cheers-received
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/v1/cheers/received
+caption CRB-42 · 내가 받은 커피챗 요청 목록 (최근 요청 순). 탈퇴한 재학생의 신청도 목록에 남김
+
+actor Client
+participant "UserGuard\n+ UserTypeGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "CheersGraduatedController" as Controller
+participant "CheersGraduatedService" as Service
+participant "CoffeeChatRequestRepository" as CoffeeChatRequestRepository
+database PostgreSQL
+
+Client -> Guard: GET /api/v1/cheers/received?page=&size=\nAuthorization: Bearer <access token>
+ref over Client, Guard
+  UserGuard, UserTypeGuard — flow/auth-guards.puml
+  @UserTypes(["graduated"]). 가입을 마친(active) 현업자만
+  401 Missing access token / Token expired / Invalid token
+  403 Signup is not completed / User type not allowed (재학생)
+end ref
+Guard -> Pipe: 통과
+alt query 검증 실패 (page < 1, size < 1 또는 > 50, 정수가 아님)
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+note right of Pipe: 기본값 page = 1, size = 20
+Pipe -> Controller: getReceivedList(query, user)
+Controller -> Service: getReceivedList(userPk, query)
+
+par 동시에 조회 — 같은 조건
+  Service -> CoffeeChatRequestRepository: findReceivedPage(userPk, offset, limit)
+  CoffeeChatRequestRepository -> PostgreSQL: SELECT r.pk, r.created_at, r.graduated_viewed_at, r.contact_shared_at,\nd.name, u.name, isActiveAccount AS student_active\nFROM coffee_chat_request r\nJOIN graduated g ON g.pk = r.graduated_pk AND g.user_pk = ?\nJOIN student_profile sp ON sp.pk = r.student_profile_pk\nJOIN department d ON d.pk = sp.department_pk\nJOIN student s ON s.pk = r.student_pk\nJOIN users u ON u.pk = s.user_pk\nORDER BY r.created_at DESC, r.pk DESC LIMIT OFFSET
+  note right
+    학과는 요청 당시 버전(student_profile_pk).
+    상대 재학생이 탈퇴했어도 요청 기록은 보여 줌
+    (탈퇴 정책상 student · 프로필 · 요청 기록은 보관)
+  end note
+  CoffeeChatRequestRepository --> Service: rows
+else
+  Service -> CoffeeChatRequestRepository: (count)
+  CoffeeChatRequestRepository -> PostgreSQL: SELECT count(*) FROM coffee_chat_request r\nJOIN graduated g ON g.pk = r.graduated_pk AND g.user_pk = ?
+  CoffeeChatRequestRepository --> Service: total
+end
+note right of Service: 트랜잭션 없음 (조회만)
+
+Service -> Service: status 계산\ncontact_shared_at 있음 → "contact_shared"\ngraduated_viewed_at 있음 → "viewed"\n그 외 → "requested"
+alt student_active = true
+  Service -> Service: student_withdrawn = false\nstudent_name = u.name, department = d.name
+else 탈퇴 또는 탈퇴 유예기간 중 (student_active = false)
+  Service -> Service: student_withdrawn = true\nstudent_name = "탈퇴한 학생의 신청서입니다"\ndepartment = d.name (요청 당시 학과는 그대로)
+  note right of Service
+    탈퇴 처리 후에는 users.name이 지워져 null이고,
+    유예기간 중에는 다른 회원에게 보이지 않아야 함.
+    유예기간 중 다시 로그인해 탈퇴를 취소하면 원래 이름으로 돌아옴.
+    프론트는 student_withdrawn으로 목록 클릭을 막음
+  end note
+end
+Service --> Controller: { items, page, size, total }
+Controller --> Client: 200 { items: ReceivedRequestDto[], page, size, total }\nitem = { id, student_name, department, student_withdrawn, status, created_at }
+
+@enduml
