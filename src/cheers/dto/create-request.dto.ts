@@ -6,7 +6,7 @@ export class CreateRequestDto {
   @IsUUID()
   graduated_id: string;
 
-  // 질문 내용. 앞뒤 공백을 지운 뒤 검사
+  /** 질문 내용. 앞뒤 공백을 지운 뒤 검사 */
   @Transform(({ value }: { value: unknown }) =>
     typeof value === "string" ? value.trim() : value,
   )

@@ -7,6 +7,7 @@ import { LoggerService } from "@src/global/logger/logger.service";
 import { HttpLoggingInterceptor } from "@src/global/interceptors/http-logging.interceptor";
 import { SlackService } from "nestjs-slack";
 import { createCorsOptions } from "@src/global/cors/cors.config";
+import { setupSwagger } from "@src/global/swagger/swagger.config";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -30,6 +31,8 @@ async function bootstrap() {
 
   app.useGlobalInterceptors(new HttpLoggingInterceptor());
   app.useGlobalFilters(new AllExceptionsFilter(slackService));
+
+  setupSwagger(app, configService);
 
   app.enableShutdownHooks();
 

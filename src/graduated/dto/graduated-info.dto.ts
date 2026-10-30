@@ -17,7 +17,7 @@ const trim = ({ value }: { value: unknown }) =>
   typeof value === "string" ? value.trim() : value;
 
 export class GraduatedInfoRequestDto {
-  // 내 정보의 name이 null일 때(첫 저장)만 필수 (서비스에서 검사). 이미 있으면 무시
+  /** 내 정보의 name이 null일 때(첫 저장)만 필수. 이미 있으면 무시 */
   @IsOptional()
   @Transform(trim)
   @IsString()
@@ -25,7 +25,7 @@ export class GraduatedInfoRequestDto {
   @MaxLength(64)
   name?: string;
 
-  // 첫 저장에만 필수 (서비스에서 검사). 가입 후 변경 불가라 이후 보내면 무시
+  /** 첫 저장에만 필수. 가입 후 변경 불가라 이후 보내면 무시 */
   @IsOptional()
   @Transform(trim)
   @Matches(/^[가-힣A-Za-z0-9_]{2,10}$/, {
@@ -38,7 +38,7 @@ export class GraduatedInfoRequestDto {
   @MaxLength(128)
   company: string;
 
-  // 비공개 (다른 회원에게 보이지 않음)
+  /** 비공개 (다른 회원에게 보이지 않음) */
   @IsString()
   @IsNotEmpty()
   @MaxLength(128)
@@ -49,7 +49,7 @@ export class GraduatedInfoRequestDto {
   @MaxLength(128)
   job: string;
 
-  // "#" 없이
+  /** "#" 없이 */
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(10)

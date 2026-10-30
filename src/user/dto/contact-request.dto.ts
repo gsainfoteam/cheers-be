@@ -18,6 +18,7 @@ export class ContactRequestDto {
   @IsBoolean()
   kakao_enabled: boolean;
 
+  /** 값이 없으면 null 또는 생략 ("" 는 400) */
   @IsOptional()
   @Transform(({ value }: { value: unknown }) =>
     typeof value === "string" ? value.trim() : value,
@@ -26,7 +27,7 @@ export class ContactRequestDto {
   @MaxLength(255)
   email?: string | null;
 
-  // "-" · 공백을 빼고 저장
+  /** "-" · 공백을 빼고 저장. 값이 없으면 null 또는 생략 ("" 는 400) */
   @IsOptional()
   @Transform(({ value }: { value: unknown }) =>
     typeof value === "string" ? value.replace(/[-\s]/g, "") : value,

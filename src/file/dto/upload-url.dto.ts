@@ -5,7 +5,7 @@ export class UploadUrlRequestDto {
   @IsNotEmpty()
   content_type: string;
 
-  // byte. 실제로 올릴 파일 크기와 같아야 함 (서명에 포함)
+  /** byte. 실제로 올릴 파일 크기와 같아야 함 (서명에 포함) */
   @IsInt()
   @IsPositive()
   size: number;
