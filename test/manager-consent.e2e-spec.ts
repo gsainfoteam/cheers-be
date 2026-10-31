@@ -136,7 +136,6 @@ describe("manager consent", () => {
         is_required: false,
         url: "https://terms.example.com/e2e",
         created_at: expect.any(String),
-        is_latest: true,
       });
       await post(auth, body({ version: version("2") })).expect(201);
 
@@ -186,6 +185,7 @@ describe("manager consent", () => {
       ["type 형식", { type: "Has Space" }],
       ["type 길이", { type: "a".repeat(65) }],
       ["version 형식", { version: "e2e/1" }],
+      ["version 점으로 시작", { version: ".." }],
       ["version 길이", { version: "1".repeat(33) }],
       ["is_required 누락", { is_required: undefined }],
       ["is_required 문자열", { is_required: "true" }],

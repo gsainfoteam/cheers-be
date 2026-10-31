@@ -62,7 +62,7 @@ describe("ManagerConsentService", () => {
       url: "https://terms.example.com/tos/2",
     };
 
-    it("요청을 행으로 바꿔 넣고 최신 버전으로 응답", async () => {
+    it("요청을 행으로 바꿔 넣고 넣은 행을 응답", async () => {
       repository.insertIfAbsent.mockResolvedValue({
         type: "tos",
         version: "2",
@@ -77,7 +77,6 @@ describe("ManagerConsentService", () => {
         is_required: false,
         url: req.url,
         created_at: NOW,
-        is_latest: true,
       });
       expect(repository.insertIfAbsent).toHaveBeenCalledWith({
         type: "tos",

@@ -3,11 +3,15 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { AdminConsentRepository } from "@src/admin-repository/admin-consent.repository";
+import {
+  AdminConsentRepository,
+  ConsentRow,
+} from "@src/admin-repository/admin-consent.repository";
 import {
   ConsentStatusDto,
   ConsentTypeDto,
   ConsentVersionDto,
+  ConsentVersionListItemDto,
   CreateConsentVersionRequestDto,
 } from "@src/manager/consent/dto/manager-consent.dto";
 
@@ -21,23 +25,16 @@ export class ManagerConsentService {
   async list(): Promise<ConsentTypeDto[]> {
     const rows = await this.adminConsentRepository.findAllVersions();
 
-    const grouped = new Map<string, ConsentVersionDto[]>();
+    const grouped = new Map<string, ConsentVersionListItemDto[]>();
     for (const row of rows) {
       const versions = grouped.get(row.type) ?? [];
-      versions.push({
-        type: row.type,
-        version: row.version,
-        is_required: row.isRequired,
-        url: row.url,
-        created_at: row.createdAt,
-        is_latest: row.isLatest,
-      });
+      versions.push({ ...this.toDto(row), is_latest: row.isLatest });
       grouped.set(row.type, versions);
     }
     return [...grouped].map(([type, versions]) => ({ type, versions }));
   }
 
-  // 등록 전 확인은 어드민 화면에서 함. 방금 넣은 행은 created_at이 가장 크므로 최신 버전
+  // 등록 전 확인은 어드민 화면에서 함
   async create(
     req: CreateConsentVersionRequestDto,
   ): Promise<ConsentVersionDto> {
@@ -50,14 +47,7 @@ export class ManagerConsentService {
     if (!row) {
       throw new ConflictException("This consent version already exists.");
     }
-    return {
-      type: row.type,
-      version: row.version,
-      is_required: row.isRequired,
-      url: row.url,
-      created_at: row.createdAt,
-      is_latest: true,
-    };
+    return this.toDto(row);
   }
 
   async getStatus(type: string, version: string): Promise<ConsentStatusDto> {
@@ -72,6 +62,16 @@ export class ManagerConsentService {
       agreed_count: counts.agreed,
       revoked_count: counts.revoked,
       withdrawn_count: counts.withdrawn,
+    };
+  }
+
+  private toDto(row: ConsentRow): ConsentVersionDto {
+    return {
+      type: row.type,
+      version: row.version,
+      is_required: row.isRequired,
+      url: row.url,
+      created_at: row.createdAt,
     };
   }
 }

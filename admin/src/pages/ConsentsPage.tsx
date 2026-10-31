@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { api, ApiError } from "../lib/api";
+import { api, errorMessage } from "../lib/api";
 import { useCurrentManager } from "../lib/current-manager";
+import { formatDateTime } from "../lib/format";
 
 const BASE_PATH = "/api/manager/v1/consent";
 
@@ -24,50 +25,45 @@ type ConsentStatus = {
   withdrawn_count: number;
 };
 
-function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof ApiError ? err.message : fallback;
-}
-
-function formatDateTime(value: string): string {
-  return new Date(value).toLocaleString("ko-KR", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-}
-
 const statusKey = (version: ConsentVersion) =>
   `${version.type}/${version.version}`;
 
-// 등록은 되돌릴 수 없고 사용자에게 바로 영향을 주는 경우만 확인. null이면 확인 없이 등록
+// 등록은 되돌릴 수 없으므로 사용자에게 영향이 있거나 실수로 보이는 경우 확인. null이면 확인 없이 등록
 function confirmMessage(
   type: string,
   version: string,
   isRequired: boolean,
   latest: ConsentVersion | undefined,
 ): string | null {
-  const name = `${type} ${version}`;
+  const warnings: string[] = [];
   if (isRequired) {
-    return [
-      `필수 약관 ${name}을(를) 등록할까요?`,
+    warnings.push(
       "이 버전에 동의하지 않은 모든 사용자에게 재동의 요청(consent_required)이 켜집니다.",
-      latest ? null : `${type}은(는) 처음 등록하는 약관 종류입니다.`,
-      "등록한 버전은 수정하거나 삭제할 수 없습니다.",
-    ]
-      .filter(Boolean)
-      .join("\n");
+    );
+  } else if (latest?.is_required) {
+    warnings.push(
+      `${type}의 최신 버전은 필수 약관입니다. 등록하면 사용자에게 이 약관의 동의를 더 요구하지 않습니다.`,
+    );
   }
-  if (latest?.is_required) {
-    return [
-      `${type}의 최신 버전은 필수 약관인데 ${name}은(는) 선택 약관입니다.`,
-      "등록하면 사용자에게 이 약관의 동의를 더 요구하지 않습니다. 계속할까요?",
-      "등록한 버전은 수정하거나 삭제할 수 없습니다.",
-    ].join("\n");
+  if (!latest) {
+    warnings.push(
+      `${type}은(는) 처음 등록하는 약관 종류입니다. 오타가 아닌지 확인해 주세요.`,
+    );
+  } else if (
+    version.localeCompare(latest.version, undefined, { numeric: true }) < 0
+  ) {
+    // 최신 버전은 번호가 아니라 등록 시각으로 정해짐
+    warnings.push(
+      `현재 최신 버전 ${latest.version}보다 번호가 낮지만, 등록하면 이 버전이 최신이 됩니다.`,
+    );
   }
-  return null;
+  if (warnings.length === 0) return null;
+
+  return [
+    `${isRequired ? "필수" : "선택"} 약관 ${type} ${version}을(를) 등록할까요?`,
+    ...warnings,
+    "등록한 버전은 수정하거나 삭제할 수 없습니다.",
+  ].join("\n");
 }
 
 export function ConsentsPage() {
@@ -99,11 +95,13 @@ export function ConsentsPage() {
       ?.find((consentType) => consentType.type === name)
       ?.versions.find((v) => v.is_latest);
 
-  // 개정할 때 필수 여부를 실수로 바꾸지 않도록 최신 버전의 값으로 채움
+  // 개정할 때 필수 여부를 실수로 바꾸지 않도록 최신 버전의 값으로 채움.
+  // 채운 값이 다른 종류로 넘어가지 않게, 기존 종류에서 벗어나면 되돌림
   const handleTypeChange = (next: string) => {
-    setType(next);
     const latest = latestOf(next.trim());
     if (latest) setIsRequired(latest.is_required);
+    else if (latestOf(type.trim())) setIsRequired(false);
+    setType(next);
   };
 
   const handleAdd = async (e: FormEvent) => {
@@ -128,11 +126,22 @@ export function ConsentsPage() {
         is_required: isRequired,
         url: url.trim(),
       });
-      setVersion("");
-      setUrl("");
-      await load();
     } catch (err) {
       setError(errorMessage(err, "약관을 등록하지 못했습니다."));
+      setSubmitting(false);
+      return;
+    }
+
+    setVersion("");
+    setUrl("");
+    try {
+      await load();
+    } catch {
+      // 오래된 목록으로 확인 창을 판단하지 않도록 비워서 등록을 막음
+      setConsentTypes(null);
+      setError(
+        "약관은 등록했지만 목록을 다시 불러오지 못했습니다. 새로고침해 주세요.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -196,7 +205,11 @@ export function ConsentsPage() {
             />{" "}
             필수
           </label>
-          <button className="button small" type="submit" disabled={submitting}>
+          <button
+            className="button small"
+            type="submit"
+            disabled={submitting || !consentTypes}
+          >
             새 버전 등록
           </button>
         </form>
