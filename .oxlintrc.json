@@ -14,5 +14,17 @@
     "typescript/no-explicit-any": "off",
     "typescript/no-extraneous-class": "off",
     "import/no-unassigned-import": "off"
-  }
+  },
+  "overrides": [
+    {
+      "files": ["admin/**"],
+      "plugins": ["typescript", "import", "react"],
+      "env": { "browser": true, "node": false, "jest": false },
+      "rules": {
+        "react/rules-of-hooks": "error",
+        "react/exhaustive-deps": "warn",
+        "react/react-in-jsx-scope": "off"
+      }
+    }
+  ]
 }
