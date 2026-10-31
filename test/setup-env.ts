@@ -1,13 +1,19 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 // AppModule을 import하기 전에 도는 파일 (jest-e2e.json setupFiles).
-// ConfigModule은 process.env에 없는 키만 .env에서 채우므로, .env-template의 모든 키를 먼저 비워서
-// 개발자의 .env에 있는 실제 AWS · 메일 · Solapi 값이 테스트로 들어오지 못하게 함
 
 const DEFAULT_E2E_DATABASE_URL =
   "postgresql://cheers:password@localhost:55432/cheers_e2e";
 
+// ConfigModule은 현재 디렉터리의 .env를 읽으므로, .env가 없는 test/로 옮겨서
+// 개발자의 .env에 있는 실제 AWS · 메일 · Solapi 값이 테스트로 들어오지 못하게 함
+if (existsSync(join(__dirname, ".env"))) {
+  throw new Error("test/.env must not exist: e2e must not load an env file.");
+}
+process.chdir(__dirname);
+
+// 셸에서 export한 값도 쓰지 않도록 .env-template의 모든 키를 비움
 const template = readFileSync(join(__dirname, "../.env-template"), "utf8");
 for (const match of template.matchAll(/^#?\s*([A-Z][A-Z0-9_]*)=/gm)) {
   process.env[match[1]] = "";
@@ -15,14 +21,16 @@ for (const match of template.matchAll(/^#?\s*([A-Z][A-Z0-9_]*)=/gm)) {
 
 // DATABASE_URL이 아니라 전용 변수만 봄 (셸이나 .env의 staging 주소를 쓰지 않도록)
 const databaseUrl = process.env.E2E_DATABASE_URL ?? DEFAULT_E2E_DATABASE_URL;
-const { hostname, pathname } = new URL(databaseUrl);
-// 테스트마다 TRUNCATE하므로 로컬 일회용 DB가 아니면 시작하지 않음
+const { hostname, pathname, search } = new URL(databaseUrl);
+// 테스트마다 TRUNCATE하므로 로컬 일회용 DB가 아니면 시작하지 않음.
+// pg는 ?host= 값을 URL의 호스트보다 우선하므로 쿼리 문자열도 받지 않음
 if (
   !["localhost", "127.0.0.1", "[::1]"].includes(hostname) ||
-  !pathname.endsWith("_e2e")
+  !pathname.endsWith("_e2e") ||
+  search !== ""
 ) {
   throw new Error(
-    "E2E_DATABASE_URL must point to a local database whose name ends with _e2e.",
+    "E2E_DATABASE_URL must point to a local database whose name ends with _e2e, without a query string.",
   );
 }
 

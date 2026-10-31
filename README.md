@@ -41,8 +41,8 @@ DATABASE_URL=postgresql://cheers:password@localhost:55432/cheers_e2e bun run db:
 bun run test:e2e
 ```
 
-- DB 주소는 `E2E_DATABASE_URL`만 보고(기본값은 위 컨테이너), 로컬의 `*_e2e` DB가 아니면 시작하지 않습니다. 테스트마다 유저 데이터를 TRUNCATE합니다.
-- `.env`의 값은 쓰지 않습니다. `test/setup-env.ts`가 `.env-template`의 키를 모두 비우고 더미 값을 넣습니다.
+- DB 주소는 `E2E_DATABASE_URL`만 보고(기본값은 위 컨테이너), 로컬의 `*_e2e` DB가 아니거나 쿼리 문자열이 있으면 시작하지 않습니다. 테스트마다 유저 데이터를 TRUNCATE합니다.
+- `.env`는 읽지 않습니다. `test/setup-env.ts`가 `.env`가 없는 `test/`로 이동하고, 셸의 값도 쓰지 않도록 `.env-template`의 키를 모두 비운 뒤 더미 값을 넣습니다.
 - Google 로그인 · 메일 · Slack · S3는 가짜로 대체해 외부로 나가지 않습니다 (`test/support/`).
 - 로그는 기본으로 끕니다. 디버깅할 때 `E2E_LOG=true`를 붙이세요.
 

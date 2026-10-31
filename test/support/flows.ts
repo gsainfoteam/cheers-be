@@ -155,6 +155,20 @@ export async function submitBusinessCard(
     .expect(201);
 }
 
+// 이력서 업로드 URL 발급 → (presigned PUT 대신) 가짜 S3에 직접 넣기. 반환한 임시 key를 추가 정보 저장에 씀
+export async function uploadAttachment(
+  ctx: E2eContext,
+  session: Session,
+): Promise<string> {
+  const upload = await http(ctx)
+    .post("/api/v1/file/attachment/upload-url")
+    .set("Authorization", bearer(session))
+    .send({ content_type: "application/pdf", size: PDF_BYTES.length })
+    .expect(201);
+  ctx.s3.put(upload.body.key, PDF_BYTES);
+  return upload.body.key;
+}
+
 export const graduatedInfoBody = (overrides: Record<string, unknown> = {}) => ({
   name: "박현업",
   nickname: `현업${randomUUID().slice(0, 6)}`,

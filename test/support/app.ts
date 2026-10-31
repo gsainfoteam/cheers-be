@@ -1,41 +1,19 @@
-import {
-  INestApplication,
-  UnauthorizedException,
-  ValidationPipe,
-} from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import { SchedulerRegistry } from "@nestjs/schedule";
+import { INestApplication, UnauthorizedException } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
+import { CronJob } from "cron";
 import { sql } from "drizzle-orm";
 import { SlackService } from "nestjs-slack";
 import { AppModule } from "@src/app.module";
 import { DatabaseService } from "@src/database/database.service";
-import { createCorsOptions } from "@src/global/cors/cors.config";
-import { AllExceptionsFilter } from "@src/global/filters/all-exception.filter";
-import { HttpLoggingInterceptor } from "@src/global/interceptors/http-logging.interceptor";
+import { configureApp } from "@src/global/app.config";
 import { MailService } from "@src/mail/mail.service";
-import { SendMailInput } from "@src/mail/mail.types";
+import { MailResult, SendMailInput } from "@src/mail/mail.types";
 import { GoogleVerifier } from "@src/user/oauth/google.verifier";
 import { OAuthProfile, OAuthVerifier } from "@src/user/oauth/oauth.types";
 import { FakeS3 } from "./fake-s3";
 
-// 기준 데이터(consent, school, department, interest)와 서명 키는 마이그레이션 · 기동 때 들어가므로 남김
-const USER_DATA_TABLES = [
-  "notification_log",
-  "coffee_chat_request",
-  "coffee_chat_contact",
-  "student_profile_attachment",
-  "student_profile",
-  "student_email_verification",
-  "student_email_send_log",
-  "student",
-  "graduated_profile",
-  "graduated",
-  "user_consent",
-  "refresh_token",
-  "user_oauth_account",
-  "users",
-];
+// skipped는 env가 비었을 때의 실제 동작과 같음
+const MAIL_SKIPPED: MailResult = { success: true, skipped: true };
 
 // token 문자열 → 계정. 실제 서명 검증은 src/user/oauth/id-token.verifier.spec.ts에서 확인
 class FakeGoogleVerifier implements OAuthVerifier {
@@ -48,13 +26,15 @@ class FakeGoogleVerifier implements OAuthVerifier {
   }
 }
 
-// 인증번호는 메일로만 나가므로 받은 메일을 모아서 꺼내 씀. skipped는 env가 비었을 때의 실제 동작과 같음
+// 인증번호는 메일로만 나가므로 받은 메일을 모아서 꺼내 씀
 export class FakeMailService {
   readonly sent: SendMailInput[] = [];
+  // notification_log 기록을 확인할 때만 바꿈 (skipped면 기록하지 않음). reset에서 되돌림
+  sendResult: MailResult = MAIL_SKIPPED;
 
-  async send(input: SendMailInput) {
+  async send(input: SendMailInput): Promise<MailResult> {
     this.sent.push(input);
-    return { success: true, skipped: true };
+    return this.sendResult;
   }
 
   sendAsync(input: SendMailInput): void {
@@ -88,14 +68,15 @@ export type E2eContext = {
   close: () => Promise<void>;
 };
 
-// main.ts의 bootstrap과 같은 전역 설정으로 AppModule을 띄움. listen 없이 supertest가 직접 호출
+// main.ts와 같은 전역 설정(configureApp)으로 AppModule을 띄움. listen 없이 supertest가 직접 호출
 export async function createE2eApp(): Promise<E2eContext> {
   const s3 = new FakeS3();
   const mail = new FakeMailService();
   const slack = new FakeSlackService();
   s3.install();
 
-  // 메일 · 슬랙 · S3는 가짜이고, 남은 외부 호출(Solapi)은 키가 없어 fetch까지 가지 않음. 새 경로가 생기면 여기서 실패
+  // 메일 · 슬랙 · S3는 가짜이고, 남은 외부 호출(Solapi)은 키가 없어 fetch까지 가지 않음.
+  // 호출하는 쪽이 예외를 삼킬 수 있으므로(AlimtalkService) close에서 호출 여부를 확인해 실패시킴
   const fetchSpy = jest
     .spyOn(globalThis, "fetch")
     .mockImplementation((input) => {
@@ -115,23 +96,14 @@ export async function createE2eApp(): Promise<E2eContext> {
   const app = moduleRef.createNestApplication({
     logger: process.env.E2E_LOG === "true" ? ["error", "warn"] : false,
   });
-  app.enableCors(createCorsOptions(app.get(ConfigService)));
-  app.useGlobalPipes(
-    new ValidationPipe({
-      transform: true,
-      transformOptions: { enableImplicitConversion: false },
-    }),
-  );
-  app.useGlobalInterceptors(new HttpLoggingInterceptor());
-  app.useGlobalFilters(
-    new AllExceptionsFilter(slack as unknown as SlackService),
-  );
-  await app.init();
+  configureApp(app);
 
-  // 테스트 중에 cron이 돌아 결과가 흔들리지 않게 멈춤. 스케줄러 작업은 서비스 메서드를 직접 호출
-  for (const job of app.get(SchedulerRegistry).getCronJobs().values()) {
-    void job.stop();
-  }
+  // cron이 돌아 결과가 흔들리지 않게 등록만 하고 시작하지 않음. 스케줄러 작업은 서비스 메서드를 직접 호출
+  const cronStartSpy = jest
+    .spyOn(CronJob.prototype, "start")
+    .mockImplementation(() => undefined);
+  await app.init();
+  cronStartSpy.mockRestore();
 
   const db = app.get(DatabaseService).db;
 
@@ -142,17 +114,22 @@ export async function createE2eApp(): Promise<E2eContext> {
     mail,
     slack,
     reset: async () => {
-      const tables = USER_DATA_TABLES.map((t) => `"${t}"`).join(", ");
-      // 테스트 DB 전용 (test/setup-env.ts에서 로컬 *_e2e DB만 허용)
-      await db.execute(sql.raw(`TRUNCATE ${tables} CASCADE`));
+      // 테스트 DB 전용 (test/setup-env.ts에서 로컬 *_e2e DB만 허용). users를 참조하는 테이블이 모두 비워지고,
+      // 참조하지 않는 기준 데이터(consent, school, department, interest)와 서명 키는 남음
+      await db.execute(sql`TRUNCATE "users" CASCADE`);
       s3.reset();
       mail.sent.length = 0;
+      mail.sendResult = MAIL_SKIPPED;
       slack.messages.length = 0;
     },
     close: async () => {
       await app.close();
       s3.uninstall();
+      const requests = fetchSpy.mock.calls.map(([input]) => String(input));
       fetchSpy.mockRestore();
+      if (requests.length > 0) {
+        throw new Error(`Unexpected external requests: ${requests.join(", ")}`);
+      }
     },
   };
 }
