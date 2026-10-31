@@ -1,5 +1,8 @@
 import { Module } from "@nestjs/common";
+import { AdminAccessLogRepository } from "@src/admin-repository/admin-access-log.repository";
 import { AdminAccountRepository } from "@src/admin-repository/admin-account.repository";
+import { AdminConsentRepository } from "@src/admin-repository/admin-consent.repository";
+import { AdminGraduatedRepository } from "@src/admin-repository/admin-graduated.repository";
 import { AdminDepartmentRepository } from "@src/admin-repository/admin-department.repository";
 import { AdminSchoolEmailDomainRepository } from "@src/admin-repository/admin-school-email-domain.repository";
 import { AdminSchoolRepository } from "@src/admin-repository/admin-school.repository";
@@ -8,6 +11,9 @@ import { DatabaseModule } from "@src/database/database.module";
 
 const repositories = [
   AdminAccountRepository,
+  AdminAccessLogRepository,
+  AdminConsentRepository,
+  AdminGraduatedRepository,
   AdminDepartmentRepository,
   AdminSchoolEmailDomainRepository,
   AdminSchoolRepository,

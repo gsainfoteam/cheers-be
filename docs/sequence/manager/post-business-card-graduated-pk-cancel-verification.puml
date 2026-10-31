@@ -1,0 +1,70 @@
+@startuml post-manager-business-card-graduated-pk-cancel-verification
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title POST /api/manager/v1/business-card/{graduatedPk}/cancel-verification
+caption CRB-44 · 명함 인증 취소 (superadmin 전용). 재업로드하면 다시 인증됨. 알림 없음
+
+actor Client
+participant "ManagerGuard\n+ SuperAdminGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "BusinessCardController" as Controller
+participant "BusinessCardService" as Service
+participant "AdminGraduatedRepository" as AdminGraduatedRepository
+database PostgreSQL
+
+Client -> Guard: POST /api/manager/v1/business-card/{graduatedPk}/cancel-verification\nAuthorization: Bearer <manager token>
+ref over Client, Guard: ManagerGuard + SuperAdminGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found\n403 Superadmin privilege is required.
+Guard -> Pipe: 통과
+alt graduatedPk가 UUID가 아님
+  Pipe -[#red]-> Client: 400 (ParseUUIDPipe 메시지)
+end
+Pipe -> Controller: cancelVerification(graduatedPk, manager)
+Controller -> Service: cancelVerification(graduatedPk, manager)
+
+group transaction (DatabaseService.db.transaction)
+  Service -> AdminGraduatedRepository: findForUpdate(graduatedPk, tx)
+  AdminGraduatedRepository -> PostgreSQL: SELECT g.verified_at FROM graduated g JOIN users u\nWHERE g.pk = ? AND u.is_deleted = false\nFOR UPDATE OF u
+  note right
+    명함 등록 · 로그인(유형 변경) · 탈퇴 처리와 같은 유저 행 잠금으로 직렬화.
+    잠금 순서도 같음 (users → graduated)
+  end note
+  PostgreSQL --> AdminGraduatedRepository: row | 0행
+  alt 현업자 없음 (탈퇴 처리 완료 포함)
+    Service -[#red]-> Client: 404 Graduated not found
+  else verified_at = NULL (이미 취소 · 미인증)
+    Service -[#red]-> Client: 409 Business card is not verified
+  end
+  Service -> AdminGraduatedRepository: clearVerification(graduatedPk, tx)
+  AdminGraduatedRepository -> PostgreSQL: UPDATE graduated SET verified_at = NULL,\nbusiness_card_key = NULL, updated_at = now() WHERE pk = ?
+end
+note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
+
+note right of Service
+  users.status는 바꾸지 않음. pending으로 되돌리면 재업로드 뒤 가입을 끝낼 길이 없고(next_step = null),
+  24시간 뒤 미완료 가입 정리가 계정을 지우며, 받은 커피챗 요청의 FK 때문에
+  정리 · 유형 변경이 실패하고, 탈퇴 유예기간도 1일로 줄어듦.
+
+  영향 (active 현업자)
+  - GET /api/v1/user/info: next_step = "verify", graduated.verified = false
+  - 재학생의 현업자 목록 · 새 커피챗 요청: 빠짐 (verified_at IS NOT NULL 조건)
+  - 받은 요청 API 3개: 403 (재업로드 전까지). 요청 행은 그대로 남고 재인증하면 이어서 처리
+  - 이미 공유한 연락처는 재학생 기록에 그대로 남음
+  - 재업로드: POST /api/v1/user/graduated/verify/business-card (allowActive)
+end note
+
+note right of Service
+  S3 파일은 지우지 않음. key가 NULL이라 다음 고아 파일 정리의 대상이 됨
+  (flow/s3-orphan-cleanup.puml, S3_ORPHAN_DELETE_ENABLED=true일 때만 실제 삭제)
+end note
+Service -> Service: 로그 (graduated pk, manager pk). 이메일은 남기지 않음
+Service --> Controller: BaseResultDto.OK
+Controller --> Client: 200 { result: "OK" }
+
+@enduml

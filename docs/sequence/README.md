@@ -4,55 +4,61 @@
 
 ## 목록
 
-| 파일                                                                                                   | 내용                                                                |
-| ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
-| [flow/auth-guards.puml](flow/auth-guards.puml)                                                         | 공통 인증 · 가입 단계 · 유형 가드                                   |
-| [flow/withdrawal-purge.puml](flow/withdrawal-purge.puml)                                               | 스케줄러: 탈퇴 유예기간 만료 처리                                   |
-| [flow/cleanup-schedulers.puml](flow/cleanup-schedulers.puml)                                           | 스케줄러: 미완료 가입 · 만료 인증 데이터 정리                       |
-| [flow/s3-orphan-cleanup.puml](flow/s3-orphan-cleanup.puml)                                             | 스케줄러: DB에서 참조하지 않는 S3 파일 정리                         |
-| [flow/file-upload.puml](flow/file-upload.puml)                                                         | 파일 업로드 · 확정 · 조회 · 삭제                                    |
-| [flow/jwt-signing-key-bootstrap.puml](flow/jwt-signing-key-bootstrap.puml)                             | 서버 기동 시 JWT 서명 키 로드 · 생성                                |
-| [flow/interest-cache-bootstrap.puml](flow/interest-cache-bootstrap.puml)                               | 서버 기동 시 관심 분야 목록을 메모리에 로드                         |
-| [flow/k8s-probes.puml](flow/k8s-probes.puml)                                                           | K8s probe와 DB 장애 시 동작                                         |
-| [flow/observability.puml](flow/observability.puml)                                                     | metrics 수집과 trace 전송                                           |
-| [flow/admin-login.puml](flow/admin-login.puml)                                                         | 어드민 화면 로그인 (PKCE)                                           |
-| [flow/manager-guards.puml](flow/manager-guards.puml)                                                   | 매니저 가드                                                         |
-| [health/get-health.puml](health/get-health.puml)                                                       | `GET /health`                                                       |
-| [health/get-health-ready.puml](health/get-health-ready.puml)                                           | `GET /health/ready`                                                 |
-| [user/post-oauth-login.puml](user/post-oauth-login.puml)                                               | `POST /api/v1/user/oauth/login`                                     |
-| [user/post-refresh.puml](user/post-refresh.puml)                                                       | `POST /api/v1/user/refresh`                                         |
-| [user/get-info.puml](user/get-info.puml)                                                               | `GET /api/v1/user/info`                                             |
-| [user/post-logout.puml](user/post-logout.puml)                                                         | `POST /api/v1/user/logout`                                          |
-| [user/post-withdraw.puml](user/post-withdraw.puml)                                                     | `POST /api/v1/user/withdraw`                                        |
-| [consent/get-consent-list.puml](consent/get-consent-list.puml)                                         | `GET /api/v1/user/consent/list`                                     |
-| [consent/post-consent.puml](consent/post-consent.puml)                                                 | `POST /api/v1/user/consent`                                         |
-| [student/post-verify-send-code.puml](student/post-verify-send-code.puml)                               | `POST /api/v1/user/student/verify/send-code`                        |
-| [student/post-verify-code.puml](student/post-verify-code.puml)                                         | `POST /api/v1/user/student/verify/code`                             |
-| [student/get-departments.puml](student/get-departments.puml)                                           | `GET /api/v1/user/student/departments`                              |
-| [student/get-interests.puml](student/get-interests.puml)                                               | `GET /api/v1/user/student/interests`                                |
-| [student/post-info.puml](student/post-info.puml)                                                       | `POST /api/v1/user/student/info`                                    |
-| [file/post-business-card-upload-url.puml](file/post-business-card-upload-url.puml)                     | `POST /api/v1/file/business-card/upload-url`                        |
-| [file/post-attachment-upload-url.puml](file/post-attachment-upload-url.puml)                           | `POST /api/v1/file/attachment/upload-url`                           |
-| [graduated/post-verify-business-card.puml](graduated/post-verify-business-card.puml)                   | `POST /api/v1/user/graduated/verify/business-card`                  |
-| [graduated/post-info.puml](graduated/post-info.puml)                                                   | `POST /api/v1/user/graduated/info`                                  |
-| [cheers/get-cheers.puml](cheers/get-cheers.puml)                                                       | `GET /api/v1/cheers`                                                |
-| [cheers/post-cheers-request.puml](cheers/post-cheers-request.puml)                                     | `POST /api/v1/cheers/request`                                       |
-| [cheers/get-cheers-sent.puml](cheers/get-cheers-sent.puml)                                             | `GET /api/v1/cheers/sent`                                           |
-| [cheers/get-cheers-sent-id.puml](cheers/get-cheers-sent-id.puml)                                       | `GET /api/v1/cheers/sent/{id}`                                      |
-| [cheers/get-cheers-received.puml](cheers/get-cheers-received.puml)                                     | `GET /api/v1/cheers/received`                                       |
-| [cheers/get-cheers-received-id.puml](cheers/get-cheers-received-id.puml)                               | `GET /api/v1/cheers/received/{id}`                                  |
-| [cheers/post-cheers-received-id-share-contact.puml](cheers/post-cheers-received-id-share-contact.puml) | `POST /api/v1/cheers/received/{id}/share-contact`                   |
-| [manager/post-auth-login.puml](manager/post-auth-login.puml)                                           | `POST /api/manager/v1/auth/login`                                   |
-| [manager/get-auth-me.puml](manager/get-auth-me.puml)                                                   | `GET /api/manager/v1/auth/me`                                       |
-| [manager/get-admin-account.puml](manager/get-admin-account.puml)                                       | `GET /api/manager/v1/admin-account`                                 |
-| [manager/post-admin-account.puml](manager/post-admin-account.puml)                                     | `POST /api/manager/v1/admin-account`                                |
-| [manager/patch-admin-account-pk.puml](manager/patch-admin-account-pk.puml)                             | `PATCH /api/manager/v1/admin-account/{pk}`                          |
-| [manager/delete-admin-account-pk.puml](manager/delete-admin-account-pk.puml)                           | `DELETE /api/manager/v1/admin-account/{pk}`                         |
-| [manager/get-school.puml](manager/get-school.puml)                                                     | `GET /api/manager/v1/school`                                        |
-| [manager/get-school-pk-department.puml](manager/get-school-pk-department.puml)                         | `GET /api/manager/v1/school/{schoolPk}/department`                  |
-| [manager/post-school-pk-department.puml](manager/post-school-pk-department.puml)                       | `POST /api/manager/v1/school/{schoolPk}/department`                 |
-| [manager/patch-school-pk-department-pk.puml](manager/patch-school-pk-department-pk.puml)               | `PATCH /api/manager/v1/school/{schoolPk}/department/{departmentPk}` |
-| [manager/put-school-pk-email-domain.puml](manager/put-school-pk-email-domain.puml)                     | `PUT /api/manager/v1/school/{schoolPk}/email-domain`                |
+| 파일                                                                                                                                 | 내용                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| [flow/auth-guards.puml](flow/auth-guards.puml)                                                                                       | 공통 인증 · 가입 단계 · 유형 가드                                      |
+| [flow/withdrawal-purge.puml](flow/withdrawal-purge.puml)                                                                             | 스케줄러: 탈퇴 유예기간 만료 처리                                      |
+| [flow/cleanup-schedulers.puml](flow/cleanup-schedulers.puml)                                                                         | 스케줄러: 미완료 가입 · 만료 인증 데이터 정리                          |
+| [flow/s3-orphan-cleanup.puml](flow/s3-orphan-cleanup.puml)                                                                           | 스케줄러: DB에서 참조하지 않는 S3 파일 정리                            |
+| [flow/file-upload.puml](flow/file-upload.puml)                                                                                       | 파일 업로드 · 확정 · 조회 · 삭제                                       |
+| [flow/jwt-signing-key-bootstrap.puml](flow/jwt-signing-key-bootstrap.puml)                                                           | 서버 기동 시 JWT 서명 키 로드 · 생성                                   |
+| [flow/interest-cache-bootstrap.puml](flow/interest-cache-bootstrap.puml)                                                             | 서버 기동 시 관심 분야 목록을 메모리에 로드                            |
+| [flow/k8s-probes.puml](flow/k8s-probes.puml)                                                                                         | K8s probe와 DB 장애 시 동작                                            |
+| [flow/observability.puml](flow/observability.puml)                                                                                   | metrics 수집과 trace 전송                                              |
+| [flow/admin-login.puml](flow/admin-login.puml)                                                                                       | 어드민 화면 로그인 (PKCE)                                              |
+| [flow/manager-guards.puml](flow/manager-guards.puml)                                                                                 | 매니저 가드                                                            |
+| [health/get-health.puml](health/get-health.puml)                                                                                     | `GET /health`                                                          |
+| [health/get-health-ready.puml](health/get-health-ready.puml)                                                                         | `GET /health/ready`                                                    |
+| [user/post-oauth-login.puml](user/post-oauth-login.puml)                                                                             | `POST /api/v1/user/oauth/login`                                        |
+| [user/post-refresh.puml](user/post-refresh.puml)                                                                                     | `POST /api/v1/user/refresh`                                            |
+| [user/get-info.puml](user/get-info.puml)                                                                                             | `GET /api/v1/user/info`                                                |
+| [user/post-logout.puml](user/post-logout.puml)                                                                                       | `POST /api/v1/user/logout`                                             |
+| [user/post-withdraw.puml](user/post-withdraw.puml)                                                                                   | `POST /api/v1/user/withdraw`                                           |
+| [consent/get-consent-list.puml](consent/get-consent-list.puml)                                                                       | `GET /api/v1/user/consent/list`                                        |
+| [consent/post-consent.puml](consent/post-consent.puml)                                                                               | `POST /api/v1/user/consent`                                            |
+| [student/post-verify-send-code.puml](student/post-verify-send-code.puml)                                                             | `POST /api/v1/user/student/verify/send-code`                           |
+| [student/post-verify-code.puml](student/post-verify-code.puml)                                                                       | `POST /api/v1/user/student/verify/code`                                |
+| [student/get-departments.puml](student/get-departments.puml)                                                                         | `GET /api/v1/user/student/departments`                                 |
+| [student/get-interests.puml](student/get-interests.puml)                                                                             | `GET /api/v1/user/student/interests`                                   |
+| [student/post-info.puml](student/post-info.puml)                                                                                     | `POST /api/v1/user/student/info`                                       |
+| [file/post-business-card-upload-url.puml](file/post-business-card-upload-url.puml)                                                   | `POST /api/v1/file/business-card/upload-url`                           |
+| [file/post-attachment-upload-url.puml](file/post-attachment-upload-url.puml)                                                         | `POST /api/v1/file/attachment/upload-url`                              |
+| [graduated/post-verify-business-card.puml](graduated/post-verify-business-card.puml)                                                 | `POST /api/v1/user/graduated/verify/business-card`                     |
+| [graduated/post-info.puml](graduated/post-info.puml)                                                                                 | `POST /api/v1/user/graduated/info`                                     |
+| [cheers/get-cheers.puml](cheers/get-cheers.puml)                                                                                     | `GET /api/v1/cheers`                                                   |
+| [cheers/post-cheers-request.puml](cheers/post-cheers-request.puml)                                                                   | `POST /api/v1/cheers/request`                                          |
+| [cheers/get-cheers-sent.puml](cheers/get-cheers-sent.puml)                                                                           | `GET /api/v1/cheers/sent`                                              |
+| [cheers/get-cheers-sent-id.puml](cheers/get-cheers-sent-id.puml)                                                                     | `GET /api/v1/cheers/sent/{id}`                                         |
+| [cheers/get-cheers-received.puml](cheers/get-cheers-received.puml)                                                                   | `GET /api/v1/cheers/received`                                          |
+| [cheers/get-cheers-received-id.puml](cheers/get-cheers-received-id.puml)                                                             | `GET /api/v1/cheers/received/{id}`                                     |
+| [cheers/post-cheers-received-id-share-contact.puml](cheers/post-cheers-received-id-share-contact.puml)                               | `POST /api/v1/cheers/received/{id}/share-contact`                      |
+| [manager/post-auth-login.puml](manager/post-auth-login.puml)                                                                         | `POST /api/manager/v1/auth/login`                                      |
+| [manager/get-auth-me.puml](manager/get-auth-me.puml)                                                                                 | `GET /api/manager/v1/auth/me`                                          |
+| [manager/get-admin-account.puml](manager/get-admin-account.puml)                                                                     | `GET /api/manager/v1/admin-account`                                    |
+| [manager/post-admin-account.puml](manager/post-admin-account.puml)                                                                   | `POST /api/manager/v1/admin-account`                                   |
+| [manager/patch-admin-account-pk.puml](manager/patch-admin-account-pk.puml)                                                           | `PATCH /api/manager/v1/admin-account/{pk}`                             |
+| [manager/delete-admin-account-pk.puml](manager/delete-admin-account-pk.puml)                                                         | `DELETE /api/manager/v1/admin-account/{pk}`                            |
+| [manager/get-business-card.puml](manager/get-business-card.puml)                                                                     | `GET /api/manager/v1/business-card`                                    |
+| [manager/get-business-card-graduated-pk.puml](manager/get-business-card-graduated-pk.puml)                                           | `GET /api/manager/v1/business-card/{graduatedPk}`                      |
+| [manager/post-business-card-graduated-pk-cancel-verification.puml](manager/post-business-card-graduated-pk-cancel-verification.puml) | `POST /api/manager/v1/business-card/{graduatedPk}/cancel-verification` |
+| [manager/get-consent.puml](manager/get-consent.puml)                                                                                 | `GET /api/manager/v1/consent`                                          |
+| [manager/post-consent.puml](manager/post-consent.puml)                                                                               | `POST /api/manager/v1/consent`                                         |
+| [manager/get-consent-type-version-status.puml](manager/get-consent-type-version-status.puml)                                         | `GET /api/manager/v1/consent/{type}/{version}/status`                  |
+| [manager/get-school.puml](manager/get-school.puml)                                                                                   | `GET /api/manager/v1/school`                                           |
+| [manager/get-school-pk-department.puml](manager/get-school-pk-department.puml)                                                       | `GET /api/manager/v1/school/{schoolPk}/department`                     |
+| [manager/post-school-pk-department.puml](manager/post-school-pk-department.puml)                                                     | `POST /api/manager/v1/school/{schoolPk}/department`                    |
+| [manager/patch-school-pk-department-pk.puml](manager/patch-school-pk-department-pk.puml)                                             | `PATCH /api/manager/v1/school/{schoolPk}/department/{departmentPk}`    |
+| [manager/put-school-pk-email-domain.puml](manager/put-school-pk-email-domain.puml)                                                   | `PUT /api/manager/v1/school/{schoolPk}/email-domain`                   |
 
 ## 보기
 

@@ -10,7 +10,7 @@
 | ---- | ---- | ------- | -------- | -------- | ------- | ------- |
 | pk | uuid |  | false | [public.coffee_chat_request](public.coffee_chat_request.md) [public.graduated_profile](public.graduated_profile.md) |  |  |
 | user_pk | uuid |  | false |  | [public.users](public.users.md) |  |
-| verified_at | timestamp with time zone |  | true |  |  |  |
+| verified_at | timestamp with time zone |  | true |  |  | 명함 등록 시각. 어드민이 인증을 취소하면 null (재업로드하면 다시 채움) |
 | created_at | timestamp with time zone | now() | false |  |  |  |
 | updated_at | timestamp with time zone | now() | false |  |  |  |
 | business_card_key | text |  | true |  |  | 명함 사진 S3 object key (비공개 버킷, presigned URL로 접근) |

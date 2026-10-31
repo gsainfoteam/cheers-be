@@ -1,9 +1,54 @@
 {
-  "id": "5a3d4a58-815f-439c-a1de-77943bd121da",
+  "id": "91a124d9-d14c-4efc-9a87-83bb37ab813c",
   "prevId": "d8df27c2-77dd-4db3-a775-94178f943e5f",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
+    "public.admin_access_log": {
+      "name": "admin_access_log",
+      "schema": "",
+      "columns": {
+        "pk": {
+          "name": "pk",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "admin_email": {
+          "name": "admin_email",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_type": {
+          "name": "target_type",
+          "type": "admin_access_target_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_id": {
+          "name": "target_id",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.admin_account": {
       "name": "admin_account",
       "schema": "",
@@ -359,18 +404,7 @@
           "name": "pk",
           "type": "integer",
           "primaryKey": true,
-          "notNull": true,
-          "identity": {
-            "type": "byDefault",
-            "name": "department_pk_seq",
-            "schema": "public",
-            "increment": "1",
-            "startWith": "1",
-            "minValue": "1",
-            "maxValue": "2147483647",
-            "cache": "1",
-            "cycle": false
-          }
+          "notNull": true
         },
         "school_pk": {
           "name": "school_pk",
@@ -383,13 +417,6 @@
           "type": "varchar(64)",
           "primaryKey": false,
           "notNull": true
-        },
-        "is_active": {
-          "name": "is_active",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
         }
       },
       "indexes": {},
@@ -831,70 +858,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.school_email_domain": {
-      "name": "school_email_domain",
-      "schema": "",
-      "columns": {
-        "pk": {
-          "name": "pk",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "identity": {
-            "type": "byDefault",
-            "name": "school_email_domain_pk_seq",
-            "schema": "public",
-            "increment": "1",
-            "startWith": "1",
-            "minValue": "1",
-            "maxValue": "2147483647",
-            "cache": "1",
-            "cycle": false
-          }
-        },
-        "school_pk": {
-          "name": "school_pk",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "domain": {
-          "name": "domain",
-          "type": "varchar(128)",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "school_email_domain_school_pk_school_pk_fk": {
-          "name": "school_email_domain_school_pk_school_pk_fk",
-          "tableFrom": "school_email_domain",
-          "tableTo": "school",
-          "columnsFrom": [
-            "school_pk"
-          ],
-          "columnsTo": [
-            "pk"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "school_email_domain_domain_unique": {
-          "name": "school_email_domain_domain_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "domain"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.school": {
       "name": "school",
       "schema": "",
@@ -915,7 +878,7 @@
           "name": "email_domain",
           "type": "varchar(128)",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         }
       },
       "indexes": {},
@@ -1704,6 +1667,13 @@
     }
   },
   "enums": {
+    "public.admin_access_target_type": {
+      "name": "admin_access_target_type",
+      "schema": "public",
+      "values": [
+        "business_card"
+      ]
+    },
     "public.admin_account_role": {
       "name": "admin_account_role",
       "schema": "public",

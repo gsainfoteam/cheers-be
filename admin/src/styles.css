@@ -210,11 +210,43 @@ select {
   margin-bottom: 16px;
 }
 
-.row-form,
-.row-actions {
+.row-form {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 16px;
+  font-size: 14px;
+}
+
+.business-card-viewer {
+  margin-bottom: 16px;
+}
+
+.business-card-viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.business-card-viewer img {
+  display: block;
+  max-width: 100%;
+  max-height: 480px;
+  margin-bottom: 12px;
 }
 
 @media (max-width: 720px) {

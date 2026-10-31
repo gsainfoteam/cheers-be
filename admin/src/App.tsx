@@ -2,7 +2,9 @@ import { ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { getAccessToken } from "./lib/auth";
 import { AdminAccountsPage } from "./pages/AdminAccountsPage";
+import { BusinessCardsPage } from "./pages/BusinessCardsPage";
 import { CallbackPage } from "./pages/CallbackPage";
+import { ConsentsPage } from "./pages/ConsentsPage";
 import { DashboardLayout, PLACEHOLDER_MENUS } from "./pages/DashboardLayout";
 import { DepartmentsPage } from "./pages/DepartmentsPage";
 import { HomePage } from "./pages/HomePage";
@@ -30,6 +32,7 @@ export function App() {
         }
       >
         <Route index element={<HomePage />} />
+        <Route path="consents" element={<ConsentsPage />} />
         {PLACEHOLDER_MENUS.map((menu) => (
           <Route
             key={menu.path}
@@ -38,6 +41,7 @@ export function App() {
           />
         ))}
         <Route path="departments" element={<DepartmentsPage />} />
+        <Route path="business-cards" element={<BusinessCardsPage />} />
         <Route path="admin-accounts" element={<AdminAccountsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
