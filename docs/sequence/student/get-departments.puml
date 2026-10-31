@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title GET /api/v1/user/student/departments
-caption CRB-31 · 인증한 gist 이메일 도메인의 학교 학과 목록
+caption CRB-31, CRB-43 · 인증한 이메일 도메인의 학교 학과 목록 (비활성 학과 제외)
 
 actor Client
 participant "SignupStepGuard\nUserTypeGuard" as Guard
@@ -44,10 +44,13 @@ note right of Service
 end note
 
 Service -> DepartmentRepository: findByEmailDomain(student.email 의 @ 뒤)
-DepartmentRepository -> PostgreSQL: SELECT d.pk, d.name FROM department d\nJOIN school s ON s.pk = d.school_pk\nWHERE s.email_domain = ? ORDER BY d.pk
+DepartmentRepository -> PostgreSQL: SELECT d.pk, d.name FROM department d\nJOIN school_email_domain sd ON sd.school_pk = d.school_pk\nWHERE sd.domain = ? AND d.is_active ORDER BY d.pk
 PostgreSQL --> DepartmentRepository: rows
 DepartmentRepository --> Service: { pk, name }[]
-note right: 학교 도메인이 seed에서 빠졌으면 빈 배열
+note right
+  비활성 학과는 숨김. 이미 고른 학생의 현재 학과는 GET /api/v1/user/info로 표시.
+  인증을 마친 재학생이 있는 도메인은 어드민에서 뺄 수 없음 (manager/put-school-pk-email-domain.puml)
+end note
 
 Service --> Controller: { departments: [{ id, name }] }
 Controller --> Client: 200 { departments: [{ id, name }] }

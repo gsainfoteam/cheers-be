@@ -9,13 +9,14 @@ autonumber
 hide footbox
 
 title POST /api/v1/user/student/verify/code
-caption CRB-31 · CRB-48 · CRB-53 · 인증코드 확인. 성공 시 student.email · verified_at 기록, 5회 틀리면 무효. 실패는 전송 기록에 누적
+caption CRB-31 · CRB-48 · CRB-53 · CRB-43 · 인증코드 확인. 성공 시 student.email · verified_at 기록, 5회 틀리면 무효. 실패는 전송 기록에 누적
 
 actor Client
 participant "SignupStepGuard\nUserTypeGuard" as Guard
 participant "ValidationPipe" as Pipe
 participant "StudentController" as Controller
 participant "StudentVerificationService" as Service
+participant "SchoolRepository" as SchoolRepository
 participant "StudentRepository" as StudentRepository
 participant "StudentEmailVerificationRepository" as VerificationRepository
 participant "StudentEmailSendLogRepository" as SendLogRepository
@@ -71,6 +72,11 @@ group transaction (DatabaseService.db.transaction)
     end note
     note over Service: 결과 = WRONG, remaining = 5 - attempt_count
   else HMAC(code) = 저장된 code
+    Service -> SchoolRepository: findByEmailDomain(verification.email 의 @ 뒤, tx)
+    SchoolRepository -> PostgreSQL: SELECT s.* FROM school s JOIN school_email_domain sd ON sd.school_pk = s.pk\nWHERE sd.domain = ?
+    alt 인증번호를 받은 뒤 어드민이 도메인을 뺌
+      note over Service: 결과 = DOMAIN_NOT_ALLOWED\n(인증하면 학과를 고를 수 없어 가입이 막히므로 여기서 거름)
+    else 도메인 허용됨
     Service -> StudentRepository: markVerified(studentPk, email, tx)
     StudentRepository -> PostgreSQL: UPDATE student SET email = ?, verified_at = now(), updated_at = now()
     alt student.email UNIQUE 위반 (23505: 다른 계정이 같은 이메일을 방금 인증)
@@ -82,6 +88,7 @@ group transaction (DatabaseService.db.transaction)
     Service -> VerificationRepository: deleteByStudentPk(studentPk, tx)
     VerificationRepository -> PostgreSQL: DELETE student_email_verification WHERE student_pk = ?
     note over Service: 결과 = OK
+    end
   end
 end
 note over Service, PostgreSQL
@@ -93,6 +100,8 @@ alt NOT_FOUND
   Service -[#red]-> Client: 404 No verification in progress
 else EXPIRED
   Service -[#red]-> Client: 410 Verification code expired
+else DOMAIN_NOT_ALLOWED
+  Service -[#red]-> Client: 400 Email domain not allowed
 else WRONG
   Service -[#red]-> Client: 400 Invalid verification code\n{ statusCode, message, remaining_attempts }
   note right of Service

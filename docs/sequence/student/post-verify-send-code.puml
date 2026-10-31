@@ -41,7 +41,7 @@ Pipe -> Controller: sendCode(req, user)
 Controller -> Service: sendCode(userPk, email)
 
 Service -> SchoolRepository: findByEmailDomain(email의 @ 뒤)
-SchoolRepository -> PostgreSQL: SELECT school WHERE email_domain = ?
+SchoolRepository -> PostgreSQL: SELECT s.* FROM school s JOIN school_email_domain sd ON sd.school_pk = s.pk\nWHERE sd.domain = ?
 PostgreSQL --> SchoolRepository: row
 SchoolRepository --> Service: school | null
 alt 등록된 학교 도메인이 아님 (서브도메인 · 대소문자 차이 없이 정확히 일치해야 함)
