@@ -1,0 +1,55 @@
+@startuml delete-manager-admin-account-pk
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title DELETE /api/manager/v1/admin-account/{pk}
+caption CRB-35 · 어드민 계정 삭제 (superadmin 전용, 자기 자신 · superadmin은 불가)
+
+actor Client
+participant "ManagerGuard\n+ SuperAdminGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "AdminAccountController" as Controller
+participant "AdminAccountService" as Service
+participant "AdminAccountRepository" as AdminAccountRepository
+database PostgreSQL
+
+Client -> Guard: DELETE /api/manager/v1/admin-account/{pk}\nAuthorization: Bearer <manager token>
+ref over Client, Guard: ManagerGuard + SuperAdminGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found\n403 Superadmin privilege is required.
+Guard -> Pipe: 통과
+alt pk가 UUID가 아님
+  Pipe -[#red]-> Client: 400 (ParseUUIDPipe 메시지)
+end
+Pipe -> Controller: remove(pk, manager)
+Controller -> Service: remove(pk, manager)
+Service -> AdminAccountRepository: findByPk(pk)
+AdminAccountRepository -> PostgreSQL: SELECT admin_account WHERE pk = ?
+PostgreSQL --> AdminAccountRepository: row
+alt 계정 없음
+  Service -[#red]-> Client: 404 Admin account not found.
+end
+alt 대상이 나 자신
+  Service -[#red]-> Client: 403 You cannot remove yourself.
+else 대상이 superadmin
+  Service -[#red]-> Client: 403 Superadmin accounts cannot be removed. Demote to admin first.
+end
+Service -> AdminAccountRepository: deleteAdminByPk(pk)
+AdminAccountRepository -> PostgreSQL: DELETE admin_account\nWHERE pk = ? AND role = 'admin' RETURNING
+note right: 확인과 삭제 사이에 superadmin으로 승격돼도 지우지 않음
+PostgreSQL --> AdminAccountRepository: row | 0행
+alt 0행 (그 사이 승격 또는 삭제됨)
+  Service -[#red]-> Client: 403 Superadmin accounts cannot be removed. Demote to admin first.
+end
+note right of Service
+  대상이 가진 토큰은 다음 요청부터 401 Manager not found.
+  admin_account를 참조하는 FK 없음
+end note
+Service --> Controller: BaseResultDto.OK
+Controller --> Client: 200 { result: "OK" }
+
+@enduml

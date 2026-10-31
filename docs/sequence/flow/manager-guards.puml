@@ -1,0 +1,63 @@
+@startuml manager-guards
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title 공통 흐름: 매니저 가드
+caption CRB-35 · ManagerGuard, SuperAdminGuard. 사용자 가드는 flow/auth-guards.puml
+
+actor Client
+participant "Guard" as Guard
+participant "ManagerAuthService" as AuthService
+participant "AdminAccountRepository" as AdminAccountRepository
+database PostgreSQL
+participant "Controller" as Controller
+
+== ManagerGuard — 모든 매니저 API ==
+
+Client -> Guard: 요청\nAuthorization: Bearer <manager token>
+alt Bearer 형식이 아님 (헤더 없음 포함)
+  Guard -[#red]-> Client: 401 Missing access token
+end
+Guard -> AuthService: verifyAccessToken(token)
+note right of AuthService
+  RS256 공개키(JwtKeyService, 사용자 토큰과 같은 키) ·
+  issuer = "Cheers-Manager" 검증.
+  사용자 토큰은 issuer가 "Cheers"라 여기서 거부되고,
+  매니저 토큰은 같은 이유로 UserGuard에서 거부됨
+end note
+alt 만료
+  AuthService -[#red]-> Client: 401 Token expired
+else 서명 · issuer · 형식 오류
+  AuthService -[#red]-> Client: 401 Invalid token
+end
+AuthService --> Guard: payload { sub: admin_account.pk }
+
+Guard -> AdminAccountRepository: findByPk(sub)
+AdminAccountRepository -> PostgreSQL: SELECT admin_account WHERE pk = ?
+PostgreSQL --> AdminAccountRepository: row
+AdminAccountRepository --> Guard: account | null
+note right of AdminAccountRepository
+  사용자 가드와 달리 요청마다 DB를 봄.
+  토큰 수명이 1일이라, 계정 삭제 · 권한 변경을 바로 반영하려고
+  role은 토큰이 아니라 DB의 현재 값을 씀
+end note
+alt 계정 없음 (삭제됨. 같은 이메일을 다시 등록해도 pk가 달라 이전 토큰은 무효)
+  Guard -[#red]-> Client: 401 Manager not found
+end
+Guard -> Guard: request.manager = ManagerContext(pk, email, role)
+
+== SuperAdminGuard — ManagerGuard 다음에 실행 ==
+
+alt request.manager.role ≠ superadmin
+  Guard -[#red]-> Client: 403 Superadmin privilege is required.
+end
+
+Guard -> Controller: 통과
+
+@enduml

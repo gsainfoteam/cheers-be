@@ -1,0 +1,24 @@
+@startuml get-manager-auth-me
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/manager/v1/auth/me
+caption CRB-35 · 현재 매니저 정보. role은 DB의 현재 값
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ManagerAuthController" as Controller
+
+Client -> Guard: GET /api/manager/v1/auth/me\nAuthorization: Bearer <manager token>
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Controller: me(manager)
+note right of Controller: 가드가 읽은 ManagerContext를 그대로 반환 (추가 조회 없음)
+Controller --> Client: 200 { email, role }
+
+@enduml
