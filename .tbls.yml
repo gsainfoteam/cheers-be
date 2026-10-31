@@ -44,7 +44,7 @@ comments:
     columnComments:
       email: Apple은 이메일을 숨기거나 최초 로그인 이후 제공하지 않을 수 있음
   - table: refresh_token
-    tableComment: 리프레시 토큰. rotation 시 새 행 insert + 기존 행 delete
+    tableComment: 리프레시 토큰
     columnComments:
       opaque_hash: 토큰 해시. 원문은 저장하지 않음
   - table: jwt_signing_key

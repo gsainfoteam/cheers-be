@@ -2,7 +2,7 @@
 
 ## Description
 
-리프레시 토큰. rotation 시 새 행 insert + 기존 행 delete
+리프레시 토큰
 
 ## Columns
 
