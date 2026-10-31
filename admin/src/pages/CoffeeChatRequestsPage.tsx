@@ -1,14 +1,10 @@
-import { FormEvent, useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { api } from "../lib/api";
+import { Link } from "react-router-dom";
 import {
-  dayStart,
-  errorMessage,
   formatDateTime,
-  PageResponse,
   REQUEST_BASE_PATH,
   REQUEST_STATUS_LABELS,
 } from "../lib/coffee-chat";
+import { usePagedList } from "../lib/use-paged-list";
 import { Pagination } from "./Pagination";
 
 export type CoffeeChatRequest = {
@@ -35,68 +31,21 @@ export type CoffeeChatRequest = {
 // 상세 화면의 "이 재학생 · 현업자의 요청" 링크가 URL로 넘기는 값. 탈퇴 처리로 이름이 지워져도 찾을 수 있음
 const PK_FILTERS = ["student_pk", "graduated_pk"] as const;
 
-// 필터와 페이지를 URL에 두어 상세 화면에서 돌아와도 유지됨
-function toApiQuery(params: URLSearchParams): string {
-  const query = new URLSearchParams({ page: params.get("page") ?? "1" });
-  for (const key of [
-    "status",
-    "student_name",
-    "graduated_nickname",
-    ...PK_FILTERS,
-  ]) {
-    const value = params.get(key);
-    if (value) query.set(key, value);
-  }
-  const from = params.get("from");
-  const to = params.get("to");
-  if (from) query.set("created_from", dayStart(from));
-  if (to) query.set("created_to", dayStart(to, 1));
-  return query.toString();
-}
+const FILTER_KEYS = [
+  "status",
+  "student_name",
+  "graduated_nickname",
+  ...PK_FILTERS,
+];
 
 export function CoffeeChatRequestsPage() {
-  const [params, setParams] = useSearchParams();
-  const [draft, setDraft] = useState(() => readFilters(params));
-  const [result, setResult] = useState<PageResponse<CoffeeChatRequest> | null>(
-    null,
-  );
-  const [error, setError] = useState<string | null>(null);
-
-  const apiQuery = toApiQuery(params);
-  useEffect(() => {
-    let stale = false;
-    api
-      .get<PageResponse<CoffeeChatRequest>>(`${REQUEST_BASE_PATH}?${apiQuery}`)
-      .then((page) => {
-        if (stale) return;
-        setResult(page);
-        setError(null);
-      })
-      .catch((err: unknown) => {
-        if (!stale) {
-          setResult(null);
-          setError(errorMessage(err, "요청 목록을 불러오지 못했습니다."));
-        }
-      });
-    return () => {
-      stale = true;
-    };
-  }, [apiQuery]);
-
-  const handleSearch = (e: FormEvent) => {
-    e.preventDefault();
-    const next = new URLSearchParams();
-    for (const [key, value] of Object.entries(draft)) {
-      if (value.trim()) next.set(key, value.trim());
-    }
-    setParams(next);
-  };
-
-  const handlePage = (page: number) => {
-    const next = new URLSearchParams(params);
-    next.set("page", String(page));
-    setParams(next);
-  };
+  const { params, result, error, search, goToPage, formKey } =
+    usePagedList<CoffeeChatRequest>(
+      REQUEST_BASE_PATH,
+      FILTER_KEYS,
+      "요청 목록을 불러오지 못했습니다.",
+    );
+  const read = (key: string) => params.get(key) ?? "";
 
   const pkFilter = PK_FILTERS.find((key) => params.get(key));
 
@@ -106,12 +55,8 @@ export function CoffeeChatRequestsPage() {
         <h2>커피챗 요청</h2>
       </div>
 
-      <form className="inline-form" onSubmit={handleSearch}>
-        <select
-          value={draft.status}
-          aria-label="상태"
-          onChange={(e) => setDraft({ ...draft, status: e.target.value })}
-        >
+      <form key={formKey} className="inline-form" onSubmit={search}>
+        <select name="status" defaultValue={read("status")} aria-label="상태">
           <option value="">전체 상태</option>
           {Object.entries(REQUEST_STATUS_LABELS).map(([value, label]) => (
             <option key={value} value={value}>
@@ -121,31 +66,29 @@ export function CoffeeChatRequestsPage() {
         </select>
         <input
           type="date"
-          value={draft.from}
+          name="from"
+          defaultValue={read("from")}
           aria-label="요청일 시작"
-          onChange={(e) => setDraft({ ...draft, from: e.target.value })}
         />
         <input
           type="date"
-          value={draft.to}
+          name="to"
+          defaultValue={read("to")}
           aria-label="요청일 끝"
-          onChange={(e) => setDraft({ ...draft, to: e.target.value })}
         />
         <input
-          value={draft.student_name}
+          name="student_name"
+          defaultValue={read("student_name")}
           maxLength={64}
           placeholder="재학생 이름"
           aria-label="재학생 이름"
-          onChange={(e) => setDraft({ ...draft, student_name: e.target.value })}
         />
         <input
-          value={draft.graduated_nickname}
+          name="graduated_nickname"
+          defaultValue={read("graduated_nickname")}
           maxLength={32}
           placeholder="현업자 닉네임"
           aria-label="현업자 닉네임"
-          onChange={(e) =>
-            setDraft({ ...draft, graduated_nickname: e.target.value })
-          }
         />
         <button className="button small" type="submit">
           검색
@@ -208,21 +151,10 @@ export function CoffeeChatRequestsPage() {
             page={result.page}
             size={result.size}
             total={result.total}
-            onChange={handlePage}
+            onChange={goToPage}
           />
         )}
       </div>
     </>
   );
-}
-
-function readFilters(params: URLSearchParams) {
-  const read = (key: string) => params.get(key) ?? "";
-  return {
-    status: read("status"),
-    from: read("from"),
-    to: read("to"),
-    student_name: read("student_name"),
-    graduated_nickname: read("graduated_nickname"),
-  };
 }

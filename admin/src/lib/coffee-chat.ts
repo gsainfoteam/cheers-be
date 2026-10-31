@@ -58,7 +58,9 @@ export function formatDateTime(value: string | null): string {
 }
 
 // 날짜 입력값(브라우저 시간대)을 API의 [created_from, created_to) 시각으로 바꿈. 끝 날짜도 그날 전체를 포함
+// URL을 직접 고친 값은 그대로 보내 서버의 400 메시지를 보여 줌
 export function dayStart(date: string, addDays = 0): string {
   const [year, month, day] = date.split("-").map(Number);
-  return new Date(year, month - 1, day + addDays).toISOString();
+  const start = new Date(year, month - 1, day + addDays);
+  return Number.isNaN(start.getTime()) ? date : start.toISOString();
 }
