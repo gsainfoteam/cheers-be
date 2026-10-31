@@ -4,13 +4,13 @@ import { JwtService } from "@nestjs/jwt";
 import { createHash, randomBytes } from "node:crypto";
 import { StringValue } from "ms";
 import { JwtKeyService } from "@src/auth/jwt-key.service";
-import { DatabaseService } from "@src/database/database.service";
 import { RefreshTokenRepository } from "@src/database/repository/refresh-token.repository";
 import { UserRepository } from "@src/database/repository/user.repository";
 import { TxType } from "@src/global/types/tx.types";
 import {
   AccessTokenPayload,
   IssuedTokens,
+  RefreshedAccessToken,
   TokenSubject,
 } from "@src/auth/auth.types";
 
@@ -27,7 +27,6 @@ export class AuthService {
     private readonly configService: ConfigService,
     private readonly jwtService: JwtService,
     private readonly jwtKeyService: JwtKeyService,
-    private readonly dbService: DatabaseService,
     private readonly refreshTokenRepository: RefreshTokenRepository,
     private readonly userRepository: UserRepository,
   ) {
@@ -43,7 +42,7 @@ export class AuthService {
     this.accessTokenExpiresIn = accessTokenExpiresIn as StringValue;
 
     const refreshTokenExpireDays = Number(
-      this.configService.get<string>("REFRESH_TOKEN_EXPIRE_DAYS") ?? 30,
+      this.configService.get<string>("REFRESH_TOKEN_EXPIRE_DAYS") ?? 180,
     );
     if (
       !Number.isInteger(refreshTokenExpireDays) ||
@@ -56,19 +55,9 @@ export class AuthService {
     this.refreshTokenExpireDays = refreshTokenExpireDays;
   }
 
-  // 로그인, 토큰 갱신, 가입 완료 시 호출. 최근 접속 시각도 같이 갱신
+  // 로그인, 가입 완료 시 호출. 최근 접속 시각도 같이 갱신
   async issueTokens(user: TokenSubject, tx: TxType): Promise<IssuedTokens> {
-    const payload: AccessTokenPayload = {
-      sub: user.pk,
-      type: user.type,
-      status: user.status,
-    };
-    const accessToken = await this.jwtService.signAsync(payload, {
-      algorithm: "RS256",
-      privateKey: this.jwtKeyService.privateKey,
-      issuer: ISSUER,
-      expiresIn: this.accessTokenExpiresIn,
-    });
+    const accessToken = await this.signAccessToken(user);
 
     // 원문은 클라이언트에만 주고 DB에는 해시만 저장
     const refreshToken = randomBytes(32).toString("base64url");
@@ -85,27 +74,27 @@ export class AuthService {
     return { accessToken, refreshToken };
   }
 
-  // rotation: 기존 토큰 삭제 후 DB의 현재 status / type으로 새 토큰 발급
-  async refresh(rawRefreshToken: string): Promise<IssuedTokens> {
-    return this.dbService.db.transaction(async (tx) => {
-      const stored = await this.refreshTokenRepository.deleteByOpaqueHash(
-        this.hashRefreshToken(rawRefreshToken),
-        tx,
-      );
-      if (!stored) {
-        throw new UnauthorizedException("Invalid refresh token");
-      }
-      if (stored.expiresAt.getTime() <= Date.now()) {
-        throw new UnauthorizedException("Refresh token expired");
-      }
+  // DB의 현재 status / type으로 access token만 새로 발급. refresh token은 재발급 · 연장 없이 만료까지 그대로 사용
+  async refresh(rawRefreshToken: string): Promise<RefreshedAccessToken> {
+    const stored = await this.refreshTokenRepository.findByOpaqueHash(
+      this.hashRefreshToken(rawRefreshToken),
+    );
+    if (!stored) {
+      throw new UnauthorizedException("Invalid refresh token");
+    }
+    if (stored.expiresAt.getTime() <= Date.now()) {
+      throw new UnauthorizedException("Refresh token expired");
+    }
 
-      const user = await this.userRepository.findByPk(stored.userPk, tx);
-      if (!user) {
-        throw new UnauthorizedException("User not found");
-      }
+    const user = await this.userRepository.findByPk(stored.userPk);
+    if (!user) {
+      throw new UnauthorizedException("User not found");
+    }
 
-      return this.issueTokens(user, tx);
-    });
+    const accessToken = await this.signAccessToken(user);
+    await this.userRepository.updateLastActiveAt(user.pk);
+
+    return { accessToken };
   }
 
   // 이미 없는 토큰이어도 성공으로 처리
@@ -143,6 +132,20 @@ export class AuthService {
       }
       throw new UnauthorizedException("Invalid token", { cause: e });
     }
+  }
+
+  private signAccessToken(user: TokenSubject): Promise<string> {
+    const payload: AccessTokenPayload = {
+      sub: user.pk,
+      type: user.type,
+      status: user.status,
+    };
+    return this.jwtService.signAsync(payload, {
+      algorithm: "RS256",
+      privateKey: this.jwtKeyService.privateKey,
+      issuer: ISSUER,
+      expiresIn: this.accessTokenExpiresIn,
+    });
   }
 
   private hashRefreshToken(rawRefreshToken: string): string {

@@ -24,3 +24,5 @@ export type IssuedTokens = {
   accessToken: string;
   refreshToken: string;
 };
+
+export type RefreshedAccessToken = Pick<IssuedTokens, "accessToken">;

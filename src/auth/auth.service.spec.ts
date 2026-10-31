@@ -3,7 +3,6 @@ import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { createHash, generateKeyPairSync } from "node:crypto";
 import { JwtKeyService } from "@src/auth/jwt-key.service";
-import { DatabaseService } from "@src/database/database.service";
 import { RefreshTokenRepository } from "@src/database/repository/refresh-token.repository";
 import { UserRepository } from "@src/database/repository/user.repository";
 import { TxType } from "@src/global/types/tx.types";
@@ -35,16 +34,13 @@ describe("AuthService", () => {
   const jwtService = new JwtService();
   const refreshTokenRepository = {
     insert: jest.fn(),
-    deleteByOpaqueHash: jest.fn(),
+    findByOpaqueHash: jest.fn(),
     deleteByOpaqueHashAndUserPk: jest.fn(),
     deleteByUserPk: jest.fn(),
   };
   const userRepository = {
     findByPk: jest.fn(),
     updateLastActiveAt: jest.fn(),
-  };
-  const dbService = {
-    db: { transaction: (fn: (tx: TxType) => unknown) => fn(tx) },
   };
 
   const createService = (
@@ -55,7 +51,6 @@ describe("AuthService", () => {
       { get: (key: string) => env[key] } as unknown as ConfigService,
       jwtService,
       jwtKeyService,
-      dbService as unknown as DatabaseService,
       refreshTokenRepository as unknown as RefreshTokenRepository,
       userRepository as unknown as UserRepository,
     );
@@ -140,7 +135,7 @@ describe("AuthService", () => {
       expect(row.opaqueHash).not.toBe(refreshToken);
       expect(row.userPk).toBe(pendingStudent.pk);
       const days = (row.expiresAt.getTime() - Date.now()) / 86_400_000;
-      expect(days).toBeCloseTo(30, 1);
+      expect(days).toBeCloseTo(180, 1);
       // access token 기본 수명 1시간
       const { iat, exp } = jwtService.decode(accessToken);
       expect(exp - iat).toBe(60 * 60);
@@ -166,10 +161,8 @@ describe("AuthService", () => {
       createdAt: new Date(),
     });
 
-    it("rotates the token and rebuilds claims from the current DB status", async () => {
-      refreshTokenRepository.deleteByOpaqueHash.mockResolvedValue(
-        stored(60_000),
-      );
+    it("issues only an access token built from the current DB status", async () => {
+      refreshTokenRepository.findByOpaqueHash.mockResolvedValue(stored(60_000));
       userRepository.findByPk.mockResolvedValue({
         ...pendingStudent,
         status: "active",
@@ -177,30 +170,41 @@ describe("AuthService", () => {
 
       const tokens = await service.refresh("old-token");
 
-      expect(refreshTokenRepository.deleteByOpaqueHash).toHaveBeenCalledWith(
+      expect(refreshTokenRepository.findByOpaqueHash).toHaveBeenCalledWith(
         sha256("old-token"),
-        tx,
       );
-      expect(refreshTokenRepository.insert).toHaveBeenCalledTimes(1);
-      expect(tokens.refreshToken).not.toBe("old-token");
+      expect(tokens).toEqual({ accessToken: expect.any(String) });
       await expect(
         service.verifyAccessToken(tokens.accessToken),
       ).resolves.toMatchObject({ status: "active" });
+      expect(userRepository.updateLastActiveAt).toHaveBeenCalledWith(
+        pendingStudent.pk,
+      );
     });
 
-    it("rejects an unknown or already used token", async () => {
-      refreshTokenRepository.deleteByOpaqueHash.mockResolvedValue(null);
+    it("keeps the refresh token as it is", async () => {
+      refreshTokenRepository.findByOpaqueHash.mockResolvedValue(stored(60_000));
+      userRepository.findByPk.mockResolvedValue(pendingStudent);
+
+      await service.refresh("old-token");
+
+      expect(refreshTokenRepository.insert).not.toHaveBeenCalled();
+      expect(
+        refreshTokenRepository.deleteByOpaqueHashAndUserPk,
+      ).not.toHaveBeenCalled();
+      expect(refreshTokenRepository.deleteByUserPk).not.toHaveBeenCalled();
+    });
+
+    it("rejects an unknown token", async () => {
+      refreshTokenRepository.findByOpaqueHash.mockResolvedValue(null);
 
       await expect(service.refresh("old-token")).rejects.toThrow(
         new UnauthorizedException("Invalid refresh token"),
       );
-      expect(refreshTokenRepository.insert).not.toHaveBeenCalled();
     });
 
     it("rejects an expired token", async () => {
-      refreshTokenRepository.deleteByOpaqueHash.mockResolvedValue(
-        stored(-1_000),
-      );
+      refreshTokenRepository.findByOpaqueHash.mockResolvedValue(stored(-1_000));
 
       await expect(service.refresh("old-token")).rejects.toThrow(
         new UnauthorizedException("Refresh token expired"),
@@ -208,9 +212,7 @@ describe("AuthService", () => {
     });
 
     it("rejects when the user is deleted", async () => {
-      refreshTokenRepository.deleteByOpaqueHash.mockResolvedValue(
-        stored(60_000),
-      );
+      refreshTokenRepository.findByOpaqueHash.mockResolvedValue(stored(60_000));
       userRepository.findByPk.mockResolvedValue(null);
 
       await expect(service.refresh("old-token")).rejects.toThrow(

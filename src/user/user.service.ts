@@ -134,11 +134,8 @@ export class UserService {
   }
 
   async refresh(req: RefreshRequestDto): Promise<RefreshResponseDto> {
-    const tokens = await this.authService.refresh(req.refresh_token);
-    return {
-      access_token: tokens.accessToken,
-      refresh_token: tokens.refreshToken,
-    };
+    const { accessToken } = await this.authService.refresh(req.refresh_token);
+    return { access_token: accessToken };
   }
 
   async getInfo(userCtx: UserContext): Promise<UserInfoDto> {
