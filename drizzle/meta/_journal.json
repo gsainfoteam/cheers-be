@@ -71,6 +71,13 @@
       "when": 1793430961896,
       "tag": "0009_admin_account",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793433159638,
+      "tag": "0010_school_email_domain_department_active",
+      "breakpoints": true
     }
   ]
 }

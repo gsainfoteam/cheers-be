@@ -2,7 +2,7 @@
 
 ## Description
 
-학과 기준 데이터. 학과명이 바뀌면 같은 행의 name만 수정 (버전 관리 안 함)
+학과 기준 데이터. 어드민에서 추가 · 수정. 학과명이 바뀌면 같은 행의 name만 수정 (버전 관리 안 함). 학생 프로필이 참조하므로 지우지 않고 비활성화함
 
 ## Columns
 
@@ -11,6 +11,7 @@
 | pk | integer |  | false | [public.student_profile](public.student_profile.md) |  |  |
 | school_pk | integer |  | false |  | [public.school](public.school.md) |  |
 | name | varchar(64) |  | false |  |  |  |
+| is_active | boolean | true | false |  |  | false면 앱의 학과 목록에서 숨기고 새로 고를 수 없음. 이미 고른 학생의 프로필과 조회는 그대로 |
 
 ## Constraints
 
@@ -39,6 +40,7 @@ erDiagram
   integer *pk
   integer school_pk FK
   varchar_64_ name
+  boolean is_active
 }
 "public.student_profile" {
   uuid *pk
@@ -52,7 +54,6 @@ erDiagram
 "public.school" {
   integer *pk
   varchar_64_ name
-  varchar_128_ email_domain
 }
 ```
 

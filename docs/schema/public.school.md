@@ -8,23 +8,20 @@
 
 | Name | Type | Default | Nullable | Children | Parents | Comment |
 | ---- | ---- | ------- | -------- | -------- | ------- | ------- |
-| pk | integer |  | false | [public.department](public.department.md) |  |  |
+| pk | integer |  | false | [public.department](public.department.md) [public.school_email_domain](public.school_email_domain.md) |  |  |
 | name | varchar(64) |  | false |  |  |  |
-| email_domain | varchar(128) |  | false |  |  | 학교 이메일 인증 시 허용 도메인 |
 
 ## Constraints
 
 | Name | Type | Definition |
 | ---- | ---- | ---------- |
 | school_pkey | PRIMARY KEY | PRIMARY KEY (pk) |
-| school_email_domain_unique | UNIQUE | UNIQUE (email_domain) |
 
 ## Indexes
 
 | Name | Definition |
 | ---- | ---------- |
 | school_pkey | CREATE UNIQUE INDEX school_pkey ON public.school USING btree (pk) |
-| school_email_domain_unique | CREATE UNIQUE INDEX school_email_domain_unique ON public.school USING btree (email_domain) |
 
 ## Relations
 
@@ -32,16 +29,22 @@
 erDiagram
 
 "public.department" }o--|| "public.school" : ""
+"public.school_email_domain" }o--|| "public.school" : ""
 
 "public.school" {
   integer *pk
   varchar_64_ name
-  varchar_128_ email_domain
 }
 "public.department" {
   integer *pk
   integer school_pk FK
   varchar_64_ name
+  boolean is_active
+}
+"public.school_email_domain" {
+  integer *pk
+  integer school_pk FK
+  varchar_128_ domain
 }
 ```
 
