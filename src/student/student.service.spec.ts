@@ -139,6 +139,7 @@ describe("StudentService", () => {
       pk: 1,
       schoolPk: 1,
       name: "전기전자컴퓨터공학부",
+      isActive: true,
     });
     profileRepository.insert.mockResolvedValue({ pk: "new-profile" });
     authService.issueTokens.mockResolvedValue({
@@ -634,6 +635,53 @@ describe("StudentService", () => {
       );
       expect(profileRepository.insert).not.toHaveBeenCalled();
       expect(userRepository.activate).not.toHaveBeenCalled();
+    });
+
+    describe("inactive department", () => {
+      beforeEach(() => {
+        departmentRepository.findByPkAndEmailDomain.mockResolvedValue({
+          pk: 1,
+          schoolPk: 1,
+          name: "전기전자컴퓨터공학부",
+          isActive: false,
+        });
+      });
+
+      it("returns 400 when newly choosing it", async () => {
+        await expect(service.saveInfo(userPk, request())).rejects.toThrow(
+          new BadRequestException("Department is no longer available"),
+        );
+        expect(profileRepository.insert).not.toHaveBeenCalled();
+      });
+
+      it("returns 400 when the current profile has another department", async () => {
+        studentRepository.findByUserPkWithLatestProfile.mockResolvedValue({
+          student: studentRow,
+          latest: {
+            ...latest,
+            profile: { ...latest.profile, departmentPk: 2 },
+          },
+        });
+
+        await expect(service.saveInfo(userPk, request())).rejects.toThrow(
+          new BadRequestException("Department is no longer available"),
+        );
+        expect(profileRepository.insert).not.toHaveBeenCalled();
+      });
+
+      it("allows keeping it while changing other fields", async () => {
+        studentRepository.findByUserPkWithLatestProfile.mockResolvedValue({
+          student: studentRow,
+          latest,
+        });
+
+        await service.saveInfo(userPk, request({ interests: ["반도체"] }));
+
+        expect(profileRepository.insert).toHaveBeenCalledWith(
+          expect.objectContaining({ departmentPk: 1, version: 3 }),
+          tx,
+        );
+      });
     });
 
     it("returns 403 when the user switched to graduated after the guard", async () => {

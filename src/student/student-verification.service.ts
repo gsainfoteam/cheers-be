@@ -43,6 +43,7 @@ type VerifyResult =
   | { kind: "ok" }
   | { kind: "not_found" }
   | { kind: "expired" }
+  | { kind: "domain_not_allowed" }
   | { kind: "wrong"; remainingAttempts: number };
 
 // 재학생 학교 이메일 인증 (가입 단계 verify)
@@ -152,6 +153,8 @@ export class StudentVerificationService {
         throw new NotFoundException("No verification in progress");
       case "expired":
         throw new GoneException("Verification code expired");
+      case "domain_not_allowed":
+        throw new BadRequestException("Email domain not allowed");
       case "wrong":
         throw new BadRequestException({
           message: "Invalid verification code",
@@ -206,6 +209,15 @@ export class StudentVerificationService {
           0,
         ),
       };
+    }
+
+    // 인증번호를 받은 뒤 어드민이 도메인을 뺐으면 인증해도 학과를 고를 수 없어 여기서 막음
+    const school = await this.schoolRepository.findByEmailDomain(
+      emailDomain(verification.email),
+      tx,
+    );
+    if (!school) {
+      return { kind: "domain_not_allowed" };
     }
 
     await this.studentRepository.markVerified(
