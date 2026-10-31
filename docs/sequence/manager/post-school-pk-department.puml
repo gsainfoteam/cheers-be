@@ -1,0 +1,49 @@
+@startuml post-manager-school-pk-department
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title POST /api/manager/v1/school/{schoolPk}/department
+caption CRB-43 · 학과 추가
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "SchoolDepartmentController" as Controller
+participant "SchoolDepartmentService" as Service
+participant "AdminSchoolRepository" as SchoolRepository
+participant "AdminDepartmentRepository" as DepartmentRepository
+database PostgreSQL
+
+Client -> Guard: POST /api/manager/v1/school/{schoolPk}/department\nAuthorization: Bearer <manager token>\n{ name }
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Pipe: 통과
+alt schoolPk가 양의 정수(int4 범위)가 아님
+  Pipe -[#red]-> Client: 400 Invalid pk
+else name이 trim 후 1~64자가 아님
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+Pipe -> Controller: createDepartment(schoolPk, req)
+Controller -> Service: createDepartment(schoolPk, req)
+Service -> SchoolRepository: findByPk(schoolPk)
+SchoolRepository -> PostgreSQL: SELECT school WHERE pk = ?
+PostgreSQL --> SchoolRepository: row | 0행
+alt 학교 없음
+  Service -[#red]-> Client: 404 School not found.
+end
+Service -> DepartmentRepository: insertIfAbsent(schoolPk, name)
+DepartmentRepository -> PostgreSQL: INSERT department (school_pk, name)\nON CONFLICT (school_pk, name) DO NOTHING RETURNING *
+note right: pk는 identity로 생성, is_active 기본값 true
+PostgreSQL --> DepartmentRepository: row | 0행
+alt 0행 (같은 학교에 같은 이름, 비활성 학과 포함)
+  Service -[#red]-> Client: 409 Department name already exists in this school.
+end
+Service --> Controller: DepartmentAdminDto
+Controller --> Client: 201 { pk, school_pk, name, is_active }
+
+@enduml

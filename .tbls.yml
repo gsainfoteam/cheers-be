@@ -26,6 +26,7 @@ desc: |
   - 가입 후 · 마지막 활동 후 24시간이 지난 `pending` 유저는 스케줄러가 삭제함
   - 필수 약관은 철회할 수 없음
   - 재학생 학과는 인증한 학교 이메일 도메인의 학교 소속이어야 함
+  - 학교에는 허용 이메일 도메인이 1개 이상 있어야 하고, 인증을 마친 재학생이 있는 도메인은 뺄 수 없음
   - 재학생의 `coffee_chat_contact`는 두 플래그 중 하나 이상이 true여야 함 (현업자는 둘 다 false 가능)
   - `student_profile`과 첨부는 프로필 수정 때 insert만 함. 지우는 경우는 가입 중 유형 변경과 탈퇴 처리뿐임
   - `graduated.verified_at`이 null인 현업자는 `active`여도 재학생에게 보이지 않고 커피챗 요청을 받거나 처리할 수 없음 (어드민의 명함 인증 취소)
@@ -101,9 +102,15 @@ comments:
   - table: school
     tableComment: 학교 기준 데이터 (seed로 pk를 고정해서 넣음)
     columnComments:
-      email_domain: 학교 이메일 인증 시 허용 도메인
+      email_domain: 쓰지 않음 (school_email_domain으로 옮김). 배포 중 이전 버전 pod가 읽으므로 남겨 두고 다음 릴리스에서 지움
+  - table: school_email_domain
+    tableComment: 학교 이메일 인증 시 허용 도메인. 재학생의 학교를 정하는 기준이라 한 도메인은 한 학교에만 속함. 변경은 superadmin만 할 수 있음
+    columnComments:
+      domain: 소문자로 저장
   - table: department
-    tableComment: 학과 기준 데이터. 학과명이 바뀌면 같은 행의 name만 수정 (버전 관리 안 함)
+    tableComment: 학과 기준 데이터. 어드민에서 추가 · 수정. 학과명이 바뀌면 같은 행의 name만 수정 (버전 관리 안 함). 학생 프로필이 참조하므로 지우지 않고 비활성화함
+    columnComments:
+      is_active: false면 앱의 학과 목록에서 숨기고 새로 고를 수 없음. 이미 고른 학생의 프로필과 조회는 그대로
   - table: interest
     tableComment: 재학생이 고를 수 있는 고정 관심 분야 기준 데이터. 목록 수정은 어드민에서 하며, 서버는 기동 때 한 번 읽어 메모리에 둠
   - table: graduated

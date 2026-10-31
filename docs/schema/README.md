@@ -13,6 +13,7 @@ FK는 모두 `ON DELETE NO ACTION`입니다. 부모 행을 지우기 전에 백�
 - 가입 후 · 마지막 활동 후 24시간이 지난 `pending` 유저는 스케줄러가 삭제함  
 - 필수 약관은 철회할 수 없음  
 - 재학생 학과는 인증한 학교 이메일 도메인의 학교 소속이어야 함  
+- 학교에는 허용 이메일 도메인이 1개 이상 있어야 하고, 인증을 마친 재학생이 있는 도메인은 뺄 수 없음  
 - 재학생의 `coffee_chat_contact`는 두 플래그 중 하나 이상이 true여야 함 (현업자는 둘 다 false 가능)  
 - `student_profile`과 첨부는 프로필 수정 때 insert만 함. 지우는 경우는 가입 중 유형 변경과 탈퇴 처리뿐임  
 - `graduated.verified_at`이 null인 현업자는 `active`여도 재학생에게 보이지 않고 커피챗 요청을 받거나 처리할 수 없음 (어드민의 명함 인증 취소)  
@@ -25,7 +26,7 @@ FK는 모두 `ON DELETE NO ACTION`입니다. 부모 행을 지우기 전에 백�
 | [public.coffee_chat_contact](public.coffee_chat_contact.md) | 7 | 커피챗 연락수단 (재학생 · 현업자 공통). 희망하지 않음 = 두 플래그 모두 false | BASE TABLE |
 | [public.coffee_chat_request](public.coffee_chat_request.md) | 12 | 커피챗 요청. 같은 현업자에게 중복 요청 가능. 진행 단계(현업자 확인 → 연락처 공유 → 재학생 확인)는 처음 했을 때 시각만 기록 | BASE TABLE |
 | [public.consent](public.consent.md) | 5 | 약관 버전 기준 데이터. 새 버전은 행을 수정하지 말고 어드민에서 새로 등록 (POST /api/manager/v1/consent) | BASE TABLE |
-| [public.department](public.department.md) | 3 | 학과 기준 데이터. 학과명이 바뀌면 같은 행의 name만 수정 (버전 관리 안 함) | BASE TABLE |
+| [public.department](public.department.md) | 4 | 학과 기준 데이터. 어드민에서 추가 · 수정. 학과명이 바뀌면 같은 행의 name만 수정 (버전 관리 안 함). 학생 프로필이 참조하므로 지우지 않고 비활성화함 | BASE TABLE |
 | [public.graduated_profile](public.graduated_profile.md) | 9 | 현업자 추가 정보. 알림 수단 · 공유할 연락처는 coffee_chat_contact | BASE TABLE |
 | [public.graduated](public.graduated.md) | 6 | 현업자 | BASE TABLE |
 | [public.notification_log](public.notification_log.md) | 9 | 이메일 · 카카오 알림톡 전송 로그 (channel로 구분). insert만 함, 재시도도 새 행 | BASE TABLE |
@@ -43,6 +44,7 @@ FK는 모두 `ON DELETE NO ACTION`입니다. 부모 행을 지우기 전에 백�
 | [public.interest](public.interest.md) | 3 | 재학생이 고를 수 있는 고정 관심 분야 기준 데이터. 목록 수정은 어드민에서 하며, 서버는 기동 때 한 번 읽어 메모리에 둠 | BASE TABLE |
 | [public.admin_account](public.admin_account.md) | 5 | 어드민 페이지에 로그인할 수 있는 이메일 목록. 앱 유저(users)와 관계없음 | BASE TABLE |
 | [public.admin_access_log](public.admin_access_log.md) | 5 | 어드민의 개인정보 열람 기록. insert만 함. 탈퇴 삭제(purge)를 막지 않도록 다른 테이블로 FK를 걸지 않음 | BASE TABLE |
+| [public.school_email_domain](public.school_email_domain.md) | 3 | 학교 이메일 인증 시 허용 도메인. 재학생의 학교를 정하는 기준이라 한 도메인은 한 학교에만 속함. 변경은 superadmin만 할 수 있음 | BASE TABLE |
 
 ## Enums
 
@@ -82,6 +84,7 @@ erDiagram
 "public.user_consent" }o--|| "public.users" : ""
 "public.user_oauth_account" }o--|| "public.users" : ""
 "public.student_email_send_log" }o--|| "public.users" : ""
+"public.school_email_domain" }o--|| "public.school" : ""
 
 "public.coffee_chat_contact" {
   uuid user_pk FK
@@ -117,6 +120,7 @@ erDiagram
   integer *pk
   integer school_pk FK
   varchar_64_ name
+  boolean is_active
 }
 "public.graduated_profile" {
   uuid graduated_pk FK
@@ -252,6 +256,11 @@ erDiagram
   admin_access_target_type target_type
   varchar_64_ target_id
   timestamp_with_time_zone created_at
+}
+"public.school_email_domain" {
+  integer *pk
+  integer school_pk FK
+  varchar_128_ domain
 }
 ```
 

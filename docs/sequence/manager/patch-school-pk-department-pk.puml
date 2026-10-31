@@ -1,0 +1,68 @@
+@startuml patch-manager-school-pk-department-pk
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title PATCH /api/manager/v1/school/{schoolPk}/department/{departmentPk}
+caption CRB-43 · 학과 이름 수정 · 비활성화 · 재활성화
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "SchoolDepartmentController" as Controller
+participant "SchoolDepartmentService" as Service
+participant "AdminSchoolRepository" as SchoolRepository
+participant "AdminDepartmentRepository" as DepartmentRepository
+database PostgreSQL
+
+Client -> Guard: PATCH /api/manager/v1/school/{schoolPk}/department/{departmentPk}\nAuthorization: Bearer <manager token>\n{ name?, is_active? }
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Pipe: 통과
+alt pk가 양의 정수(int4 범위)가 아님
+  Pipe -[#red]-> Client: 400 Invalid pk
+else name이 trim 후 1~64자가 아님, is_active가 boolean이 아님
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+Pipe -> Controller: updateDepartment(schoolPk, departmentPk, req)
+Controller -> Service: updateDepartment(schoolPk, departmentPk, req)
+alt name · is_active 둘 다 없음
+  Service -[#red]-> Client: 400 Nothing to update.
+end
+group transaction (DatabaseService.db.transaction)
+  opt is_active = false
+    Service -> SchoolRepository: findByPkForUpdate(schoolPk, tx)
+    SchoolRepository -> PostgreSQL: SELECT school WHERE pk = ? FOR UPDATE
+    note right: 같은 학교의 동시 비활성화를 직렬화해서\n활성 학과가 0개가 되지 않게 함
+  end
+  Service -> DepartmentRepository: update(schoolPk, departmentPk, { name?, isActive? }, tx)
+  DepartmentRepository -> PostgreSQL: UPDATE department SET ...\nWHERE pk = ? AND school_pk = ? RETURNING *
+  PostgreSQL --> DepartmentRepository: row | 0행 | UNIQUE 위반
+  alt UNIQUE (school_pk, name) 위반
+    Service -[#red]-> Client: 409 Department name already exists in this school.
+  else 0행 (없는 학과이거나 다른 학교의 학과)
+    Service -[#red]-> Client: 404 Department not found.
+  end
+  opt is_active = false
+    Service -> DepartmentRepository: existsActiveBySchoolPk(schoolPk, tx)
+    DepartmentRepository -> PostgreSQL: SELECT pk FROM department WHERE school_pk = ? AND is_active LIMIT 1
+    alt 남은 활성 학과 없음
+      Service -[#red]-> Client: 409 At least one active department is required.
+    end
+    note right of Service: 활성 학과가 없으면 가입 중인 재학생이 프로필 단계를 끝낼 수 없음
+  end
+end
+note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
+note right of Service
+  행을 지우지 않으므로 이미 고른 학생의 프로필 · 내 정보 조회 · 커피챗 표시는 그대로.
+  이름을 바꾸면 이전 프로필 버전의 표시 이름도 함께 바뀜 (버전 관리 안 함).
+  비활성화 후 앱 동작: student/get-departments.puml, student/post-info.puml
+end note
+Service --> Controller: DepartmentAdminDto
+Controller --> Client: 200 { pk, school_pk, name, is_active }
+
+@enduml

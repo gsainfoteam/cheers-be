@@ -54,6 +54,11 @@
 | [manager/get-consent.puml](manager/get-consent.puml)                                                                                 | `GET /api/manager/v1/consent`                                          |
 | [manager/post-consent.puml](manager/post-consent.puml)                                                                               | `POST /api/manager/v1/consent`                                         |
 | [manager/get-consent-type-version-status.puml](manager/get-consent-type-version-status.puml)                                         | `GET /api/manager/v1/consent/{type}/{version}/status`                  |
+| [manager/get-school.puml](manager/get-school.puml)                                                                                   | `GET /api/manager/v1/school`                                           |
+| [manager/get-school-pk-department.puml](manager/get-school-pk-department.puml)                                                       | `GET /api/manager/v1/school/{schoolPk}/department`                     |
+| [manager/post-school-pk-department.puml](manager/post-school-pk-department.puml)                                                     | `POST /api/manager/v1/school/{schoolPk}/department`                    |
+| [manager/patch-school-pk-department-pk.puml](manager/patch-school-pk-department-pk.puml)                                             | `PATCH /api/manager/v1/school/{schoolPk}/department/{departmentPk}`    |
+| [manager/put-school-pk-email-domain.puml](manager/put-school-pk-email-domain.puml)                                                   | `PUT /api/manager/v1/school/{schoolPk}/email-domain`                   |
 
 ## 보기
 

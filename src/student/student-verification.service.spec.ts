@@ -89,7 +89,10 @@ describe("StudentVerificationService", () => {
   const mailService = {
     sendAsync: jest.fn(() => order.push("sendAsync")),
   };
-  const schoolRepository = { findByEmailDomain: jest.fn() };
+  const schoolRepository = {
+    findByEmailDomain: jest.fn(),
+    findByEmailDomainForShare: jest.fn(),
+  };
   const studentRepository = {
     findByUserPkForUpdate: jest.fn(),
     existsByEmailExcept: jest.fn(),
@@ -142,7 +145,10 @@ describe("StudentVerificationService", () => {
     schoolRepository.findByEmailDomain.mockResolvedValue({
       pk: 1,
       name: "GIST",
-      emailDomain: "gm.gist.ac.kr",
+    });
+    schoolRepository.findByEmailDomainForShare.mockResolvedValue({
+      pk: 1,
+      name: "GIST",
     });
     studentRepository.findByUserPkForUpdate.mockResolvedValue(student);
     studentRepository.existsByEmailExcept.mockResolvedValue(false);
@@ -350,6 +356,16 @@ describe("StudentVerificationService", () => {
   });
 
   describe("verifyCode", () => {
+    it("returns 400 when the domain was removed after the code was sent", async () => {
+      verificationRepository.findByStudentPk.mockResolvedValue(verification());
+      schoolRepository.findByEmailDomainForShare.mockResolvedValue(null);
+
+      await expect(service.verifyCode(userPk, "482913")).rejects.toThrow(
+        new BadRequestException("Email domain not allowed"),
+      );
+      expect(studentRepository.markVerified).not.toHaveBeenCalled();
+    });
+
     it("records the verified email and deletes the request on a match", async () => {
       verificationRepository.findByStudentPk.mockResolvedValue(verification());
 

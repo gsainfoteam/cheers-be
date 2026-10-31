@@ -17,6 +17,7 @@ import { HealthModule } from "@src/health/health.module";
 import { ManagerModule } from "@src/manager/manager.module";
 import { ManagerConsentModule } from "@src/manager/consent/manager-consent.module";
 import { BusinessCardModule } from "@src/manager/business-card/business-card.module";
+import { SchoolDepartmentModule } from "@src/manager/department/school-department.module";
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { BusinessCardModule } from "@src/manager/business-card/business-card.mod
     ManagerModule,
     ManagerConsentModule,
     BusinessCardModule,
+    SchoolDepartmentModule,
   ],
   controllers: [],
   providers: [],

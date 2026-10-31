@@ -133,7 +133,7 @@ export async function createE2eApp(): Promise<E2eContext> {
     slack,
     reset: async () => {
       // 테스트 DB 전용 (test/setup-env.ts에서 로컬 *_e2e DB만 허용). users를 참조하는 테이블과 admin_account, admin_access_log가 비워지고,
-      // 참조하지 않는 기준 데이터(consent, school, department, interest)와 서명 키는 남음
+      // 참조하지 않는 기준 데이터(consent, school, school_email_domain, department, interest)와 서명 키는 남음
       await db.execute(
         sql`TRUNCATE "users", "admin_account", "admin_access_log" CASCADE`,
       );

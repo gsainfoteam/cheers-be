@@ -11,10 +11,8 @@ import {
   MaxLength,
   ValidateNested,
 } from "class-validator";
+import { trim } from "@src/global/dto/transforms";
 import { ContactRequestDto } from "@src/user/dto/contact-request.dto";
-
-const trim = ({ value }: { value: unknown }) =>
-  typeof value === "string" ? value.trim() : value;
 
 export class GraduatedInfoRequestDto {
   /** 내 정보의 name이 null일 때(첫 저장)만 필수. 이미 있으면 무시 */

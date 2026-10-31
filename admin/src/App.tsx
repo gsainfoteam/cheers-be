@@ -6,6 +6,7 @@ import { BusinessCardsPage } from "./pages/BusinessCardsPage";
 import { CallbackPage } from "./pages/CallbackPage";
 import { ConsentsPage } from "./pages/ConsentsPage";
 import { DashboardLayout, PLACEHOLDER_MENUS } from "./pages/DashboardLayout";
+import { DepartmentsPage } from "./pages/DepartmentsPage";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
@@ -39,6 +40,7 @@ export function App() {
             element={<PlaceholderPage title={menu.label} />}
           />
         ))}
+        <Route path="departments" element={<DepartmentsPage />} />
         <Route path="business-cards" element={<BusinessCardsPage />} />
         <Route path="admin-accounts" element={<AdminAccountsPage />} />
       </Route>

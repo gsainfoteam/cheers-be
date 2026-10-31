@@ -1,0 +1,44 @@
+@startuml get-manager-school-pk-department
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/manager/v1/school/{schoolPk}/department
+caption CRB-43 · 학교별 학과 목록 (비활성 학과 포함)
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ParsePkPipe" as Pipe
+participant "SchoolDepartmentController" as Controller
+participant "SchoolDepartmentService" as Service
+participant "AdminSchoolRepository" as SchoolRepository
+participant "AdminDepartmentRepository" as DepartmentRepository
+database PostgreSQL
+
+Client -> Guard: GET /api/manager/v1/school/{schoolPk}/department\nAuthorization: Bearer <manager token>
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Pipe: 통과
+alt schoolPk가 양의 정수(int4 범위)가 아님
+  Pipe -[#red]-> Client: 400 Invalid pk
+end
+Pipe -> Controller: listDepartments(schoolPk)
+Controller -> Service: listDepartments(schoolPk)
+Service -> SchoolRepository: findByPk(schoolPk)
+SchoolRepository -> PostgreSQL: SELECT school WHERE pk = ?
+PostgreSQL --> SchoolRepository: row | 0행
+alt 학교 없음
+  Service -[#red]-> Client: 404 School not found.
+end
+Service -> DepartmentRepository: findBySchoolPk(schoolPk)
+DepartmentRepository -> PostgreSQL: SELECT department WHERE school_pk = ? ORDER BY pk
+PostgreSQL --> DepartmentRepository: rows
+note right of DepartmentRepository: 앱 API와 달리 비활성 학과도 포함
+Service --> Controller: DepartmentAdminDto[]
+Controller --> Client: 200 [{ pk, school_pk, name, is_active }]
+
+@enduml
