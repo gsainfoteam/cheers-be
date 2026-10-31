@@ -4,6 +4,7 @@ import { getAccessToken } from "./lib/auth";
 import { AdminAccountsPage } from "./pages/AdminAccountsPage";
 import { CallbackPage } from "./pages/CallbackPage";
 import { DashboardLayout, PLACEHOLDER_MENUS } from "./pages/DashboardLayout";
+import { DepartmentsPage } from "./pages/DepartmentsPage";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
@@ -36,6 +37,7 @@ export function App() {
             element={<PlaceholderPage title={menu.label} />}
           />
         ))}
+        <Route path="departments" element={<DepartmentsPage />} />
         <Route path="admin-accounts" element={<AdminAccountsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
