@@ -22,7 +22,7 @@ participant "CoffeeChatRequestRepository" as CoffeeChatRequestRepository
 participant "NotificationService" as NotificationService
 database PostgreSQL
 participant "SMTP"
-participant "Solapi"
+participant "Aligo"
 participant "Slack"
 
 Client -> Guard: POST /api/v1/cheers/request\nAuthorization: Bearer <access token>\n{ graduated_id, message }
@@ -91,10 +91,10 @@ par 채널별 독립 발송
   NotificationService -> SMTP: MailService.send
   SMTP --> NotificationService: MailResult
 else
-  NotificationService -> Solapi: AlimtalkService.send (템플릿 coffee_chat_requested)
-  Solapi --> NotificationService: AlimtalkResult
+  NotificationService -> Aligo: AlimtalkService.send (템플릿 coffee_chat_requested)
+  Aligo --> NotificationService: AlimtalkResult
 end
-alt 실제 발송 안 함 (로컬 메일 · 솔라피 키 미설정 → skipped)
+alt 실제 발송 안 함 (로컬 메일 · 알리고 키 미설정 → skipped)
   note over NotificationService: notification_log 기록 안 함
 else 발송 시도함
   NotificationService -> PostgreSQL: INSERT notification_log\n(event = coffee_chat_requested, channel, status sent | failed, recipient)

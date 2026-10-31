@@ -106,16 +106,16 @@ caption CRB-12 · 한 줄 설명
 
 왼쪽에서 오른쪽으로 이 순서를 지키고, 이름은 실제 클래스명을 씁니다. 쓰지 않는 참여자는 빼도 됩니다.
 
-| 순서 | 참여자                             | 선언                                                                  |
-| ---- | ---------------------------------- | --------------------------------------------------------------------- |
-| 1    | 클라이언트                         | `actor Client`                                                        |
-| 2    | 가드                               | `participant "UserGuard" as Guard`                                    |
-| 3    | 요청 검증 (body · query가 있을 때) | `participant "ValidationPipe" as Pipe`                                |
-| 4    | 컨트롤러                           | `participant "ConsentController" as Controller`                       |
-| 5    | 서비스 (여러 개면 호출 순서대로)   | `participant "ConsentService" as Service`                             |
-| 6    | 리포지토리                         | `participant "ConsentRepository" as ConsentRepository`                |
-| 7    | DB                                 | `database PostgreSQL`                                                 |
-| 8    | 외부 시스템                        | `participant "S3"`, `"Infoteam IdP"`, `"Solapi"`, `"SMTP"`, `"Slack"` |
+| 순서 | 참여자                             | 선언                                                                 |
+| ---- | ---------------------------------- | -------------------------------------------------------------------- |
+| 1    | 클라이언트                         | `actor Client`                                                       |
+| 2    | 가드                               | `participant "UserGuard" as Guard`                                   |
+| 3    | 요청 검증 (body · query가 있을 때) | `participant "ValidationPipe" as Pipe`                               |
+| 4    | 컨트롤러                           | `participant "ConsentController" as Controller`                      |
+| 5    | 서비스 (여러 개면 호출 순서대로)   | `participant "ConsentService" as Service`                            |
+| 6    | 리포지토리                         | `participant "ConsentRepository" as ConsentRepository`               |
+| 7    | DB                                 | `database PostgreSQL`                                                |
+| 8    | 외부 시스템                        | `participant "S3"`, `"Infoteam IdP"`, `"Aligo"`, `"SMTP"`, `"Slack"` |
 
 ### 가드
 

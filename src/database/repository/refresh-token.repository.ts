@@ -28,17 +28,13 @@ export class RefreshTokenRepository {
   }
 
   /*
-  DELETE FROM refresh_token WHERE opaque_hash = ?1 RETURNING *;
+  SELECT * FROM refresh_token WHERE opaque_hash = ?1;
    */
-  // rotation 시 기존 토큰을 원자적으로 소비. 동시에 두 번 refresh하면 한쪽만 행을 받음
-  async deleteByOpaqueHash(
-    opaqueHash: string,
-    tx: TxType,
-  ): Promise<RefreshTokenRow | null> {
-    const result = await tx
-      .delete(refreshToken)
-      .where(eq(refreshToken.opaqueHash, opaqueHash))
-      .returning();
+  async findByOpaqueHash(opaqueHash: string): Promise<RefreshTokenRow | null> {
+    const result = await this.dbService.db
+      .select()
+      .from(refreshToken)
+      .where(eq(refreshToken.opaqueHash, opaqueHash));
 
     return result[0] ?? null;
   }

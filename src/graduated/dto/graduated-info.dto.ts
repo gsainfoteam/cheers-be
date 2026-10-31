@@ -49,10 +49,10 @@ export class GraduatedInfoRequestDto {
   @MaxLength(128)
   job: string;
 
-  /** "#" 없이 */
+  /** "#" 없이. 최대 5개, 각 1~20자, 중복 불가. 안 보내면 빈 배열로 교체 */
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(10)
+  @ArrayMaxSize(5)
   @ArrayUnique()
   @IsString({ each: true })
   @IsNotEmpty({ each: true })

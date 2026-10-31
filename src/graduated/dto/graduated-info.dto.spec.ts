@@ -52,7 +52,7 @@ describe("GraduatedInfoRequestDto", () => {
   it.each([
     ["a hashtag with #", { hashtags: ["#백엔드"] }],
     ["duplicate hashtags", { hashtags: ["백엔드", "백엔드"] }],
-    ["more than 10 hashtags", { hashtags: [...Array(11).keys()].map(String) }],
+    ["more than 5 hashtags", { hashtags: [...Array(6).keys()].map(String) }],
     ["a non-http link", { links: ["ftp://example.com"] }],
     ["a link without protocol", { links: ["www.linkedin.com/in/chulsoo"] }],
     ["more than 5 links", { links: Array(6).fill("https://example.com") }],
