@@ -7,6 +7,7 @@ import { refreshToken } from "@drizzle/schema/refresh-token";
 import { student } from "@drizzle/schema/student";
 import { studentEmailSendLog } from "@drizzle/schema/student-email-send-log";
 import { studentEmailVerification } from "@drizzle/schema/student-email-verification";
+import { studentProfileAttachment } from "@drizzle/schema/student-profile-attachment";
 import { userConsent } from "@drizzle/schema/user-consent";
 import { userOauthAccount } from "@drizzle/schema/user-oauth-account";
 import { users } from "@drizzle/schema/users";
@@ -19,11 +20,13 @@ import {
   getInfo,
   http,
   login,
+  saveStudentInfo,
   sendCode,
   Session,
   signupGraduated,
   signupStudent,
   submitBusinessCard,
+  uploadAttachment,
   verifyStudentEmail,
 } from "./support/flows";
 
@@ -279,6 +282,66 @@ describe("시나리오 4: 스케줄러 작업", () => {
         .set("Authorization", bearer(studentSession))
         .expect(200);
       expect(sent.body.graduated_withdrawn).toBe(true);
+    });
+
+    it("재학생의 첨부 파일을 DB 커밋 뒤에 지우고 링크 첨부는 남김", async () => {
+      const session = await signupStudent(ctx);
+      const tempKey = await uploadAttachment(ctx, session);
+      const linkUrl = "https://example.com/portfolio";
+      await saveStudentInfo(ctx, session, {
+        attachments: [
+          { kind: "cv", source: "file", key: tempKey, file_name: "cv.pdf" },
+          { kind: "portfolio", source: "link", url: linkUrl },
+        ],
+      });
+      const info = await getInfo(ctx, session);
+      const fileKey = info.student.profile.attachments.find(
+        (a: { source: string }) => a.source === "file",
+      ).key as string;
+      expect(ctx.s3.objects.has(fileKey)).toBe(true);
+
+      await withdraw(session, ago(30 * DAY_MS));
+      ctx.s3.clearDeleteLog();
+
+      // 트랜잭션 안에서 지우면 이 조회(다른 연결)에는 아직 파일 행이 보임
+      let rowsAtDelete = -1;
+      ctx.s3.onDelete = async () => {
+        rowsAtDelete = (
+          await ctx.db
+            .select()
+            .from(studentProfileAttachment)
+            .where(eq(studentProfileAttachment.source, "file"))
+        ).length;
+      };
+
+      expect(await withdrawal.purgeExpired(now)).toBe(1);
+
+      expect(rowsAtDelete).toBe(0);
+      expect(ctx.s3.deletedKeys).toEqual([fileKey]);
+      expect(ctx.s3.objects.has(fileKey)).toBe(false);
+      const remaining = await ctx.db.select().from(studentProfileAttachment);
+      expect(remaining.map((a) => [a.source, a.url])).toEqual([
+        ["link", linkUrl],
+      ]);
+    });
+
+    it("진행 중인 학교 이메일 인증 요청과 전송 기록을 지움", async () => {
+      const email = "withdraw-progress@gm.gist.ac.kr";
+      const session = await login(ctx, "student");
+      await agreeConsents(ctx, session);
+      await sendCode(ctx, session, email);
+      expect(await ctx.db.select().from(studentEmailVerification)).toHaveLength(
+        1,
+      );
+
+      await withdraw(session, ago(DAY_MS));
+
+      expect(await withdrawal.purgeExpired(now)).toBe(1);
+
+      expect(await ctx.db.select().from(studentEmailVerification)).toHaveLength(
+        0,
+      );
+      expect(await ctx.db.select().from(studentEmailSendLog)).toHaveLength(0);
     });
 
     it("유예 경계값: active 30일, pending 1일. 유예 중인 유저는 그대로", async () => {

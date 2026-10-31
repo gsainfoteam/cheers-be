@@ -3,14 +3,13 @@ import { graduated } from "@drizzle/schema/graduated";
 import { OrphanFileService } from "@src/file/orphan-file.service";
 import { createE2eApp, E2eContext } from "./support/app";
 import {
-  bearer,
   getInfo,
-  http,
   JPEG_BYTES,
   PDF_BYTES,
   saveStudentInfo,
   signupGraduated,
   signupStudent,
+  uploadAttachment,
 } from "./support/flows";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -33,20 +32,10 @@ describe("시나리오 4: S3 고아 파일 정리 (가짜 S3)", () => {
     const cardKey = row.businessCardKey as string;
 
     const studentSession = await signupStudent(ctx);
-    const upload = await http(ctx)
-      .post("/api/v1/file/attachment/upload-url")
-      .set("Authorization", bearer(studentSession))
-      .send({ content_type: "application/pdf", size: PDF_BYTES.length })
-      .expect(201);
-    ctx.s3.put(upload.body.key, PDF_BYTES);
+    const tempKey = await uploadAttachment(ctx, studentSession);
     await saveStudentInfo(ctx, studentSession, {
       attachments: [
-        {
-          kind: "cv",
-          source: "file",
-          key: upload.body.key,
-          file_name: "cv.pdf",
-        },
+        { kind: "cv", source: "file", key: tempKey, file_name: "cv.pdf" },
       ],
     });
     const info = await getInfo(ctx, studentSession);

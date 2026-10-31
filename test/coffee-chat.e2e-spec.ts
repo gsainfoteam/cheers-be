@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { notificationLog } from "@drizzle/schema/notification-log";
 import { createE2eApp, E2eContext } from "./support/app";
 import {
   bearer,
@@ -8,6 +9,9 @@ import {
   signupGraduated,
   signupStudent,
 } from "./support/flows";
+
+// graduatedInfoBody의 연락처
+const GRADUATED_CONTACT_EMAIL = "graduated-contact@example.com";
 
 describe("시나리오 2: 현업자 가입 → 재학생 목록 조회 → 커피챗 요청", () => {
   let ctx: E2eContext;
@@ -80,8 +84,64 @@ describe("시나리오 2: 현업자 가입 → 재학생 목록 조회 → 커�
 
     // 알림은 응답 뒤에 비동기로 나감
     await waitUntil(() =>
-      ctx.mail.sent.some((m) => m.to === "graduated-contact@example.com"),
+      ctx.mail.sent.some((m) => m.to === GRADUATED_CONTACT_EMAIL),
     );
+  });
+
+  describe("알림 결과 기록", () => {
+    // 요청을 보내고 notification_log 행이 생길 때까지 기다림 (응답 뒤에 비동기로 기록)
+    const requestAndWaitForLog = async () => {
+      await signupGraduated(ctx);
+      const studentSession = await signupStudent(ctx);
+      const card = (await list(studentSession)).items[0];
+      const created = await http(ctx)
+        .post("/api/v1/cheers/request")
+        .set("Authorization", bearer(studentSession))
+        .send({ graduated_id: card.graduated_id, message: "질문" })
+        .expect(201);
+
+      let rows: (typeof notificationLog.$inferSelect)[] = [];
+      await waitUntil(async () => {
+        rows = await ctx.db.select().from(notificationLog);
+        return rows.length > 0;
+      });
+      return { requestId: created.body.id, rows };
+    };
+
+    it("발송에 성공하면 notification_log에 sent로 남음", async () => {
+      ctx.mail.sendResult = { success: true, messageId: "e2e-message-id" };
+
+      const { requestId, rows } = await requestAndWaitForLog();
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        coffeeChatRequestPk: requestId,
+        event: "coffee_chat_requested",
+        channel: "email",
+        status: "sent",
+        recipient: GRADUATED_CONTACT_EMAIL,
+        providerMessageId: "e2e-message-id",
+      });
+      expect(ctx.slack.messages).toHaveLength(0);
+    });
+
+    it("발송에 실패하면 failed로 남고 수신자를 가려서 알림을 보냄", async () => {
+      ctx.mail.sendResult = {
+        success: false,
+        error: `SMTP error for ${GRADUATED_CONTACT_EMAIL}`,
+      };
+
+      const { requestId, rows } = await requestAndWaitForLog();
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        coffeeChatRequestPk: requestId,
+        status: "failed",
+      });
+      expect(ctx.slack.messages).toHaveLength(1);
+      expect(ctx.slack.messages[0]).toContain("NOTIFICATION ERROR");
+      expect(ctx.slack.messages[0]).not.toContain(GRADUATED_CONTACT_EMAIL);
+    });
   });
 
   it("현업자는 재학생 API를 호출할 수 없음", async () => {
@@ -120,9 +180,11 @@ describe("시나리오 2: 현업자 가입 → 재학생 목록 조회 → 커�
   });
 });
 
-async function waitUntil(condition: () => boolean): Promise<void> {
+async function waitUntil(
+  condition: () => boolean | Promise<boolean>,
+): Promise<void> {
   for (let i = 0; i < 100; i++) {
-    if (condition()) return;
+    if (await condition()) return;
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
   throw new Error("Condition not met in time");
