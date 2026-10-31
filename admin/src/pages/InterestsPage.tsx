@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { api, ApiError } from "../lib/api";
+import { api, errorMessage } from "../lib/api";
 
 const BASE_PATH = "/api/manager/v1/interest";
 
@@ -8,10 +8,6 @@ type Interest = {
   name: string;
   sort_order: number;
 };
-
-function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof ApiError ? err.message : fallback;
-}
 
 export function InterestsPage() {
   const [interests, setInterests] = useState<Interest[] | null>(null);
