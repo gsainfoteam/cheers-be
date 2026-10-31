@@ -1,5 +1,11 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
   "printWidth": 80,
-  "ignorePatterns": ["dist", "coverage", "drizzle/meta", "bun.lock"]
+  "ignorePatterns": [
+    "dist",
+    "coverage",
+    "drizzle/meta",
+    "docs/schema",
+    "bun.lock"
+  ]
 }
