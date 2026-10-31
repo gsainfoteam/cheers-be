@@ -8,10 +8,12 @@ skinparam shadowing false
 autonumber
 hide footbox
 
-title 공통 흐름: 서버 기동 시 관심 분야 목록을 메모리에 로드
-caption CRB-55 · src/student/interest.service.ts
+title 공통 흐름: 관심 분야 메모리 캐시 (기동 시 로드 · 쓰기 후 · 1분 주기 갱신)
+caption CRB-55, CRB-58 · src/student/interest.service.ts
 
 participant "start:prod" as Entrypoint
+participant "AdminInterestService\n(쓰기를 처리한 인스턴스)" as AdminInterestService
+participant "@Cron 매분" as Cron
 participant "InterestService" as InterestService
 participant "InterestRepository" as InterestRepository
 database PostgreSQL
@@ -19,20 +21,50 @@ database PostgreSQL
 == onModuleInit — 요청을 받기 전에 끝남 ==
 
 Entrypoint -> InterestService: app.listen → init → onModuleInit()
-InterestService -> InterestRepository: findAll()
+InterestService -> InterestRepository: findAllNames()
 InterestRepository -> PostgreSQL: SELECT name FROM interest ORDER BY sort_order, pk
 alt DB 오류
   PostgreSQL -[#red]-> Entrypoint: 예외 → 기동 실패 → K8s가 재시작
 end
 PostgreSQL --> InterestRepository: rows
 InterestRepository --> InterestService: name[]
-InterestService -> InterestService: 메모리에 보관 (읽기 전용 배열 + Set)
+InterestService -> InterestService: 메모리에 보관
 note right of InterestService
-  이후 요청은 DB를 조회하지 않음.
-  목록 추가 · 수정 · 삭제는 어드민 페이지(CRB-58)에서 하고,
-  바뀐 목록은 서버를 다시 띄우거나 캐시를 갱신해야 반영됨
+  이후 GET /interests 요청은 DB를 조회하지 않음.
   빈 목록이면 경고 로그만 남기고 기동 (GET /interests 가 빈 배열)
   재학생 정보 저장 API 는 이 목록과 대조하지 않음
 end note
+
+== 어드민 쓰기 후 — 이 인스턴스는 바로 반영 ==
+
+AdminInterestService -> PostgreSQL: 추가 · 이름 수정 · 삭제 · 정렬 (COMMIT)
+AdminInterestService -> InterestService: refresh() (커밋 뒤, 응답 전에 await)
+ref over InterestService, PostgreSQL: 재조회
+
+== 다른 인스턴스 — 매분 재조회 ==
+
+Cron -> InterestService: refresh() (0초마다)
+ref over InterestService, PostgreSQL: 재조회
+note over Cron, PostgreSQL
+  메시지 브로커 · Redis 없이 DB만 다시 읽음.
+  쓰기를 처리하지 않은 인스턴스는 다음 주기까지 옛 목록을 보여 줌 → 인스턴스 사이에 최대 1분 차이가 있음.
+  옛 목록이 보여도 저장 API가 목록과 대조하지 않으므로 저장은 실패하지 않음
+end note
+
+== 재조회 (refresh) ==
+
+InterestService -> InterestRepository: findAllNames()
+InterestRepository -> PostgreSQL: SELECT name FROM interest ORDER BY sort_order, pk
+alt 조회 실패
+  PostgreSQL --> InterestService: 예외
+  InterestService -> InterestService: 기존 목록 유지, 에러 로그만 남김 (다음 주기에 다시 시도)
+else 조회 성공
+  PostgreSQL --> InterestRepository: rows
+  InterestRepository --> InterestService: name[]
+  opt 이보다 늦게 시작한 재조회가 아직 반영되지 않았을 때만
+    InterestService -> InterestService: 메모리 목록 교체
+  end
+  note right of InterestService: 먼저 시작한 주기 재조회가 늦게 끝나\n커밋 후 재조회 결과를 옛 값으로 덮어쓰지 않게 함
+end
 
 @enduml
