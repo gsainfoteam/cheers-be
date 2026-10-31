@@ -6,9 +6,11 @@ COPY --from=oven/bun:1 /usr/local/bin/bun /usr/local/bin/bun
 
 WORKDIR /app
 
-COPY package.json bun.lock ./
+COPY package.json bun.lock .npmrc ./
 
-RUN bun install --frozen-lockfile
+# @gsainfoteam 패키지는 GitHub Packages에 있어 설치할 때 토큰이 필요함 (이미지에는 남지 않음)
+RUN --mount=type=secret,id=npm_token,env=NPM_TOKEN \
+  bun install --frozen-lockfile
 
 COPY . .
 
@@ -22,9 +24,10 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY package.json bun.lock ./
+COPY package.json bun.lock .npmrc ./
 
-RUN bun install --production --frozen-lockfile --ignore-scripts
+RUN --mount=type=secret,id=npm_token,env=NPM_TOKEN \
+  bun install --production --frozen-lockfile --ignore-scripts
 
 COPY --from=builder --chown=bun:bun /app/drizzle ./drizzle
 

@@ -25,4 +25,6 @@ runs:
 
     - name: Install dependencies
       shell: bash
+      env:
+        NPM_TOKEN: ${{ github.token }}
       run: bun install --frozen-lockfile
