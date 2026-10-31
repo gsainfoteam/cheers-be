@@ -1,57 +1,60 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { createHmac, randomBytes } from "node:crypto";
-import {
-  AlimtalkResult,
-  AlimtalkVariablesMap,
-  SendAlimtalkInput,
-} from "./alimtalk.types";
+import { AlimtalkResult, SendAlimtalkInput } from "./alimtalk.types";
 import { NotificationEvent } from "./notification.types";
 import { maskRecipient } from "./notification.utils";
 
-const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
+const ALIGO_SEND_URL = "https://kakaoapi.aligo.in/akv10/alimtalk/send/";
 
-// 키는 솔라피에 등록한 템플릿의 치환 문구와 정확히 같아야 함
-const TEMPLATE_VARIABLES: {
-  [E in NotificationEvent]: (
-    variables: AlimtalkVariablesMap[E],
-  ) => Record<string, string>;
-} = {
-  coffee_chat_requested: (v) => ({
-    "#{이름}": v.recipientName,
-    "#{요청ID}": v.coffeeChatRequestPk,
-  }),
-  contact_shared: (v) => ({
-    "#{이름}": v.recipientName,
-    "#{현업자이름}": v.graduatedName,
-    "#{요청ID}": v.coffeeChatRequestPk,
-  }),
+interface AlimtalkTemplate {
+  subject: string;
+  message: string;
+  buttonName: string;
+  // WEB_BASE_URL 뒤에 붙는 버튼 링크 경로
+  path: string;
+}
+
+// message와 버튼은 알리고에 등록한 템플릿과 글자 하나까지 같아야 함 (다르면 전송되지 않음)
+const TEMPLATES: Record<NotificationEvent, AlimtalkTemplate> = {
+  coffee_chat_requested: {
+    subject: "커피챗 요청 도착",
+    message:
+      "Cheers\n\n☕ 새로운 커피챗 요청이 도착했어요\n요청자로부터 온 메시지를 확인하고 커피챗 가능 여부를 알려주세요",
+    buttonName: "커피챗 요청 확인하기",
+    path: "/cheers/received",
+  },
+  contact_shared: {
+    subject: "연락처 공유 도착",
+    message:
+      "Cheers\n\n☕ 선배가 연락처를 공유했어요\n연락처를 확인하고 커피챗 일정을 잡아볼까요?",
+    buttonName: "연락처 확인하기",
+    path: "/cheers/sent",
+  },
 };
 
-interface SolapiConfig {
+interface AligoConfig {
   apiKey: string;
-  apiSecret: string;
+  userId: string;
+  senderKey: string;
   sender: string;
-  pfId: string;
-  templateIds: Record<NotificationEvent, string>;
+  webBaseUrl: string;
+  templateCodes: Record<NotificationEvent, string>;
 }
 
-interface SolapiMessageResult {
-  messageId?: string;
-  statusCode?: string;
-  statusMessage?: string;
+interface AligoSendResponse {
+  code?: number | string;
+  message?: string;
+  info?: {
+    // 문서의 표는 Integer, 예시는 문자열
+    mid?: number | string;
+    // 잘못 요청된 연락처 수
+    fcnt?: number | string;
+  };
 }
 
-interface SolapiSendResponse {
-  failedMessageList?: SolapiMessageResult[];
-  messageList?: SolapiMessageResult[];
-  errorCode?: string;
-  errorMessage?: string;
-}
-
-function parseJson(text: string): SolapiSendResponse | null {
+function parseJson(text: string): AligoSendResponse | null {
   try {
-    return JSON.parse(text) as SolapiSendResponse;
+    return JSON.parse(text) as AligoSendResponse;
   } catch {
     return null;
   }
@@ -60,13 +63,17 @@ function parseJson(text: string): SolapiSendResponse | null {
 @Injectable()
 export class AlimtalkService {
   private readonly logger = new Logger(AlimtalkService.name);
-  private readonly config: SolapiConfig | null;
+  private readonly config: AligoConfig | null;
 
   constructor(private readonly configService: ConfigService) {
-    const apiKey = this.configService.get<string>("SOLAPI_API_KEY");
-    const apiSecret = this.configService.get<string>("SOLAPI_API_SECRET");
-    const sender = this.configService.get<string>("SOLAPI_SENDER_PHONE");
-    const pfId = this.configService.get<string>("KAKAO_PF_ID");
+    const apiKey = this.configService.get<string>("ALIGO_API_KEY");
+    const userId = this.configService.get<string>("ALIGO_USER_ID");
+    const senderKey = this.configService.get<string>("ALIGO_SENDER_KEY");
+    const sender = this.configService.get<string>("ALIGO_SENDER_PHONE");
+    const webBaseUrl = this.configService
+      .get<string>("WEB_BASE_URL")
+      ?.trim()
+      .replace(/\/+$/, "");
     const coffeeChatRequested = this.configService.get<string>(
       "KAKAO_TEMPLATE_COFFEE_CHAT_REQUESTED",
     );
@@ -76,15 +83,16 @@ export class AlimtalkService {
 
     if (
       !apiKey ||
-      !apiSecret ||
+      !userId ||
+      !senderKey ||
       !sender ||
-      !pfId ||
+      !webBaseUrl ||
       !coffeeChatRequested ||
       !contactShared
     ) {
       // 비즈 채널 · 템플릿 심사 전에도 배포할 수 있게 production에서도 막지 않음
       this.logger.warn(
-        "Solapi or Kakao alimtalk config is not set. Alimtalk will be logged instead of sent.",
+        "Aligo or Kakao alimtalk config is not set. Alimtalk will be logged instead of sent.",
       );
       this.config = null;
       return;
@@ -92,10 +100,11 @@ export class AlimtalkService {
 
     this.config = {
       apiKey,
-      apiSecret,
+      userId,
+      senderKey,
       sender,
-      pfId,
-      templateIds: {
+      webBaseUrl,
+      templateCodes: {
         coffee_chat_requested: coffeeChatRequested,
         contact_shared: contactShared,
       },
@@ -104,7 +113,7 @@ export class AlimtalkService {
 
   /**
    * 알림톡을 발송하고 결과를 반환합니다. 실패해도 throw하지 않습니다.
-   * success는 솔라피 접수 성공이며, 실제 도달 여부는 아닙니다.
+   * success는 알리고 접수 성공이며, 실제 도달 여부는 아닙니다.
    */
   async send<E extends NotificationEvent>(
     input: SendAlimtalkInput<E>,
@@ -116,33 +125,35 @@ export class AlimtalkService {
       return { success: true, skipped: true };
     }
 
-    const buildVariables = TEMPLATE_VARIABLES[input.event] as (
-      variables: AlimtalkVariablesMap[E],
-    ) => Record<string, string>;
+    const template = TEMPLATES[input.event];
+    const link = `${this.config.webBaseUrl}${template.path}`;
 
     try {
-      const response = await fetch(SOLAPI_SEND_URL, {
+      const response = await fetch(ALIGO_SEND_URL, {
         method: "POST",
-        headers: {
-          Authorization: this.createAuthorization(),
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          messages: [
-            {
-              to: input.to,
-              from: this.config.sender,
-              type: "ATA",
-              kakaoOptions: {
-                pfId: this.config.pfId,
-                templateId: this.config.templateIds[input.event],
-                variables: buildVariables(input.variables),
-                // 알림톡 실패 시 문자로 대체 발송하지 않음
-                disableSms: true,
+        body: new URLSearchParams({
+          apikey: this.config.apiKey,
+          userid: this.config.userId,
+          senderkey: this.config.senderKey,
+          tpl_code: this.config.templateCodes[input.event],
+          sender: this.config.sender,
+          receiver_1: input.to,
+          recvname_1: input.variables.recipientName,
+          subject_1: template.subject,
+          message_1: template.message,
+          button_1: JSON.stringify({
+            button: [
+              {
+                name: template.buttonName,
+                linkType: "WL",
+                linkTypeName: "웹링크",
+                linkMo: link,
+                linkPc: link,
               },
-            },
-          ],
-          showMessageList: true,
+            ],
+          }),
+          // 알림톡 실패 시 문자로 대체 발송하지 않음
+          failover: "N",
         }),
         signal: AbortSignal.timeout(10_000),
       });
@@ -154,7 +165,7 @@ export class AlimtalkService {
         return {
           success: false,
           error:
-            `${response.status} ${body?.errorCode ?? ""} ${body?.errorMessage ?? ""}`.trim(),
+            `${response.status} ${body?.code ?? ""} ${body?.message ?? ""}`.trim(),
         };
       }
 
@@ -165,32 +176,32 @@ export class AlimtalkService {
         };
       }
 
-      const failed = body.failedMessageList?.[0];
-      if (failed) {
+      // 알리고는 실패도 HTTP 200으로 주고 code로 구분함
+      if (Number(body.code) !== 0) {
         return {
           success: false,
-          messageId: failed.messageId,
-          error: `${failed.statusCode} ${failed.statusMessage}`,
+          error: `${body.code ?? ""} ${body.message ?? ""}`.trim(),
         };
       }
 
-      return { success: true, messageId: body.messageList?.[0]?.messageId };
+      const messageId =
+        body.info?.mid === undefined ? undefined : String(body.info.mid);
+
+      // 수신자가 1명이라 잘못 요청된 연락처가 있으면 발송되지 않은 것
+      if (Number(body.info?.fcnt) > 0) {
+        return {
+          success: false,
+          messageId,
+          error: `${body.code} invalid receiver: ${body.message ?? ""}`.trim(),
+        };
+      }
+
+      return { success: true, messageId };
     } catch (error) {
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error),
       };
     }
-  }
-
-  // https://solapi.com/developers/api/authentication-api-key
-  private createAuthorization(): string {
-    const { apiKey, apiSecret } = this.config!;
-    const date = new Date().toISOString();
-    const salt = randomBytes(32).toString("hex");
-    const signature = createHmac("sha256", apiSecret)
-      .update(date + salt)
-      .digest("hex");
-    return `HMAC-SHA256 apiKey=${apiKey}, date=${date}, salt=${salt}, signature=${signature}`;
   }
 }
