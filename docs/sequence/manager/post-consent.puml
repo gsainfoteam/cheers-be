@@ -1,0 +1,42 @@
+@startuml post-manager-consent
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title POST /api/manager/v1/consent
+caption CRB-39 · 약관 새 버전 등록 (superadmin 전용). 기존 버전은 수정 · 삭제하지 않음
+
+actor Client
+participant "ManagerGuard\n+ SuperAdminGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "ManagerConsentController" as Controller
+participant "ManagerConsentService" as Service
+participant "AdminConsentRepository" as AdminConsentRepository
+database PostgreSQL
+
+note over Client: 어드민 화면은 필수 약관을 등록하거나\n필수 약관을 선택으로 바꿀 때 확인 창을 먼저 띄움.\n서버 쪽 확인 절차는 없음
+Client -> Guard: POST /api/manager/v1/consent\nAuthorization: Bearer <manager token>\n{ type, version, is_required, url }
+ref over Client, Guard: ManagerGuard + SuperAdminGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found\n403 Superadmin privilege is required.
+Guard -> Pipe: 통과
+alt body 검증 실패 (type · version 형식 · 길이, is_required가 boolean이 아님, url이 http(s)가 아니거나 512자 초과)
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+Pipe -> Controller: create(req)
+Controller -> Service: create(req)
+Service -> AdminConsentRepository: insertIfAbsent({ type, version, isRequired, url })
+AdminConsentRepository -> PostgreSQL: INSERT consent\nON CONFLICT (type, version) DO NOTHING RETURNING
+note right: 먼저 조회하지 않아 동시 요청이어도 500이 아니라 409.\n요청 하나에 한 행만 넣어 created_at이 겹치지 않음 (최신 버전 판정 기준)
+PostgreSQL --> AdminConsentRepository: row | 0행
+alt 0행 (이미 있는 버전)
+  Service -[#red]-> Client: 409 This consent version already exists.
+end
+Service --> Controller: ConsentVersionDto
+Controller --> Client: 201 { type, version, is_required, url, created_at, is_latest: true }
+note over Client, PostgreSQL: is_required가 true면 이 버전에 동의하지 않은 active 사용자의 consent_required가\n다음 조회부터 true가 되고, 가입 중인 사용자는 next_step = consent로 돌아감
+
+@enduml

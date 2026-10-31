@@ -4,7 +4,6 @@ import { CurrentManagerProvider } from "../lib/current-manager";
 
 // 메뉴 자리만 둠. 기능은 각 하위 이슈에서 추가
 export const PLACEHOLDER_MENUS = [
-  { path: "consents", label: "이용약관" },
   { path: "departments", label: "학과" },
   { path: "business-cards", label: "현업자 명함" },
   { path: "coffee-chats", label: "커피챗 요청" },
@@ -13,6 +12,7 @@ export const PLACEHOLDER_MENUS = [
 
 const NAV_ITEMS = [
   { to: "/", label: "홈", end: true },
+  { to: "/consents", label: "이용약관", end: false },
   ...PLACEHOLDER_MENUS.map((menu) => ({
     to: `/${menu.path}`,
     label: menu.label,

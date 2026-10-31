@@ -1,0 +1,33 @@
+@startuml get-manager-consent
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/manager/v1/consent
+caption CRB-39 · 약관 종류별 버전 목록. admin도 조회 가능
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ManagerConsentController" as Controller
+participant "ManagerConsentService" as Service
+participant "AdminConsentRepository" as AdminConsentRepository
+database PostgreSQL
+
+Client -> Guard: GET /api/manager/v1/consent\nAuthorization: Bearer <manager token>
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Controller: list()
+Controller -> Service: list()
+Service -> AdminConsentRepository: findAllVersions()
+AdminConsentRepository -> PostgreSQL: SELECT consent + is_latest\nORDER BY type, created_at DESC, version DESC
+note right: is_latest는 사용자 API와 같은 조각(consent.sql.ts isLatestConsent)으로 판정
+PostgreSQL --> AdminConsentRepository: rows
+Service -> Service: type별로 묶음 (각 type 안은 최신 버전부터)
+Service --> Controller: ConsentTypeDto[]
+Controller --> Client: 200 [{ type, versions: [{ type, version, is_required, url, created_at, is_latest }] }]
+
+@enduml
