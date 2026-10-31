@@ -210,6 +210,11 @@ select {
   margin-bottom: 16px;
 }
 
+.row-actions {
+  display: flex;
+  gap: 8px;
+}
+
 @media (max-width: 720px) {
   .app-shell {
     flex-direction: column;

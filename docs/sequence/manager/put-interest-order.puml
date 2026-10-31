@@ -1,0 +1,54 @@
+@startuml put-manager-interest-order
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title PUT /api/manager/v1/interest/order
+caption CRB-58 · 관심 분야 정렬 (전체 pk를 원하는 순서로 보냄)
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "AdminInterestController" as Controller
+participant "AdminInterestService" as Service
+participant "AdminInterestRepository" as AdminInterestRepository
+participant "InterestService" as InterestService
+database PostgreSQL
+
+Client -> Guard: PUT /api/manager/v1/interest/order\nAuthorization: Bearer <manager token>\n{ pks: number[] }
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Pipe: 통과
+alt pks가 빈 배열, 중복, 1 ~ 2147483647의 정수가 아닌 항목
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+Pipe -> Controller: reorder(req)
+Controller -> Service: reorder(req)
+group transaction (DatabaseService.db.transaction)
+  Service -> AdminInterestRepository: lockForWrite(tx)
+  AdminInterestRepository -> PostgreSQL: LOCK TABLE interest IN SHARE ROW EXCLUSIVE MODE
+  Service -> AdminInterestRepository: findAll(tx)
+  AdminInterestRepository -> PostgreSQL: SELECT interest ORDER BY sort_order, pk
+  PostgreSQL --> AdminInterestRepository: rows
+  alt pks가 현재 목록의 pk 전체와 다름 (화면을 연 뒤 다른 어드민이 추가 · 삭제)
+    Service -[#red]-> Client: 409 The interest list has changed. Reload and try again.
+  end
+  loop pks (index 순서)
+    Service -> AdminInterestRepository: updateSortOrder(pk, index + 1, tx)
+    AdminInterestRepository -> PostgreSQL: UPDATE interest SET sort_order WHERE pk = ?
+  end
+  Service -> AdminInterestRepository: findAll(tx)
+  AdminInterestRepository -> PostgreSQL: SELECT interest ORDER BY sort_order, pk
+  PostgreSQL --> AdminInterestRepository: rows
+end
+note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
+Service -> InterestService: refresh()
+ref over Service, PostgreSQL: 커밋 뒤 이 인스턴스 캐시를 다시 읽음 — flow/interest-cache-bootstrap.puml\n재조회 실패는 로그만 남기고 응답은 성공
+Service --> Controller: AdminInterestDto[]
+Controller --> Client: 200 [{ pk, name, sort_order }]
+
+@enduml

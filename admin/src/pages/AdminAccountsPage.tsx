@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { api, ApiError } from "../lib/api";
+import { api, errorMessage } from "../lib/api";
 import { AdminRole, useCurrentManager } from "../lib/current-manager";
 
 const BASE_PATH = "/api/manager/v1/admin-account";
@@ -12,10 +12,6 @@ type AdminAccount = {
   created_at: string;
   updated_at: string;
 };
-
-function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof ApiError ? err.message : fallback;
-}
 
 function formatDateTime(value: string): string {
   return new Date(value).toLocaleString("ko-KR", {

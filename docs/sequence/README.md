@@ -12,7 +12,7 @@
 | [flow/s3-orphan-cleanup.puml](flow/s3-orphan-cleanup.puml)                                             | 스케줄러: DB에서 참조하지 않는 S3 파일 정리        |
 | [flow/file-upload.puml](flow/file-upload.puml)                                                         | 파일 업로드 · 확정 · 조회 · 삭제                   |
 | [flow/jwt-signing-key-bootstrap.puml](flow/jwt-signing-key-bootstrap.puml)                             | 서버 기동 시 JWT 서명 키 로드 · 생성               |
-| [flow/interest-cache-bootstrap.puml](flow/interest-cache-bootstrap.puml)                               | 서버 기동 시 관심 분야 목록을 메모리에 로드        |
+| [flow/interest-cache-bootstrap.puml](flow/interest-cache-bootstrap.puml)                               | 관심 분야 메모리 캐시 (기동 로드 · 1분 주기 갱신)  |
 | [flow/k8s-probes.puml](flow/k8s-probes.puml)                                                           | K8s probe와 DB 장애 시 동작                        |
 | [flow/observability.puml](flow/observability.puml)                                                     | metrics 수집과 trace 전송                          |
 | [flow/admin-login.puml](flow/admin-login.puml)                                                         | 어드민 화면 로그인 (PKCE)                          |
@@ -48,6 +48,11 @@
 | [manager/post-admin-account.puml](manager/post-admin-account.puml)                                     | `POST /api/manager/v1/admin-account`               |
 | [manager/patch-admin-account-pk.puml](manager/patch-admin-account-pk.puml)                             | `PATCH /api/manager/v1/admin-account/{pk}`         |
 | [manager/delete-admin-account-pk.puml](manager/delete-admin-account-pk.puml)                           | `DELETE /api/manager/v1/admin-account/{pk}`        |
+| [manager/get-interest.puml](manager/get-interest.puml)                                                 | `GET /api/manager/v1/interest`                     |
+| [manager/post-interest.puml](manager/post-interest.puml)                                               | `POST /api/manager/v1/interest`                    |
+| [manager/patch-interest-pk.puml](manager/patch-interest-pk.puml)                                       | `PATCH /api/manager/v1/interest/{pk}`              |
+| [manager/delete-interest-pk.puml](manager/delete-interest-pk.puml)                                     | `DELETE /api/manager/v1/interest/{pk}`             |
+| [manager/put-interest-order.puml](manager/put-interest-order.puml)                                     | `PUT /api/manager/v1/interest/order`               |
 
 ## 보기
 

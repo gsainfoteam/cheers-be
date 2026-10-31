@@ -9,6 +9,10 @@ export class ApiError extends Error {
   }
 }
 
+export function errorMessage(err: unknown, fallback: string): string {
+  return err instanceof ApiError ? err.message : fallback;
+}
+
 // 서버 에러 응답은 { statusCode, message }. 그 외 형식이면 상태 코드만 보여 줌
 async function toApiError(res: Response): Promise<ApiError> {
   const body = (await res.json().catch(() => null)) as {
@@ -50,5 +54,7 @@ export const api = {
     request<T>(path, { method: "POST", body: JSON.stringify(body) }),
   patch: <T>(path: string, body: unknown) =>
     request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
+  put: <T>(path: string, body: unknown) =>
+    request<T>(path, { method: "PUT", body: JSON.stringify(body) }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 };
