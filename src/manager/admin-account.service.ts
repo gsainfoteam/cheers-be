@@ -8,7 +8,7 @@ import {
 import {
   AdminAccountRepository,
   AdminAccountRow,
-} from "@src/database/repository/admin-account.repository";
+} from "@src/admin-repository/admin-account.repository";
 import { ManagerContext } from "@src/manager/context/manager-context";
 import {
   AdminAccountDto,

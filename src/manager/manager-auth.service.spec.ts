@@ -2,7 +2,7 @@ import { ForbiddenException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { generateKeyPairSync } from "node:crypto";
 import { JwtKeyService } from "@src/auth/jwt-key.service";
-import { AdminAccountRepository } from "@src/database/repository/admin-account.repository";
+import { AdminAccountRepository } from "@src/admin-repository/admin-account.repository";
 import { InfoteamIdpService } from "@src/manager/infoteam-idp.service";
 import { ManagerAuthService } from "@src/manager/manager-auth.service";
 

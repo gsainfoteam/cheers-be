@@ -1,6 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { IsNotEmpty, IsString } from "class-validator";
-import { AdminAccountRole } from "@src/database/repository/admin-account.repository";
+import { AdminAccountRole } from "@src/admin-repository/admin-account.repository";
 import { ADMIN_ACCOUNT_ROLES } from "@src/manager/dto/admin-account.dto";
 
 export class ManagerLoginRequestDto {

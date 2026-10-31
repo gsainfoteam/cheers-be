@@ -4,7 +4,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from "@nestjs/common";
-import { AdminAccountRepository } from "@src/database/repository/admin-account.repository";
+import { AdminAccountRepository } from "@src/admin-repository/admin-account.repository";
 import { AdminAccountService } from "@src/manager/admin-account.service";
 import { ManagerContext } from "@src/manager/context/manager-context";
 

@@ -1,6 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { IsEmail, IsIn, IsOptional, MaxLength } from "class-validator";
-import { AdminAccountRole } from "@src/database/repository/admin-account.repository";
+import { AdminAccountRole } from "@src/admin-repository/admin-account.repository";
 
 export const ADMIN_ACCOUNT_ROLES = ["admin", "superadmin"] as const;
 

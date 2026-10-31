@@ -6,7 +6,7 @@ import {
 } from "@nestjs/common";
 import { Request } from "express";
 import { extractBearerToken } from "@src/auth/guard/access-token";
-import { AdminAccountRepository } from "@src/database/repository/admin-account.repository";
+import { AdminAccountRepository } from "@src/admin-repository/admin-account.repository";
 import { ManagerContext } from "@src/manager/context/manager-context";
 import { ManagerAuthService } from "@src/manager/manager-auth.service";
 

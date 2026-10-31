@@ -1,4 +1,4 @@
-import { AdminAccountRole } from "@src/database/repository/admin-account.repository";
+import { AdminAccountRole } from "@src/admin-repository/admin-account.repository";
 
 export class ManagerContext {
   constructor(

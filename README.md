@@ -104,6 +104,7 @@ bun run --cwd admin dev
 - `docs/sequence/` — API 시퀀스 다이어그램 (PlantUML, [작성 가이드](docs/sequence/README.md))
 - `src/global/` — 로거, 필터, 인터셉터, 공통 DTO/타입
 - `src/manager/` — 어드민 인증, 매니저 가드, 어드민 계정 API
+- `src/admin-repository/` — 어드민 API 전용 레포지토리. 기존 테이블을 어드민에서 조회 · 수정할 때도 `src/database/repository`를 쓰지 않고 여기에 `admin-{table}.repository.ts`를 만듦
 - `admin/` — 어드민 화면 (Vite + React)
 
 ## 배포

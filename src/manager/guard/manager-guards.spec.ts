@@ -3,7 +3,7 @@ import {
   ForbiddenException,
   UnauthorizedException,
 } from "@nestjs/common";
-import { AdminAccountRepository } from "@src/database/repository/admin-account.repository";
+import { AdminAccountRepository } from "@src/admin-repository/admin-account.repository";
 import { ManagerContext } from "@src/manager/context/manager-context";
 import { ManagerGuard } from "@src/manager/guard/manager.guard";
 import { SuperAdminGuard } from "@src/manager/guard/super-admin.guard";
