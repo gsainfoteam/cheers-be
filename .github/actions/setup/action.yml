@@ -1,0 +1,28 @@
+name: Set up
+description: Node, Bun, 의존성 캐시와 설치
+
+runs:
+  using: composite
+  steps:
+    # nest build 는 node 로 실행해야 @src/*, @drizzle/* alias 가 치환됨 (Dockerfile 주석 참고)
+    - name: Set up Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 24
+
+    - name: Set up Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: 1.4.2
+
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.bun/install/cache
+          node_modules
+        key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+
+    - name: Install dependencies
+      shell: bash
+      run: bun install --frozen-lockfile
