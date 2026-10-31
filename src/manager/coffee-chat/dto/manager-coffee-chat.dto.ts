@@ -7,6 +7,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   MaxLength,
 } from "class-validator";
 import { PaginationQueryDto } from "@src/cheers/dto/pagination.dto";
@@ -28,19 +29,28 @@ export const COFFEE_CHAT_REQUEST_STATUSES = [
   "contact_shared",
 ] as const satisfies readonly CoffeeChatRequestStatus[];
 
-const trim = ({ value }: { value: unknown }) =>
-  typeof value === "string" ? value.trim() : value;
+// PostgreSQL은 text 파라미터에 NUL을 받지 않음
+const toKeyword = ({ value }: { value: unknown }) =>
+  typeof value === "string" ? value.replaceAll("\0", "").trim() : value;
+
+// IsISO8601만으로는 오프셋이 없는 값(서버 시간대로 해석됨)과 Date로 읽지 못하는 값(20261015, 2026-W01)이 통과함
+const OFFSET_DATE_TIME =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
+const OFFSET_DATE_TIME_MESSAGE =
+  "$property must be an ISO 8601 date-time with a UTC offset";
 
 // 기간 필터 공통. [created_from, created_to)
 export class CreatedPeriodQueryDto extends PaginationQueryDto {
   /** 이 시각부터 (포함). UTC 오프셋이 있는 ISO 8601 */
   @IsOptional()
   @IsISO8601({ strict: true })
+  @Matches(OFFSET_DATE_TIME, { message: OFFSET_DATE_TIME_MESSAGE })
   created_from?: string;
 
   /** 이 시각 전까지 (미포함). UTC 오프셋이 있는 ISO 8601 */
   @IsOptional()
   @IsISO8601({ strict: true })
+  @Matches(OFFSET_DATE_TIME, { message: OFFSET_DATE_TIME_MESSAGE })
   created_to?: string;
 }
 
@@ -57,7 +67,7 @@ export class CoffeeChatRequestListQueryDto extends CreatedPeriodQueryDto {
 
   /** 재학생 이름 (부분 일치) */
   @IsOptional()
-  @Transform(trim)
+  @Transform(toKeyword)
   @IsString()
   @IsNotEmpty()
   @MaxLength(64)
@@ -69,7 +79,7 @@ export class CoffeeChatRequestListQueryDto extends CreatedPeriodQueryDto {
 
   /** 현업자 닉네임 (부분 일치) */
   @IsOptional()
-  @Transform(trim)
+  @Transform(toKeyword)
   @IsString()
   @IsNotEmpty()
   @MaxLength(32)

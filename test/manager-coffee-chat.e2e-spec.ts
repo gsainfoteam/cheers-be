@@ -259,6 +259,9 @@ describe("어드민 커피챗 요청 관리", () => {
       expect(pksOf(await listRequests({ graduated_nickname: "가나" }))).toEqual(
         [first],
       );
+      expect(pksOf(await listRequests({ student_name: "이학\0" }))).toEqual([
+        second,
+      ]);
       expect(pksOf(await listRequests({ student_name: "%" }))).toEqual([]);
       expect(pksOf(await listRequests({ graduated_nickname: "_" }))).toEqual(
         [],
@@ -325,7 +328,14 @@ describe("어드민 커피챗 요청 관리", () => {
         { created_from: "2026-02-30T00:00:00Z" },
         { student_pk: "not-a-uuid" },
         { graduated_pk: "not-a-uuid" },
+        { created_from: "20261015" },
+        { created_from: "2026-W01" },
+        { created_from: "2026-288" },
+        { created_from: "2026-10-15" },
+        { created_to: "2026-10-15T00:00:00" },
         { student_name: "   " },
+        { student_name: "\0" },
+        { graduated_nickname: " \0 " },
         { graduated_nickname: "가".repeat(33) },
         { page: 0 },
         { size: 51 },
@@ -489,6 +499,8 @@ describe("어드민 커피챗 요청 관리", () => {
         { status: "unknown" },
         { event: "unknown" },
         { created_to: "tomorrow" },
+        { created_from: "20261015" },
+        { created_to: "2026-10-15T00:00:00" },
       ]) {
         await http(ctx)
           .get(LOGS)

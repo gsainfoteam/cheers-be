@@ -1,7 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import {
   and,
-  AnyColumn,
   count,
   desc,
   eq,
@@ -15,6 +14,7 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { DatabaseService } from "@src/database/database.service";
+import { isActiveAccountAs } from "@src/database/repository/user.sql";
 import { CoffeeChatRequestStatus } from "@src/cheers/cheers.utils";
 import { coffeeChatRequest } from "@drizzle/schema/coffee-chat-request";
 import { department } from "@drizzle/schema/department";
@@ -71,13 +71,6 @@ export type AdminCoffeeChatRequestPage = {
 const studentUser = alias(users, "student_user");
 const graduatedUser = alias(users, "graduated_user");
 
-// 사용 중인 계정 (탈퇴 · 탈퇴 유예기간 중이면 false)
-const isActive = (user: {
-  isDeleted: AnyColumn;
-  withdrawRequestedAt: AnyColumn;
-}) =>
-  sql<boolean>`(${user.isDeleted} = false AND ${user.withdrawRequestedAt} IS NULL)`;
-
 // shared_phone · shared_email은 어드민에 노출하지 않으므로 읽지도 않음
 const requestColumns = {
   pk: coffeeChatRequest.pk,
@@ -90,14 +83,14 @@ const requestColumns = {
     pk: coffeeChatRequest.studentPk,
     name: studentUser.name,
     department: department.name,
-    active: isActive(studentUser),
+    active: sql<boolean>`${isActiveAccountAs("student_user")}`,
   },
   graduated: {
     pk: coffeeChatRequest.graduatedPk,
     nickname: graduatedProfile.nickname,
     company: graduatedProfile.company,
     job: graduatedProfile.job,
-    active: isActive(graduatedUser),
+    active: sql<boolean>`${isActiveAccountAs("graduated_user")}`,
   },
 };
 
