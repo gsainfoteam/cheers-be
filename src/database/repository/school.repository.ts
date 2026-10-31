@@ -17,15 +17,31 @@ export class SchoolRepository {
   WHERE sd.domain = ?1;
    */
   // 학교 이메일 인증 시 허용 도메인 검사
-  async findByEmailDomain(
-    emailDomain: string,
-    tx?: TxType,
-  ): Promise<SchoolRow | null> {
-    const result = await (tx ?? this.dbService.db)
+  async findByEmailDomain(emailDomain: string): Promise<SchoolRow | null> {
+    const result = await this.dbService.db
       .select({ school })
       .from(school)
       .innerJoin(schoolEmailDomain, eq(schoolEmailDomain.schoolPk, school.pk))
       .where(eq(schoolEmailDomain.domain, emailDomain));
+
+    return result[0]?.school ?? null;
+  }
+
+  /*
+  SELECT s.* FROM school s JOIN school_email_domain sd ON sd.school_pk = s.pk
+  WHERE sd.domain = ?1 FOR SHARE OF sd;
+   */
+  // 인증 완료: 커밋할 때까지 도메인이 빠지지 않게 잡음. 어드민이 먼저 지웠으면 그 커밋을 기다렸다가 null
+  async findByEmailDomainForShare(
+    emailDomain: string,
+    tx: TxType,
+  ): Promise<SchoolRow | null> {
+    const result = await tx
+      .select({ school })
+      .from(school)
+      .innerJoin(schoolEmailDomain, eq(schoolEmailDomain.schoolPk, school.pk))
+      .where(eq(schoolEmailDomain.domain, emailDomain))
+      .for("share", { of: schoolEmailDomain });
 
     return result[0]?.school ?? null;
   }

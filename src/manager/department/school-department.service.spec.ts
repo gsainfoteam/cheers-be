@@ -41,6 +41,7 @@ describe("SchoolDepartmentService", () => {
     findBySchoolPk: jest.fn(),
     insertIfAbsent: jest.fn(),
     update: jest.fn(),
+    existsActiveBySchoolPk: jest.fn(),
   };
   const studentRepository = { existsByEmailDomain: jest.fn() };
   const service = new SchoolDepartmentService(
@@ -126,6 +127,7 @@ describe("SchoolDepartmentService", () => {
         ...departmentRow,
         isActive: false,
       });
+      departmentRepository.existsActiveBySchoolPk.mockResolvedValue(true);
 
       await expect(
         service.updateDepartment(1, 5, { is_active: false }),
@@ -135,10 +137,50 @@ describe("SchoolDepartmentService", () => {
         name: "AI학과",
         is_active: false,
       });
-      expect(departmentRepository.update).toHaveBeenCalledWith(1, 5, {
-        name: undefined,
+      expect(schoolRepository.findByPkForUpdate).toHaveBeenCalledWith(1, tx);
+      expect(departmentRepository.update).toHaveBeenCalledWith(
+        1,
+        5,
+        { name: undefined, isActive: false },
+        tx,
+      );
+    });
+
+    it("returns 409 when deactivating the last active department", async () => {
+      departmentRepository.update.mockResolvedValue({
+        ...departmentRow,
         isActive: false,
       });
+      departmentRepository.existsActiveBySchoolPk.mockResolvedValue(false);
+
+      await expect(
+        service.updateDepartment(1, 5, { is_active: false }),
+      ).rejects.toThrow(
+        new ConflictException("At least one active department is required."),
+      );
+    });
+
+    it("does not lock or check active departments for a rename or reactivation", async () => {
+      departmentRepository.update.mockResolvedValue(departmentRow);
+
+      await service.updateDepartment(1, 5, { name: "새 이름" });
+      await service.updateDepartment(1, 5, { is_active: true });
+
+      expect(schoolRepository.findByPkForUpdate).not.toHaveBeenCalled();
+      expect(
+        departmentRepository.existsActiveBySchoolPk,
+      ).not.toHaveBeenCalled();
+    });
+
+    it("returns 404 when deactivating a department of another school", async () => {
+      departmentRepository.update.mockResolvedValue(null);
+
+      await expect(
+        service.updateDepartment(2, 5, { is_active: false }),
+      ).rejects.toThrow(new NotFoundException("Department not found."));
+      expect(
+        departmentRepository.existsActiveBySchoolPk,
+      ).not.toHaveBeenCalled();
     });
 
     it("returns 404 for a department of another school", async () => {
@@ -228,7 +270,7 @@ describe("SchoolDepartmentService", () => {
       ).rejects.toThrow(new NotFoundException("School not found."));
     });
 
-    it("returns 409 when removing a domain verified students use", async () => {
+    it("returns 409 when removing a domain verified students use, checking after the delete", async () => {
       studentRepository.existsByEmailDomain.mockResolvedValue(true);
 
       await expect(
@@ -238,9 +280,12 @@ describe("SchoolDepartmentService", () => {
           "Email domain is in use by verified students: gm.gist.ac.kr",
         ),
       );
+      // 지운 행은 예외로 rollback됨 (e2e에서 확인). 인증 완료와의 경합을 막으려고 지운 뒤에 검사
       expect(
-        domainRepository.deleteBySchoolPkAndDomains,
-      ).not.toHaveBeenCalled();
+        domainRepository.deleteBySchoolPkAndDomains.mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        studentRepository.existsByEmailDomain.mock.invocationCallOrder[0],
+      );
       expect(domainRepository.insertMany).not.toHaveBeenCalled();
     });
 

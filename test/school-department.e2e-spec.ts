@@ -4,6 +4,7 @@ import { adminAccount } from "@drizzle/schema/admin-account";
 import { department } from "@drizzle/schema/department";
 import { school } from "@drizzle/schema/school";
 import { schoolEmailDomain } from "@drizzle/schema/school-email-domain";
+import { student } from "@drizzle/schema/student";
 import { createE2eApp, E2eContext } from "./support/app";
 import {
   agreeConsents,
@@ -67,6 +68,10 @@ describe("school · department admin", () => {
     await ctx.db
       .delete(schoolEmailDomain)
       .where(notInArray(schoolEmailDomain.domain, [GIST_DOMAIN]));
+    await ctx.db
+      .insert(schoolEmailDomain)
+      .values({ schoolPk: GIST_PK, domain: GIST_DOMAIN })
+      .onConflictDoNothing({ target: schoolEmailDomain.domain });
     await ctx.db.delete(school).where(notInArray(school.pk, [GIST_PK]));
   };
 
@@ -247,6 +252,35 @@ describe("school · department admin", () => {
       }).expect(404);
     });
 
+    it("마지막 활성 학과는 비활성화할 수 없고, 다른 학과를 활성화하면 가능", async () => {
+      const [last, ...others] = seedDepartments;
+      for (const d of others) {
+        await setActive(d.pk, false);
+      }
+
+      const res = await http(ctx)
+        .patch(`${DEPARTMENTS}/${last.pk}`)
+        .set("Authorization", adminAuth)
+        .send({ is_active: false })
+        .expect(409);
+      expect(res.body.message).toBe(
+        "At least one active department is required.",
+      );
+
+      const list = await http(ctx)
+        .get(DEPARTMENTS)
+        .set("Authorization", adminAuth)
+        .expect(200);
+      expect(
+        list.body
+          .filter((d: { is_active: boolean }) => d.is_active)
+          .map((d: { pk: number }) => d.pk),
+      ).toEqual([last.pk]);
+
+      await setActive(others[0].pk, true);
+      await setActive(last.pk, false);
+    });
+
     it("비활성 학과와 같은 이름도 409", async () => {
       const created = await addDepartment("옛 학과");
       await setActive(created.pk, false);
@@ -414,10 +448,56 @@ describe("school · department admin", () => {
       expect(res.body.message).toBe(
         `Email domain is in use by verified students: ${GIST_DOMAIN}`,
       );
+      // 먼저 지운 행이 rollback되어 도메인이 그대로 남음
+      const rows = await ctx.db.select().from(schoolEmailDomain);
+      expect(rows.map((r) => r.domain)).toEqual([GIST_DOMAIN]);
 
       // 뒷부분만 같은 도메인은 사용 중이 아님
       await putDomains([GIST_DOMAIN, "gist.ac.kr"]).expect(200);
       await putDomains([GIST_DOMAIN]).expect(200);
+    });
+
+    it("진행 중인 인증 완료가 커밋될 때까지 기다렸다가 그 학생을 보고 409", async () => {
+      const email = "racing@extra.ac.kr";
+      await putDomains([GIST_DOMAIN, "extra.ac.kr"]).expect(200);
+      await login(ctx, "student");
+      const [row] = await ctx.db.select().from(student);
+
+      // 인증 완료 트랜잭션을 커밋 직전에 멈춰 둠 (StudentVerificationService.checkCode와 같은 잠금)
+      let commit = () => {};
+      const committed = new Promise<void>((resolve) => (commit = resolve));
+      let locked = () => {};
+      const lockHeld = new Promise<void>((resolve) => (locked = resolve));
+      const verifying = ctx.db.transaction(async (tx) => {
+        await tx
+          .select()
+          .from(schoolEmailDomain)
+          .where(eq(schoolEmailDomain.domain, "extra.ac.kr"))
+          .for("share");
+        await tx
+          .update(student)
+          .set({ email, verifiedAt: new Date() })
+          .where(eq(student.pk, row.pk));
+        locked();
+        await committed;
+      });
+      await lockHeld;
+
+      let settled = false;
+      const removing = putDomains([GIST_DOMAIN]).then((res) => {
+        settled = true;
+        return res;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(settled).toBe(false);
+
+      commit();
+      await verifying;
+      const res = await removing;
+      expect(res.status).toBe(409);
+      expect(res.body.message).toBe(
+        "Email domain is in use by verified students: extra.ac.kr",
+      );
     });
 
     it("뺀 도메인은 새 인증이 막히고, 이미 받은 인증번호도 쓸 수 없음", async () => {

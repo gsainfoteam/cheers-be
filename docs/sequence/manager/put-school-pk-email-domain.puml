@@ -51,12 +51,22 @@ group transaction (DatabaseService.db.transaction)
   PostgreSQL --> DomainRepository: rows
   Service -> Service: 현재 목록과 비교해 뺄 도메인 · 더할 도메인을 구함
 
+  opt 뺄 도메인 있음
+    Service -> DomainRepository: deleteBySchoolPkAndDomains(schoolPk, 뺄 도메인, tx)
+    DomainRepository -> PostgreSQL: DELETE school_email_domain WHERE school_pk = ? AND domain IN (...)
+    note right
+      검사보다 먼저 지움. 진행 중인 인증 완료(student/post-verify-code.puml)는
+      도메인 행을 FOR SHARE로 잡고 있어 DELETE가 그 커밋을 기다리므로 그 학생이 다음 검사에 보이고,
+      이후의 인증 완료는 지워진 도메인을 보고 실패함
+    end note
+  end
   loop 뺄 도메인마다
     Service -> StudentRepository: existsByEmailDomain(domain, tx)
     StudentRepository -> PostgreSQL: SELECT 1 FROM student WHERE email LIKE '%@<domain>' LIMIT 1
     PostgreSQL --> StudentRepository: 행 있음 | 없음
     alt 이 도메인으로 인증을 마친 재학생이 있음
       Service -[#red]-> Client: 409 Email domain is in use by verified students: <domain>
+      note right of Service: rollback되어 지운 행이 되돌아감
     end
   end
   note right of Service
@@ -64,10 +74,6 @@ group transaction (DatabaseService.db.transaction)
     그 학생은 학과 목록이 비고 프로필을 저장할 수 없음
   end note
 
-  opt 뺄 도메인 있음
-    Service -> DomainRepository: deleteBySchoolPkAndDomains(schoolPk, 뺄 도메인, tx)
-    DomainRepository -> PostgreSQL: DELETE school_email_domain WHERE school_pk = ? AND domain IN (...)
-  end
   opt 더할 도메인 있음
     Service -> DomainRepository: insertMany(schoolPk, 더할 도메인, tx)
     DomainRepository -> PostgreSQL: INSERT school_email_domain (school_pk, domain)

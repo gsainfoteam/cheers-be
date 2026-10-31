@@ -66,7 +66,7 @@ export class SchoolDepartmentController {
   @ApiErrors({
     400: "요청 형식 오류, 바꿀 값이 없음",
     404: "없는 학과, 다른 학교의 학과",
-    409: "같은 학교에 같은 이름의 학과가 있음 (비활성 학과 포함)",
+    409: "같은 학교에 같은 이름의 학과가 있음 (비활성 학과 포함), 마지막 활성 학과를 비활성화",
   })
   async updateDepartment(
     @Param("schoolPk", ParsePkPipe) schoolPk: number,

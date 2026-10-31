@@ -84,11 +84,32 @@ export class SchoolDepartmentService {
 
     let department: AdminDepartmentRow | null;
     try {
-      department = await this.departmentRepository.update(
-        schoolPk,
-        departmentPk,
-        { name: req.name, isActive: req.is_active },
-      );
+      department = await this.dbService.db.transaction(async (tx) => {
+        // 같은 학교의 동시 비활성화를 직렬화해서 활성 학과가 0개가 되지 않게 함
+        if (req.is_active === false) {
+          await this.schoolRepository.findByPkForUpdate(schoolPk, tx);
+        }
+        const updated = await this.departmentRepository.update(
+          schoolPk,
+          departmentPk,
+          { name: req.name, isActive: req.is_active },
+          tx,
+        );
+        if (
+          updated &&
+          req.is_active === false &&
+          !(await this.departmentRepository.existsActiveBySchoolPk(
+            schoolPk,
+            tx,
+          ))
+        ) {
+          // 활성 학과가 없으면 가입 중인 재학생이 프로필 단계를 끝낼 수 없음
+          throw new ConflictException(
+            "At least one active department is required.",
+          );
+        }
+        return updated;
+      });
     } catch (e) {
       if (isUniqueViolation(e)) {
         throw new ConflictException(DEPARTMENT_NAME_EXISTS, { cause: e });
@@ -126,19 +147,22 @@ export class SchoolDepartmentService {
         const removed = current.filter((domain) => !next.includes(domain));
         const added = next.filter((domain) => !current.includes(domain));
 
-        for (const domain of removed) {
-          if (await this.studentRepository.existsByEmailDomain(domain, tx)) {
-            throw new ConflictException(
-              `Email domain is in use by verified students: ${domain}`,
-            );
-          }
-        }
+        // 지운 뒤에 검사함. 진행 중인 인증 완료는 도메인 행을 FOR SHARE로 잡고 있어 DELETE가 그 커밋을
+        // 기다리므로 그 학생이 아래 검사에 보이고, 이후의 인증 완료는 지워진 도메인을 보고 실패함.
+        // 사용 중이면 예외로 rollback되어 지운 행이 되돌아감
         if (removed.length > 0) {
           await this.schoolEmailDomainRepository.deleteBySchoolPkAndDomains(
             schoolPk,
             removed,
             tx,
           );
+        }
+        for (const domain of removed) {
+          if (await this.studentRepository.existsByEmailDomain(domain, tx)) {
+            throw new ConflictException(
+              `Email domain is in use by verified students: ${domain}`,
+            );
+          }
         }
         if (added.length > 0) {
           await this.schoolEmailDomainRepository.insertMany(

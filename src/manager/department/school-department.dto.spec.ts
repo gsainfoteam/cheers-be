@@ -7,7 +7,11 @@ import {
 import { ParsePkPipe } from "@src/manager/department/parse-pk.pipe";
 
 const INVALID = "Bad Request Exception";
-const pipe = new ValidationPipe({ whitelist: true, transform: true });
+// src/global/app.config.ts의 전역 파이프와 같은 옵션
+const pipe = new ValidationPipe({
+  transform: true,
+  transformOptions: { enableImplicitConversion: false },
+});
 const body = (metatype: new () => object, value: unknown) =>
   pipe.transform(value, { type: "body", metatype });
 

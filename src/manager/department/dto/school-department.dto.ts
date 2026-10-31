@@ -12,9 +12,7 @@ import {
   MaxLength,
   ValidateIf,
 } from "class-validator";
-
-const trim = ({ value }: { value: unknown }) =>
-  typeof value === "string" ? value.trim() : value;
+import { trim } from "@src/global/dto/transforms";
 
 // 인증 이메일도 소문자로 저장해 비교하므로 소문자로 맞춤 (중복 검사 전에 실행됨)
 const normalizeDomains = ({ value }: { value: unknown }) =>

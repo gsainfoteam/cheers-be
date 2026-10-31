@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { and, asc, eq } from "drizzle-orm";
 import { DatabaseService } from "@src/database/database.service";
+import { TxType } from "@src/global/types/tx.types";
 import { department } from "@drizzle/schema/department";
 
 export type AdminDepartmentRow = typeof department.$inferSelect;
@@ -48,13 +49,29 @@ export class AdminDepartmentRepository {
     schoolPk: number,
     pk: number,
     values: Partial<Pick<AdminDepartmentRow, "name" | "isActive">>,
+    tx: TxType,
   ): Promise<AdminDepartmentRow | null> {
-    const result = await this.dbService.db
+    const result = await tx
       .update(department)
       .set(values)
       .where(and(eq(department.pk, pk), eq(department.schoolPk, schoolPk)))
       .returning();
 
     return result[0] ?? null;
+  }
+
+  /*
+  SELECT pk FROM department WHERE school_pk = ?1 AND is_active LIMIT 1;
+   */
+  async existsActiveBySchoolPk(schoolPk: number, tx: TxType): Promise<boolean> {
+    const result = await tx
+      .select({ pk: department.pk })
+      .from(department)
+      .where(
+        and(eq(department.schoolPk, schoolPk), eq(department.isActive, true)),
+      )
+      .limit(1);
+
+    return result.length > 0;
   }
 }

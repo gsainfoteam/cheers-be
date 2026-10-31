@@ -212,7 +212,7 @@ export class StudentVerificationService {
     }
 
     // 인증번호를 받은 뒤 어드민이 도메인을 뺐으면 인증해도 학과를 고를 수 없어 여기서 막음
-    const school = await this.schoolRepository.findByEmailDomain(
+    const school = await this.schoolRepository.findByEmailDomainForShare(
       emailDomain(verification.email),
       tx,
     );

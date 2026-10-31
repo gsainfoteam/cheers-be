@@ -20,6 +20,7 @@ CREATE TABLE "department" (
 */
 // 기준 데이터. 어드민에서 추가 · 수정. 학과명이 바뀌면 같은 행의 name만 수정 (버전 관리 안 함)
 // 학생 프로필이 참조하므로 지우지 않고 비활성화함
+// pk는 시퀀스로 생성. 마이그레이션으로 학과를 넣을 때 pk를 직접 지정하면 시퀀스가 따라오지 않아 이후 추가가 충돌함
 export const department = pgTable(
   "department",
   {
