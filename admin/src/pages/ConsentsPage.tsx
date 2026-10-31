@@ -1,7 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { api, errorMessage } from "../lib/api";
+import { api } from "../lib/api";
 import { useCurrentManager } from "../lib/current-manager";
-import { formatDateTime } from "../lib/format";
+import { errorMessage, formatDateTime } from "../lib/format";
 
 const BASE_PATH = "/api/manager/v1/consent";
 

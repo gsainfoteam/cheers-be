@@ -21,6 +21,7 @@ export const graduated = pgTable("graduated", {
     .notNull()
     .unique()
     .references(() => users.pk),
+  // 명함 등록 시각. 어드민이 인증을 취소하면 null (재업로드하면 다시 채움)
   verifiedAt: timestamp("verified_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()

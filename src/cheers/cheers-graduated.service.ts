@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   GoneException,
   Injectable,
   Logger,
@@ -12,6 +13,7 @@ import {
   CoffeeChatRequestRepository,
   ReceivedRequestForShareRow,
 } from "@src/database/repository/coffee-chat-request.repository";
+import { GraduatedRepository } from "@src/database/repository/graduated.repository";
 import { UserRepository } from "@src/database/repository/user.repository";
 import { FileService } from "@src/file/file.service";
 import { buildContactSharedMail } from "@src/mail/templates/contact-shared.template";
@@ -42,6 +44,7 @@ export class CheersGraduatedService {
     private readonly coffeeChatRequestRepository: CoffeeChatRequestRepository,
     private readonly coffeeChatContactRepository: CoffeeChatContactRepository,
     private readonly userRepository: UserRepository,
+    private readonly graduatedRepository: GraduatedRepository,
     private readonly fileService: FileService,
     private readonly notificationService: NotificationService,
   ) {
@@ -52,6 +55,7 @@ export class CheersGraduatedService {
     userPk: string,
     query: PaginationQueryDto,
   ): Promise<PageResponseDto<ReceivedRequestDto>> {
+    await this.assertVerified(userPk);
     const { rows, total } =
       await this.coffeeChatRequestRepository.findReceivedPage(
         userPk,
@@ -81,6 +85,7 @@ export class CheersGraduatedService {
     userPk: string,
     requestPk: string,
   ): Promise<ReceivedRequestDetailDto> {
+    await this.assertVerified(userPk);
     const row = await this.dbService.db.transaction(async (tx) => {
       const found = await this.coffeeChatRequestRepository.findReceivedByPk(
         requestPk,
@@ -143,6 +148,7 @@ export class CheersGraduatedService {
     userPk: string,
     requestPk: string,
   ): Promise<ShareContactResponseDto> {
+    await this.assertVerified(userPk);
     // 내 데이터는 요청 행과 원자적으로 묶을 필요가 없어 밖에서 읽음 (행 잠금을 짧게 유지)
     const [contact, me] = await Promise.all([
       this.coffeeChatContactRepository.findByUserPk(userPk),
@@ -205,6 +211,14 @@ export class CheersGraduatedService {
     }
 
     return response;
+  }
+
+  // 어드민이 명함 인증을 취소한 현업자는 재업로드 전까지 재학생 정보를 볼 수 없음. 토큰에 없는 값이라 DB에서 확인
+  private async assertVerified(userPk: string): Promise<void> {
+    const graduated = await this.graduatedRepository.findByUserPk(userPk);
+    if (!graduated?.verifiedAt) {
+      throw new ForbiddenException("Business card verification is required");
+    }
   }
 
   // 재학생이 연락 설정에서 켠 채널만 담음
