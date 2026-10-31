@@ -8,6 +8,7 @@ import { DatabaseService } from "@src/database/database.service";
 import { configureApp } from "@src/global/app.config";
 import { MailService } from "@src/mail/mail.service";
 import { MailResult, SendMailInput } from "@src/mail/mail.types";
+import { InfoteamIdpService } from "@src/manager/infoteam-idp.service";
 import { GoogleVerifier } from "@src/user/oauth/google.verifier";
 import { OAuthProfile, OAuthVerifier } from "@src/user/oauth/oauth.types";
 import { FakeS3 } from "./fake-s3";
@@ -49,6 +50,21 @@ export class FakeMailService {
   }
 }
 
+// code 문자열 → IdP가 확인해 준 이메일. 실제 HTTP 호출은 src/manager/infoteam-idp.service.spec.ts에서 확인
+class FakeInfoteamIdpService {
+  async exchangeAuthorizationCode(code: string): Promise<string> {
+    const [prefix, email] = code.split(":");
+    if (prefix !== "fake-idp-code") {
+      throw new UnauthorizedException("Failed to exchange authorization code");
+    }
+    return `fake-idp-token:${email ?? ""}`;
+  }
+
+  async getEmail(accessToken: string): Promise<string | null> {
+    return accessToken.split(":")[1] || null;
+  }
+}
+
 export class FakeSlackService {
   readonly messages: string[] = [];
 
@@ -86,6 +102,8 @@ export async function createE2eApp(): Promise<E2eContext> {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(GoogleVerifier)
     .useValue(new FakeGoogleVerifier())
+    .overrideProvider(InfoteamIdpService)
+    .useValue(new FakeInfoteamIdpService())
     .overrideProvider(MailService)
     .useValue(mail)
     .overrideProvider(SlackService)
@@ -114,9 +132,9 @@ export async function createE2eApp(): Promise<E2eContext> {
     mail,
     slack,
     reset: async () => {
-      // 테스트 DB 전용 (test/setup-env.ts에서 로컬 *_e2e DB만 허용). users를 참조하는 테이블이 모두 비워지고,
+      // 테스트 DB 전용 (test/setup-env.ts에서 로컬 *_e2e DB만 허용). users를 참조하는 테이블과 admin_account가 비워지고,
       // 참조하지 않는 기준 데이터(consent, school, department, interest)와 서명 키는 남음
-      await db.execute(sql`TRUNCATE "users" CASCADE`);
+      await db.execute(sql`TRUNCATE "users", "admin_account" CASCADE`);
       s3.reset();
       mail.sent.length = 0;
       mail.sendResult = MAIL_SKIPPED;

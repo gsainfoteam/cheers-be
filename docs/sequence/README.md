@@ -15,6 +15,8 @@
 | [flow/interest-cache-bootstrap.puml](flow/interest-cache-bootstrap.puml)                               | 서버 기동 시 관심 분야 목록을 메모리에 로드        |
 | [flow/k8s-probes.puml](flow/k8s-probes.puml)                                                           | K8s probe와 DB 장애 시 동작                        |
 | [flow/observability.puml](flow/observability.puml)                                                     | metrics 수집과 trace 전송                          |
+| [flow/admin-login.puml](flow/admin-login.puml)                                                         | 어드민 화면 로그인 (PKCE)                          |
+| [flow/manager-guards.puml](flow/manager-guards.puml)                                                   | 매니저 가드                                        |
 | [health/get-health.puml](health/get-health.puml)                                                       | `GET /health`                                      |
 | [health/get-health-ready.puml](health/get-health-ready.puml)                                           | `GET /health/ready`                                |
 | [user/post-oauth-login.puml](user/post-oauth-login.puml)                                               | `POST /api/v1/user/oauth/login`                    |
@@ -40,6 +42,12 @@
 | [cheers/get-cheers-received.puml](cheers/get-cheers-received.puml)                                     | `GET /api/v1/cheers/received`                      |
 | [cheers/get-cheers-received-id.puml](cheers/get-cheers-received-id.puml)                               | `GET /api/v1/cheers/received/{id}`                 |
 | [cheers/post-cheers-received-id-share-contact.puml](cheers/post-cheers-received-id-share-contact.puml) | `POST /api/v1/cheers/received/{id}/share-contact`  |
+| [manager/post-auth-login.puml](manager/post-auth-login.puml)                                           | `POST /api/manager/v1/auth/login`                  |
+| [manager/get-auth-me.puml](manager/get-auth-me.puml)                                                   | `GET /api/manager/v1/auth/me`                      |
+| [manager/get-admin-account.puml](manager/get-admin-account.puml)                                       | `GET /api/manager/v1/admin-account`                |
+| [manager/post-admin-account.puml](manager/post-admin-account.puml)                                     | `POST /api/manager/v1/admin-account`               |
+| [manager/patch-admin-account-pk.puml](manager/patch-admin-account-pk.puml)                             | `PATCH /api/manager/v1/admin-account/{pk}`         |
+| [manager/delete-admin-account-pk.puml](manager/delete-admin-account-pk.puml)                           | `DELETE /api/manager/v1/admin-account/{pk}`        |
 
 ## 보기
 
@@ -77,6 +85,7 @@ docker run --rm -v "$PWD/docs/sequence:/data" plantuml/plantuml -checkonly "/dat
 
 - API 하나당 한 파일: `<명세 섹션>/<method>-<path slug>.puml`
   - 섹션 디렉터리는 API 명세서 목차를 따름: `user`, `consent`, `student`, `graduated`, ...
+  - 어드민 API(`/api/manager/v1/...`)는 `manager`
   - 예: `POST /api/v1/user/consent` → `consent/post-consent.puml`, `GET /api/v1/user/info` → `user/get-info.puml`
 - 여러 API에 걸친 큰 흐름은 `flow/<name>.puml`
   - 예: 회원가입(로그인 → 약관 동의 → 인증 → 추가 정보 입력)은 가입 API들이 들어올 때 `flow/signup.puml`로 추가. API 하나하나의 내부는 각 API 파일에 두고, 플로우 파일은 API 사이의 순서 · 분기(`next_step`)만 그림
@@ -128,6 +137,7 @@ Guard -> Controller: ...
 ```
 
 - 가드 동작 자체가 바뀌면 `flow/auth-guards.puml`을 수정
+- 어드민 API는 `ManagerGuard`(+ `SuperAdminGuard`)로, [flow/manager-guards.puml](flow/manager-guards.puml)을 가리킴
 
 ### 요청 검증
 

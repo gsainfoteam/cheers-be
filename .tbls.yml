@@ -30,6 +30,11 @@ desc: |
   - `student_profile`과 첨부는 프로필 수정 때 insert만 함. 지우는 경우는 가입 중 유형 변경과 탈퇴 처리뿐임
 
 comments:
+  - table: admin_account
+    tableComment: 어드민 페이지에 로그인할 수 있는 이메일 목록. 앱 유저(users)와 관계없음
+    columnComments:
+      email: 소문자로 저장. IdP가 확인해 준 이메일과 비교
+      role: superadmin만 어드민 계정을 등록 · 변경 · 삭제할 수 있음
   - table: users
     tableComment: 모든 유저의 공통 정보. 유형별 정보는 student / graduated
     columnComments:

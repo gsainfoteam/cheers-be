@@ -1,0 +1,76 @@
+@startuml post-manager-auth-login
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title POST /api/manager/v1/auth/login
+caption CRB-35 · IdP code 교환, admin_account 허용 목록 확인, 매니저 토큰 발급
+
+actor Client
+participant "ValidationPipe" as Pipe
+participant "ManagerAuthController" as Controller
+participant "ManagerAuthService" as Service
+participant "InfoteamIdpService" as IdpService
+participant "AdminAccountRepository" as AdminAccountRepository
+database PostgreSQL
+participant "Infoteam IdP" as IdP
+
+Client -> Pipe: POST /api/manager/v1/auth/login\n{ code, redirect_uri, code_verifier }
+note right of Client: 가드 없음 (Authorization 불필요). 호출 순서는 flow/admin-login.puml
+alt body 검증 실패 (누락 · 빈 문자열)
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+Pipe -> Controller: login(req)
+Controller -> Service: login(code, redirect_uri, code_verifier)
+
+== IdP 확인 (timeout 5초) ==
+
+Service -> IdpService: exchangeAuthorizationCode(code, redirect_uri, code_verifier)
+IdpService -> IdP: POST /oauth/token\n{ grant_type, client_id, client_secret, code, redirect_uri, code_verifier }
+alt IdP가 4xx (잘못되거나 재사용된 code, redirect_uri · verifier 불일치)
+  IdpService -[#red]-> Client: 401 Failed to exchange authorization code
+else 5xx · 타임아웃 · 네트워크 오류
+  IdpService -[#red]-> Client: 500 An unexpected error occurred. (Slack 알림)
+end
+IdP --> IdpService: { access_token }
+
+IdpService -> IdP: GET /oauth/userinfo\nAuthorization: Bearer <idp access token>
+alt IdP가 401
+  IdpService -[#red]-> Client: 401 Failed to fetch IdP user info
+else 그 외 오류 · 타임아웃
+  IdpService -[#red]-> Client: 500 An unexpected error occurred. (Slack 알림)
+end
+IdP --> IdpService: { sub, email, ... }
+IdpService --> Service: { email }
+
+== 허용 목록 확인 ==
+
+Service -> Service: email trim + 소문자 변환
+alt email 없음
+  Service -[#red]-> Client: 403 This account is not allowed as a manager.
+end
+Service -> AdminAccountRepository: findByEmail(email)
+AdminAccountRepository -> PostgreSQL: SELECT admin_account WHERE email = ?
+PostgreSQL --> AdminAccountRepository: row
+AdminAccountRepository --> Service: account | null
+alt 계정 없음
+  Service -[#red]-> Client: 403 This account is not allowed as a manager.
+end
+
+== 매니저 토큰 발급 ==
+
+Service -> Service: 서명 (RS256, JwtKeyService.privateKey,\nissuer = "Cheers-Manager", 수명 1일, 클레임 sub = account.pk)
+note right of Service
+  사용자 토큰과 키는 같고 issuer만 다름.
+  role은 넣지 않음 (ManagerGuard가 DB에서 읽음).
+  refresh token 없음
+end note
+Service --> Controller: { accessToken }
+Controller --> Client: 201 { access_token }
+
+@enduml

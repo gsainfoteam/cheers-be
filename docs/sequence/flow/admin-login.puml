@@ -1,0 +1,68 @@
+@startuml admin-login
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title 공통 흐름: 어드민 화면 로그인 (PKCE)
+caption CRB-35 · admin/ 화면과 API 사이의 순서. API 내부는 manager/post-auth-login.puml
+
+actor Operator
+participant "admin/ (브라우저)" as Admin
+participant "ServeStaticModule" as Static
+participant "ManagerAuthController" as Api
+participant "Infoteam IdP" as IdP
+
+Operator -> Admin: 어드민 페이지 접속
+Admin -> Static: GET /admin/, /admin/assets/*
+Static --> Admin: index.html, JS (Vite 빌드 결과)
+note right of Static
+  IdP authorize URL · client ID는 이미지 빌드 인자로
+  JS에 들어감. client secret은 넣지 않음
+end note
+
+alt localStorage에 매니저 토큰 있음
+  Admin -> Api: GET /api/manager/v1/auth/me
+  ref over Admin, Api: manager/get-auth-me.puml
+  alt 200
+    Admin --> Operator: 대시보드
+  else 401 (만료, 계정 삭제)
+    Admin -> Admin: 토큰 삭제 후 /admin/login으로 이동
+  end
+end
+
+Operator -> Admin: 로그인 버튼
+Admin -> Admin: code_verifier 생성, sessionStorage 저장
+Admin -> IdP: 리다이렉트 /authorize\nresponse_type=code, client_id, redirect_uri=<서버 origin>/admin/callback,\nscope=profile email, code_challenge, code_challenge_method
+Operator -> IdP: 로그인 · 동의
+IdP --> Admin: 리다이렉트 /admin/callback?code=...
+
+Admin -> Admin: sessionStorage에서 code_verifier를 꺼내고 삭제
+alt code 또는 code_verifier 없음 (직접 접속, 새로고침)
+  Admin --> Operator: 오류 안내 + 로그인으로 돌아가기
+end
+Admin -> Api: POST /api/manager/v1/auth/login\n{ code, redirect_uri, code_verifier }
+ref over Admin, Api: manager/post-auth-login.puml
+alt 201
+  Api --> Admin: { access_token }
+  Admin -> Admin: localStorage에 저장
+  Admin --> Operator: 대시보드
+else 403 (admin_account에 없는 이메일)
+  Admin --> Operator: "권한이 없는 계정입니다"
+else 401 · 500
+  Admin --> Operator: 로그인 실패 안내
+end
+
+== 이후 API 호출 (lib/api.ts) ==
+
+Admin -> Api: Authorization: Bearer <manager token>
+alt 401
+  Admin -> Admin: 토큰 삭제 후 /admin/login으로 이동
+end
+note over Admin, Api: refresh token 없음. 1일 지나면 다시 로그인
+
+@enduml

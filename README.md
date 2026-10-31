@@ -25,6 +25,7 @@ bun run start:dev
 | `bun run format` / `format:check` | oxfmt                                        |
 | `bun run db:generate`             | `drizzle/schema/*.ts` 기준 마이그레이션 생성 |
 | `bun run db:migrate`              | 마이그레이션 적용                            |
+| `bun run db:seed-admin`           | 어드민 계정 등록 (아래 참고)                 |
 | `bun run db:docs`                 | `docs/schema/` 생성 (아래 참고)              |
 | `bun run db:docs:check`           | `docs/schema/`와 DB 비교                     |
 | `bun run test`                    | 단위 테스트                                  |
@@ -76,6 +77,24 @@ docker rm -f cheers-schema-docs
 - 테이블 · 컬럼 설명과 서비스 로직 규칙은 `.tbls.yml`에 있습니다. drizzle 스키마의 주석과 함께 고치세요.
 - tbls는 `scripts/tbls.sh`가 고정된 버전을 받아 `node_modules/.cache/`에 둡니다. 따로 설치하지 않아도 됩니다.
 
+## 어드민
+
+`admin/`(Vite + React)을 빌드하면 백엔드가 `/admin` 아래에 서빙합니다. 로그인은 Infoteam IdP로 하고, `admin_account`에 있는 이메일만 들어올 수 있습니다.
+
+첫 superadmin은 화면에서 만들 수 없어 환경마다 한 번 스크립트로 등록합니다. 배포 환경에서는 pod 안에서 실행합니다. role을 생략하면 superadmin이고, 이미 있는 이메일은 바꾸지 않습니다. 이후 계정은 어드민 화면에서 관리합니다.
+
+```bash
+bun run db:seed-admin -- <email>@gm.gist.ac.kr [admin|superadmin]
+```
+
+로컬에서 화면을 띄울 때는 백엔드를 켠 뒤 아래처럼 실행합니다. `http://localhost:5174/admin/callback`이 IdP 클라이언트에 등록되어 있어야 로그인할 수 있습니다.
+
+```bash
+cp admin/.env.example admin/.env
+bun install --cwd admin
+bun run --cwd admin dev
+```
+
 ## 구조
 
 - `drizzle/schema/` — 테이블 정의 (pgTable)
@@ -84,6 +103,9 @@ docker rm -f cheers-schema-docs
 - `docs/schema/` — DB 스키마 문서와 ER 다이어그램 (tbls로 생성)
 - `docs/sequence/` — API 시퀀스 다이어그램 (PlantUML, [작성 가이드](docs/sequence/README.md))
 - `src/global/` — 로거, 필터, 인터셉터, 공통 DTO/타입
+- `src/manager/` — 어드민 인증, 매니저 가드, 어드민 계정 API
+- `src/admin-repository/` — 어드민 API 전용 레포지토리. 기존 테이블을 어드민에서 조회 · 수정할 때도 `src/database/repository`를 쓰지 않고 여기에 `admin-{table}.repository.ts`를 만듦
+- `admin/` — 어드민 화면 (Vite + React)
 
 ## 배포
 

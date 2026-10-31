@@ -20,6 +20,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun drizzle/migrate.ts",
+    "db:seed-admin": "bun drizzle/seed-admin.ts",
     "db:docs": "scripts/tbls.sh doc --rm-dist",
     "db:docs:check": "scripts/tbls.sh diff"
   },
@@ -33,6 +34,7 @@
     "@nestjs/jwt": "^11.0.0",
     "@nestjs/platform-express": "^11.2.8",
     "@nestjs/schedule": "^6.1.3",
+    "@nestjs/serve-static": "^5.0.5",
     "@nestjs/swagger": "^11.4.7",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",

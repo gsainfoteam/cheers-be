@@ -1,0 +1,31 @@
+@startuml get-manager-admin-account
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/manager/v1/admin-account
+caption CRB-35 · 어드민 계정 목록. admin도 조회 가능
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "AdminAccountController" as Controller
+participant "AdminAccountService" as Service
+participant "AdminAccountRepository" as AdminAccountRepository
+database PostgreSQL
+
+Client -> Guard: GET /api/manager/v1/admin-account\nAuthorization: Bearer <manager token>
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Controller: list()
+Controller -> Service: list()
+Service -> AdminAccountRepository: findAll()
+AdminAccountRepository -> PostgreSQL: SELECT admin_account ORDER BY created_at
+PostgreSQL --> AdminAccountRepository: rows
+Service --> Controller: AdminAccountDto[]
+Controller --> Client: 200 [{ pk, email, role, created_at, updated_at }]
+
+@enduml

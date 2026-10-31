@@ -1,0 +1,50 @@
+@startuml patch-manager-admin-account-pk
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title PATCH /api/manager/v1/admin-account/{pk}
+caption CRB-35 · 어드민 권한 변경 (superadmin 전용, 자기 자신은 불가)
+
+actor Client
+participant "ManagerGuard\n+ SuperAdminGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "AdminAccountController" as Controller
+participant "AdminAccountService" as Service
+participant "AdminAccountRepository" as AdminAccountRepository
+database PostgreSQL
+
+Client -> Guard: PATCH /api/manager/v1/admin-account/{pk}\nAuthorization: Bearer <manager token>\n{ role }
+ref over Client, Guard: ManagerGuard + SuperAdminGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found\n403 Superadmin privilege is required.
+Guard -> Pipe: 통과
+alt pk가 UUID가 아님, role이 admin · superadmin이 아님
+  Pipe -[#red]-> Client: 400 (ParseUUIDPipe · class-validator 메시지)
+end
+Pipe -> Controller: updateRole(pk, req, manager)
+Controller -> Service: updateRole(pk, req, manager)
+Service -> AdminAccountRepository: findByPk(pk)
+AdminAccountRepository -> PostgreSQL: SELECT admin_account WHERE pk = ?
+PostgreSQL --> AdminAccountRepository: row
+alt 계정 없음
+  Service -[#red]-> Client: 404 Admin account not found.
+end
+alt 대상이 나 자신
+  Service -[#red]-> Client: 403 You cannot change your own role.
+end
+note right of Service: 호출자가 superadmin으로 남으므로 superadmin이 0명이 되지 않음
+Service -> AdminAccountRepository: updateRole(pk, role)
+AdminAccountRepository -> PostgreSQL: UPDATE admin_account SET role, updated_at WHERE pk = ? RETURNING
+PostgreSQL --> AdminAccountRepository: row | 0행
+alt 0행 (그 사이 삭제됨)
+  Service -[#red]-> Client: 404 Admin account not found.
+end
+note right of Service: 대상이 가진 토큰에도 다음 요청부터 바로 반영 (ManagerGuard가 DB의 role을 읽음)
+Service --> Controller: AdminAccountDto
+Controller --> Client: 200 { pk, email, role, created_at, updated_at }
+
+@enduml
