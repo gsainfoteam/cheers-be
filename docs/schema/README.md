@@ -36,7 +36,7 @@ FK는 모두 `ON DELETE NO ACTION`입니다. 부모 행을 지우기 전에 백�
 | [public.student](public.student.md) | 6 | 재학생 | BASE TABLE |
 | [public.user_consent](public.user_consent.md) | 6 | 동의 이력. 철회하면 revoked_at 기록, 재동의는 새 행 | BASE TABLE |
 | [public.user_oauth_account](public.user_oauth_account.md) | 6 | 유저에 연동된 OAuth 계정 | BASE TABLE |
-| [public.users](public.users.md) | 10 | 모든 유저의 공통 정보. 유형별 정보는 student / graduated | BASE TABLE |
+| [public.users](public.users.md) | 11 | 모든 유저의 공통 정보. 유형별 정보는 student / graduated | BASE TABLE |
 | [public.jwt_signing_key](public.jwt_signing_key.md) | 4 | 서버 전체에서 하나인 JWT 서명 키. replica가 각자 다른 키를 넣지 못하도록 행을 1개로 제한 | BASE TABLE |
 | [public.student_email_send_log](public.student_email_send_log.md) | 5 | 학교 이메일 인증번호 전송 기록 (전송마다 새 행). 최근 24시간 전송 상한 · 누적 실패 상한에 씀. 유형을 바꾸면 student 행이 새로 만들어져 횟수가 초기화되므로 user_pk 기준 | BASE TABLE |
 | [public.interest](public.interest.md) | 3 | 재학생이 고를 수 있는 고정 관심 분야 기준 데이터. 목록 수정은 어드민에서 하며, 서버는 기동 때 한 번 읽어 메모리에 둠 | BASE TABLE |
@@ -215,6 +215,7 @@ erDiagram
   varchar_64_ name
   varchar_255_ email
   timestamp_with_time_zone withdraw_requested_at
+  varchar_8_ tbls_check
 }
 "public.jwt_signing_key" {
   smallint id

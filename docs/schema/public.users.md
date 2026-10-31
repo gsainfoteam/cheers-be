@@ -18,6 +18,7 @@
 | name | varchar(64) |  | true |  |  | 추가 정보 입력에서 한 번 받음 (OAuth 이름은 쓰지 않음). 이후 수정 불가 |
 | email | varchar(255) |  | true |  |  |  |
 | withdraw_requested_at | timestamp with time zone |  | true |  |  | 탈퇴 요청 시각. 유예기간(active는 WITHDRAWAL_GRACE_DAYS, pending은 1일) 안에 다시 로그인하면 null로 되돌림 |
+| tbls_check | varchar(8) |  | true |  |  |  |
 
 ## Constraints
 
@@ -57,6 +58,7 @@ erDiagram
   varchar_64_ name
   varchar_255_ email
   timestamp_with_time_zone withdraw_requested_at
+  varchar_8_ tbls_check
 }
 "public.coffee_chat_contact" {
   uuid user_pk FK
