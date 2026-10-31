@@ -48,6 +48,9 @@
 | [manager/post-admin-account.puml](manager/post-admin-account.puml)                                     | `POST /api/manager/v1/admin-account`               |
 | [manager/patch-admin-account-pk.puml](manager/patch-admin-account-pk.puml)                             | `PATCH /api/manager/v1/admin-account/{pk}`         |
 | [manager/delete-admin-account-pk.puml](manager/delete-admin-account-pk.puml)                           | `DELETE /api/manager/v1/admin-account/{pk}`        |
+| [manager/get-coffee-chat-request.puml](manager/get-coffee-chat-request.puml)                           | `GET /api/manager/v1/coffee-chat/request`          |
+| [manager/get-coffee-chat-request-pk.puml](manager/get-coffee-chat-request-pk.puml)                     | `GET /api/manager/v1/coffee-chat/request/{pk}`     |
+| [manager/get-coffee-chat-notification-log.puml](manager/get-coffee-chat-notification-log.puml)         | `GET /api/manager/v1/coffee-chat/notification-log` |
 
 ## 보기
 

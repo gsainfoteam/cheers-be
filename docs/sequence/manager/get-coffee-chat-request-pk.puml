@@ -1,0 +1,50 @@
+@startuml get-manager-coffee-chat-request-pk
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/manager/v1/coffee-chat/request/{pk}
+caption CRB-45 · 커피챗 요청 상세와 그 요청의 알림 발송 결과 (읽기 전용)
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ParseUUIDPipe" as Pipe
+participant "ManagerCoffeeChatController" as Controller
+participant "ManagerCoffeeChatService" as Service
+participant "AdminCoffeeChatRequestRepository" as RequestRepository
+participant "AdminNotificationLogRepository" as LogRepository
+database PostgreSQL
+
+Client -> Guard: GET /api/manager/v1/coffee-chat/request/{pk}\nAuthorization: Bearer <manager token>
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Pipe: 통과
+alt pk가 uuid가 아님
+  Pipe -[#red]-> Client: 400 Validation failed (uuid is expected)
+end
+Pipe -> Controller: getRequest(pk)
+Controller -> Service: getRequest(pk)
+Service -> RequestRepository: findByPk(pk)
+RequestRepository -> PostgreSQL: SELECT 요청 (message · 시각) + 재학생 + 현업자\nshared_phone · shared_email은 SELECT하지 않음
+PostgreSQL --> RequestRepository: row | 없음
+RequestRepository --> Service: row | null
+alt 없는 요청
+  Service -[#red]-> Client: 404 Coffee chat request not found.
+end
+Service -> LogRepository: findByRequestPk(pk)
+LogRepository -> PostgreSQL: SELECT notification_log WHERE coffee_chat_request_pk ORDER BY created_at DESC, pk DESC
+PostgreSQL --> LogRepository: rows
+LogRepository --> Service: rows
+note right of Service
+  recipient는 응답에 넣지 않음.
+  error는 발송사 문구에 수신자가 섞여 있을 수 있어
+  이메일 · 전화번호를 가려서 응답 (maskPersonalInfo)
+end note
+Service --> Controller: CoffeeChatRequestDetailDto
+Controller --> Client: 200 { pk, status, student, graduated, message, created_at, graduated_viewed_at, contact_shared_at, student_viewed_at, notifications: [{ pk, event, channel, status, error, created_at }] }
+
+@enduml
