@@ -7,7 +7,7 @@ const DEFAULT_E2E_DATABASE_URL =
   "postgresql://cheers:password@localhost:55432/cheers_e2e";
 
 // ConfigModule은 현재 디렉터리의 .env를 읽으므로, .env가 없는 test/로 옮겨서
-// 개발자의 .env에 있는 실제 AWS · 메일 · Solapi 값이 테스트로 들어오지 못하게 함
+// 개발자의 .env에 있는 실제 AWS · 메일 · 알리고 값이 테스트로 들어오지 못하게 함
 if (existsSync(join(__dirname, ".env"))) {
   throw new Error("test/.env must not exist: e2e must not load an env file.");
 }

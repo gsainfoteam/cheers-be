@@ -75,7 +75,7 @@ export async function createE2eApp(): Promise<E2eContext> {
   const slack = new FakeSlackService();
   s3.install();
 
-  // 메일 · 슬랙 · S3는 가짜이고, 남은 외부 호출(Solapi)은 키가 없어 fetch까지 가지 않음.
+  // 메일 · 슬랙 · S3는 가짜이고, 남은 외부 호출(Aligo)은 키가 없어 fetch까지 가지 않음.
   // 호출하는 쪽이 예외를 삼킬 수 있으므로(AlimtalkService) close에서 호출 여부를 확인해 실패시킴
   const fetchSpy = jest
     .spyOn(globalThis, "fetch")
