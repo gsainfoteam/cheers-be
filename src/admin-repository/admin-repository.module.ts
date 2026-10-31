@@ -1,12 +1,14 @@
 import { Module } from "@nestjs/common";
 import { AdminAccessLogRepository } from "@src/admin-repository/admin-access-log.repository";
 import { AdminAccountRepository } from "@src/admin-repository/admin-account.repository";
+import { AdminConsentRepository } from "@src/admin-repository/admin-consent.repository";
 import { AdminGraduatedRepository } from "@src/admin-repository/admin-graduated.repository";
 import { DatabaseModule } from "@src/database/database.module";
 
 const repositories = [
   AdminAccountRepository,
   AdminAccessLogRepository,
+  AdminConsentRepository,
   AdminGraduatedRepository,
 ];
 

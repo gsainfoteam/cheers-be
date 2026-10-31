@@ -51,6 +51,9 @@
 | [manager/get-business-card.puml](manager/get-business-card.puml)                                                                     | `GET /api/manager/v1/business-card`                                    |
 | [manager/get-business-card-graduated-pk.puml](manager/get-business-card-graduated-pk.puml)                                           | `GET /api/manager/v1/business-card/{graduatedPk}`                      |
 | [manager/post-business-card-graduated-pk-cancel-verification.puml](manager/post-business-card-graduated-pk-cancel-verification.puml) | `POST /api/manager/v1/business-card/{graduatedPk}/cancel-verification` |
+| [manager/get-consent.puml](manager/get-consent.puml)                                                                                 | `GET /api/manager/v1/consent`                                          |
+| [manager/post-consent.puml](manager/post-consent.puml)                                                                               | `POST /api/manager/v1/consent`                                         |
+| [manager/get-consent-type-version-status.puml](manager/get-consent-type-version-status.puml)                                         | `GET /api/manager/v1/consent/{type}/{version}/status`                  |
 
 ## 보기
 

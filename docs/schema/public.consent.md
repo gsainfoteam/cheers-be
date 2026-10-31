@@ -2,7 +2,7 @@
 
 ## Description
 
-약관 버전 기준 데이터. 새 버전은 행을 수정하지 말고 새 마이그레이션으로 추가
+약관 버전 기준 데이터. 새 버전은 행을 수정하지 말고 어드민에서 새로 등록 (POST /api/manager/v1/consent)
 
 ## Columns
 

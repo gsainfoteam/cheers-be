@@ -4,6 +4,7 @@ import { getAccessToken } from "./lib/auth";
 import { AdminAccountsPage } from "./pages/AdminAccountsPage";
 import { BusinessCardsPage } from "./pages/BusinessCardsPage";
 import { CallbackPage } from "./pages/CallbackPage";
+import { ConsentsPage } from "./pages/ConsentsPage";
 import { DashboardLayout, PLACEHOLDER_MENUS } from "./pages/DashboardLayout";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
@@ -30,6 +31,7 @@ export function App() {
         }
       >
         <Route index element={<HomePage />} />
+        <Route path="consents" element={<ConsentsPage />} />
         {PLACEHOLDER_MENUS.map((menu) => (
           <Route
             key={menu.path}
