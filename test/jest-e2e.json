@@ -11,6 +11,13 @@
   "testRegex": "\\.e2e-spec\\.ts$",
   "testTimeout": 30000,
   "transform": {
-    "^.+\\.(t|j)s$": "ts-jest"
+    "^.+\\.(t|j)s$": [
+      "ts-jest",
+      {
+        "astTransformers": {
+          "before": ["<rootDir>/swagger-plugin.transformer.js"]
+        }
+      }
+    ]
   }
 }
