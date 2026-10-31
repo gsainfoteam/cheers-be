@@ -3,9 +3,12 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { getAccessToken } from "./lib/auth";
 import { AdminAccountsPage } from "./pages/AdminAccountsPage";
 import { CallbackPage } from "./pages/CallbackPage";
+import { CoffeeChatRequestDetailPage } from "./pages/CoffeeChatRequestDetailPage";
+import { CoffeeChatRequestsPage } from "./pages/CoffeeChatRequestsPage";
 import { DashboardLayout, PLACEHOLDER_MENUS } from "./pages/DashboardLayout";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
+import { NotificationLogsPage } from "./pages/NotificationLogsPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -36,6 +39,12 @@ export function App() {
             element={<PlaceholderPage title={menu.label} />}
           />
         ))}
+        <Route path="coffee-chats" element={<CoffeeChatRequestsPage />} />
+        <Route
+          path="coffee-chats/:pk"
+          element={<CoffeeChatRequestDetailPage />}
+        />
+        <Route path="notification-logs" element={<NotificationLogsPage />} />
         <Route path="admin-accounts" element={<AdminAccountsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
