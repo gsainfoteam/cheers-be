@@ -7,7 +7,6 @@ export const PLACEHOLDER_MENUS = [
   { path: "consents", label: "이용약관" },
   { path: "departments", label: "학과" },
   { path: "business-cards", label: "현업자 명함" },
-  { path: "coffee-chats", label: "커피챗 요청" },
   { path: "interests", label: "관심분야" },
 ];
 
@@ -18,6 +17,8 @@ const NAV_ITEMS = [
     label: menu.label,
     end: false,
   })),
+  { to: "/coffee-chats", label: "커피챗 요청", end: false },
+  { to: "/notification-logs", label: "알림 발송 결과", end: false },
   { to: "/admin-accounts", label: "어드민 계정", end: false },
 ];
 

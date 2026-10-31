@@ -210,6 +210,40 @@ select {
   margin-bottom: 16px;
 }
 
+.table-scroll {
+  overflow-x: auto;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 16px;
+  font-size: 14px;
+}
+
+.detail-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 16px;
+  margin: 0;
+  font-size: 14px;
+}
+
+.detail-list dt {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.detail-list dd {
+  margin: 0;
+}
+
+.pre-wrap {
+  white-space: pre-wrap;
+}
+
 @media (max-width: 720px) {
   .app-shell {
     flex-direction: column;

@@ -1,0 +1,47 @@
+@startuml get-manager-coffee-chat-notification-log
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/manager/v1/coffee-chat/notification-log
+caption CRB-45 · 커피챗 알림 발송 결과 목록 (읽기 전용). 수신자는 응답하지 않음
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "ManagerCoffeeChatController" as Controller
+participant "ManagerCoffeeChatService" as Service
+participant "AdminNotificationLogRepository" as LogRepository
+database PostgreSQL
+
+Client -> Guard: GET /api/manager/v1/coffee-chat/notification-log?channel&status&event&created_from&created_to&page&size\nAuthorization: Bearer <manager token>
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Pipe: 통과
+alt query 검증 실패 (channel · status · event · 날짜 형식, page · size 범위)
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+Pipe -> Controller: listNotificationLogs(query)
+Controller -> Service: listNotificationLogs(query)
+alt created_from이 created_to보다 늦음
+  Service -[#red]-> Client: 400 created_from must not be after created_to
+end
+Service -> LogRepository: findPage(filter, offset, limit)
+LogRepository -> PostgreSQL: SELECT notification_log ORDER BY created_at DESC, pk DESC LIMIT OFFSET
+PostgreSQL --> LogRepository: rows
+LogRepository -> PostgreSQL: SELECT count(*) (같은 조건)
+PostgreSQL --> LogRepository: total
+LogRepository --> Service: { rows, total }
+note right of Service
+  recipient는 응답에 넣지 않음.
+  error는 이메일 · 전화번호를 가려서 응답 (maskPersonalInfo).
+  탈퇴 처리 후에도 notification_log는 원문 그대로 남아 있음
+end note
+Service --> Controller: PageResponseDto<NotificationLogItemDto>
+Controller --> Client: 200 { items: [{ pk, coffee_chat_request_pk, event, channel, status, error, created_at }], page, size, total }
+
+@enduml
