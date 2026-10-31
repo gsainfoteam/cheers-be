@@ -59,6 +59,62 @@ jobs:
       - name: Test
         run: bun run test
 
+  # AppModule 을 테스트 안에서 띄워 일회용 Postgres 로 API 흐름을 검증.
+  # Google · 메일 · Slack · S3 는 가짜로 대체하므로 저장소 시크릿을 쓰지 않음
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: cheers
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: cheers_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cheers -d cheers_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://cheers:password@localhost:5432/cheers_e2e
+      E2E_DATABASE_URL: postgresql://cheers:password@localhost:5432/cheers_e2e
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Apply migrations
+        run: bun run db:migrate
+
+      - name: E2E test
+        run: bun run test:e2e
+
   # runner 안에서만 뜨는 일회용 Postgres 에 마이그레이션을 적용해 보고,
   # 스키마 변경에 맞는 마이그레이션이 커밋돼 있는지 확인
   migration:
