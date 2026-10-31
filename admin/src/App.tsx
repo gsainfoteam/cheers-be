@@ -5,6 +5,7 @@ import { AdminAccountsPage } from "./pages/AdminAccountsPage";
 import { CallbackPage } from "./pages/CallbackPage";
 import { DashboardLayout, PLACEHOLDER_MENUS } from "./pages/DashboardLayout";
 import { HomePage } from "./pages/HomePage";
+import { InterestsPage } from "./pages/InterestsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 
@@ -36,6 +37,7 @@ export function App() {
             element={<PlaceholderPage title={menu.label} />}
           />
         ))}
+        <Route path="interests" element={<InterestsPage />} />
         <Route path="admin-accounts" element={<AdminAccountsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
