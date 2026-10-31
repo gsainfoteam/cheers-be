@@ -15,6 +15,7 @@ FK는 모두 `ON DELETE NO ACTION`입니다. 부모 행을 지우기 전에 백�
 - 재학생 학과는 인증한 학교 이메일 도메인의 학교 소속이어야 함  
 - 재학생의 `coffee_chat_contact`는 두 플래그 중 하나 이상이 true여야 함 (현업자는 둘 다 false 가능)  
 - `student_profile`과 첨부는 프로필 수정 때 insert만 함. 지우는 경우는 가입 중 유형 변경과 탈퇴 처리뿐임  
+- `graduated.verified_at`이 null인 현업자는 `active`여도 재학생에게 보이지 않고 커피챗 요청을 받거나 처리할 수 없음 (어드민의 명함 인증 취소)  
 
 
 ## Tables
@@ -41,11 +42,13 @@ FK는 모두 `ON DELETE NO ACTION`입니다. 부모 행을 지우기 전에 백�
 | [public.student_email_send_log](public.student_email_send_log.md) | 5 | 학교 이메일 인증번호 전송 기록 (전송마다 새 행). 최근 24시간 전송 상한 · 누적 실패 상한에 씀. 유형을 바꾸면 student 행이 새로 만들어져 횟수가 초기화되므로 user_pk 기준 | BASE TABLE |
 | [public.interest](public.interest.md) | 3 | 재학생이 고를 수 있는 고정 관심 분야 기준 데이터. 목록 수정은 어드민에서 하며, 서버는 기동 때 한 번 읽어 메모리에 둠 | BASE TABLE |
 | [public.admin_account](public.admin_account.md) | 5 | 어드민 페이지에 로그인할 수 있는 이메일 목록. 앱 유저(users)와 관계없음 | BASE TABLE |
+| [public.admin_access_log](public.admin_access_log.md) | 5 | 어드민의 개인정보 열람 기록. insert만 함. 탈퇴 삭제(purge)를 막지 않도록 다른 테이블로 FK를 걸지 않음 | BASE TABLE |
 
 ## Enums
 
 | Name | Values |
 | ---- | ------- |
+| public.admin_access_target_type | business_card |
 | public.admin_account_role | admin, superadmin |
 | public.attachment_kind | cv, portfolio |
 | public.attachment_source | file, link |
@@ -242,6 +245,13 @@ erDiagram
   admin_account_role role
   timestamp_with_time_zone created_at
   timestamp_with_time_zone updated_at
+}
+"public.admin_access_log" {
+  uuid *pk
+  varchar_64_ admin_email
+  admin_access_target_type target_type
+  varchar_64_ target_id
+  timestamp_with_time_zone created_at
 }
 ```
 

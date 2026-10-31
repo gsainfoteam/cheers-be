@@ -16,6 +16,7 @@ participant "UserGuard\n+ UserTypeGuard" as Guard
 participant "ParseUUIDPipe" as Pipe
 participant "CheersGraduatedController" as Controller
 participant "CheersGraduatedService" as Service
+participant "GraduatedRepository" as GraduatedRepository
 participant "CoffeeChatRequestRepository" as CoffeeChatRequestRepository
 participant "FileService" as FileService
 database PostgreSQL
@@ -34,6 +35,14 @@ alt id가 UUID 형식이 아님
 end
 Pipe -> Controller: getReceivedDetail(id, user)
 Controller -> Service: getReceivedDetail(userPk, id)
+
+Service -> GraduatedRepository: findByUserPk(userPk)
+GraduatedRepository -> PostgreSQL: SELECT graduated WHERE user_pk = ?
+PostgreSQL --> GraduatedRepository: row
+alt verified_at = NULL (어드민이 명함 인증을 취소하고 아직 재업로드하지 않음)
+  Service -[#red]-> Client: 403 Business card verification is required
+end
+note right of Service: 가드는 토큰의 status만 보므로 인증 여부는 DB에서 확인. 취소 즉시 반영됨 (CRB-44)
 
 group transaction (DatabaseService.db.transaction)
   Service -> CoffeeChatRequestRepository: findReceivedByPk(id, userPk, tx)

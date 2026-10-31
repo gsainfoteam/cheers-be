@@ -1,0 +1,63 @@
+@startuml get-manager-business-card-graduated-pk
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/manager/v1/business-card/{graduatedPk}
+caption CRB-44 · 명함 이미지 presigned GET URL 발급. 열람 기록을 먼저 남기고, 저장에 실패하면 URL을 발급하지 않음
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "BusinessCardController" as Controller
+participant "BusinessCardService" as Service
+participant "AdminGraduatedRepository" as AdminGraduatedRepository
+participant "AdminAccessLogRepository" as AdminAccessLogRepository
+participant "FileService" as FileService
+database PostgreSQL
+
+Client -> Guard: GET /api/manager/v1/business-card/{graduatedPk}\nAuthorization: Bearer <manager token>
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found\nadmin · superadmin 모두 가능
+Guard -> Pipe: 통과
+alt graduatedPk가 UUID가 아님
+  Pipe -[#red]-> Client: 400 (ParseUUIDPipe 메시지)
+end
+Pipe -> Controller: getImageUrl(graduatedPk, manager)
+Controller -> Service: getImageUrl(graduatedPk, manager)
+
+Service -> AdminGraduatedRepository: findCardByPk(graduatedPk)
+AdminGraduatedRepository -> PostgreSQL: SELECT g.business_card_key FROM graduated g JOIN users u\nWHERE g.pk = ? AND u.is_deleted = false
+PostgreSQL --> AdminGraduatedRepository: row | 0행
+alt 현업자 없음 (탈퇴 처리 완료 포함)
+  Service -[#red]-> Client: 404 Graduated not found
+else business_card_key = NULL (미업로드 · 인증 취소)
+  Service -[#red]-> Client: 404 Business card not found
+end
+
+Service -> AdminAccessLogRepository: insert({ adminEmail, targetType: "business_card", targetId: graduatedPk })
+AdminAccessLogRepository -> PostgreSQL: INSERT INTO admin_access_log
+note right
+  users · graduated로 FK를 걸지 않아 탈퇴 삭제(purge)를 막지 않음.
+  트랜잭션 없이 이 INSERT 하나만 씀.
+  QueryLogWriter가 이 테이블의 쿼리 파라미터(이메일)를 로그에서 가림
+end note
+alt 기록 저장 실패
+  PostgreSQL --> AdminAccessLogRepository: 오류
+  AdminAccessLogRepository -[#red]-> Client: 500 An unexpected error occurred. (URL 발급 안 함, Slack 알림)
+end
+
+Service -> FileService: getPresignedUrl(key, 60)
+note right of FileService: 서버에서 서명만 계산 (S3 호출 없음).\n만료 60초. URL과 key는 로그에 남기지 않음
+alt 서명 실패 (기록은 남음: 시도까지 기록)
+  FileService -[#red]-> Client: 500 Internal Server Error
+end
+FileService --> Service: url
+Service --> Controller: BusinessCardImageUrlDto
+Controller --> Client: 200 { url, expires_in: 60 }
+
+@enduml
