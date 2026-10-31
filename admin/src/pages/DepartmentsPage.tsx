@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { api, ApiError } from "../lib/api";
+import { api, errorMessage } from "../lib/api";
 import { useCurrentManager } from "../lib/current-manager";
 
 const BASE_PATH = "/api/manager/v1/school";
@@ -16,10 +16,6 @@ type Department = {
   name: string;
   is_active: boolean;
 };
-
-function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof ApiError ? err.message : fallback;
-}
 
 export function DepartmentsPage() {
   const [schools, setSchools] = useState<School[] | null>(null);
