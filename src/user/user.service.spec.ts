@@ -584,15 +584,11 @@ describe("UserService", () => {
   });
 
   describe("refresh / logout", () => {
-    it("maps refreshed tokens to snake_case", async () => {
-      authService.refresh.mockResolvedValue({
-        accessToken: "a2",
-        refreshToken: "r2",
-      });
+    it("returns only the new access token", async () => {
+      authService.refresh.mockResolvedValue({ accessToken: "a2" });
 
       await expect(service.refresh({ refresh_token: "r1" })).resolves.toEqual({
         access_token: "a2",
-        refresh_token: "r2",
       });
       expect(authService.refresh).toHaveBeenCalledWith("r1");
     });

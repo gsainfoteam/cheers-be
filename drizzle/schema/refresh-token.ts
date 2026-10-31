@@ -10,7 +10,7 @@ CREATE TABLE "refresh_token" (
     "created_at"  timestamp with time zone NOT NULL DEFAULT NOW()
 );
 */
-// 원문은 저장하지 않고 해시만 저장. rotation 시 새 행 insert + 기존 행 delete
+// 원문은 저장하지 않고 해시만 저장. refresh 때 재발급 · 연장하지 않음 (expires_at 고정)
 export const refreshToken = pgTable(
   "refresh_token",
   {

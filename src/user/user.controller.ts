@@ -35,7 +35,7 @@ export class UserController {
     return this.userService.login(req);
   }
 
-  /** access token 갱신 */
+  /** access token 갱신 (refresh token은 재발급 · 연장 없음. 발급 후 기본 180일이 지나면 다시 로그인) */
   @Post("/refresh")
   @ApiErrors({
     400: "요청 형식 오류",

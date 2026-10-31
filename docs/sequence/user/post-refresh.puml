@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title POST /api/v1/user/refresh
-caption CRB-10 · refresh token rotation, DB의 현재 status · type으로 새 토큰 발급
+caption CRB-65 · access token만 새로 발급. refresh token은 재발급 · 연장 없이 발급 후 180일까지 그대로 사용
 
 actor Client
 participant "ValidationPipe" as Pipe
@@ -29,47 +29,43 @@ Pipe -> Controller: refresh(req)
 Controller -> Service: refresh(req)
 Service -> AuthService: refresh(refresh_token)
 
-group transaction (DatabaseService.db.transaction)
-  AuthService -> RefreshTokenRepository: deleteByOpaqueHash(SHA-256(refresh_token), tx)
-  RefreshTokenRepository -> PostgreSQL: DELETE refresh_token WHERE opaque_hash = ? RETURNING *
-  note right
-    기존 토큰을 먼저 소비 (rotation).
-    같은 토큰으로 동시에 두 번 refresh하면 한쪽만 행을 받음
-  end note
-  PostgreSQL --> RefreshTokenRepository: row | 없음
-  RefreshTokenRepository --> AuthService: stored | null
-  alt 행 없음 (모르는 토큰, 이미 쓴 토큰, 로그아웃 · 탈퇴로 지워진 토큰)
-    AuthService -[#red]-> Client: 401 Invalid refresh token
-  else expires_at 지남
-    AuthService -[#red]-> Client: 401 Refresh token expired
-  end
-
-  AuthService -> UserRepository: findByPk(userPk, tx)
-  UserRepository -> PostgreSQL: SELECT users (is_deleted = false\nAND withdraw_requested_at IS NULL)
-  PostgreSQL --> UserRepository: row
-  UserRepository --> AuthService: user | null
-  alt 유저 없음 (탈퇴 · 탈퇴 유예기간 중)
-    AuthService -[#red]-> Client: 401 User not found
-  end
-  note right of AuthService
-    클레임은 DB의 현재 status · type으로 다시 만듦.
-    가입 중 유형 변경 · 가입 완료 뒤에 refresh해도 어긋나지 않음
-  end note
-
-  AuthService -> AuthService: issueTokens(user, tx)\naccess token 서명 (RS256, sub · type · status)
-  AuthService -> RefreshTokenRepository: insert({ opaqueHash, userPk, expiresAt }, tx)
-  RefreshTokenRepository -> PostgreSQL: INSERT refresh_token
-  AuthService -> UserRepository: updateLastActiveAt(userPk, tx)
-  UserRepository -> PostgreSQL: UPDATE users SET last_active_at = now()
+AuthService -> RefreshTokenRepository: findByOpaqueHash(SHA-256(refresh_token))
+RefreshTokenRepository -> PostgreSQL: SELECT refresh_token WHERE opaque_hash = ?
+PostgreSQL --> RefreshTokenRepository: row | 없음
+RefreshTokenRepository --> AuthService: stored | null
+note right of RefreshTokenRepository
+  토큰을 소비하지 않고 조회만 함.
+  같은 토큰으로 동시에 여러 번 호출해도 모두 성공
+end note
+alt 행 없음 (모르는 토큰, 로그아웃 · 탈퇴 · 유형 변경으로 지워진 토큰)
+  AuthService -[#red]-> Client: 401 Invalid refresh token
+else expires_at 지남
+  AuthService -[#red]-> Client: 401 Refresh token expired
 end
-note over AuthService, PostgreSQL
-  트랜잭션 안의 예외는 전부 rollback 후 응답.
-  401로 끝나면 기존 토큰 삭제도 rollback되지만, 그 토큰은 이미 쓸 수 없는 상태
+note right of AuthService
+  expires_at은 발급 시각 + 180일로 고정.
+  호출해도 늘어나지 않으며, 만료되면 다시 로그인
 end note
 
-AuthService --> Service: { accessToken, refreshToken }
-Service --> Controller: { access_token, refresh_token }
-Controller --> Client: 201 { access_token, refresh_token }
-note right of Client: 응답의 refresh token으로 교체 (기존 토큰은 더 쓸 수 없음)
+AuthService -> UserRepository: findByPk(userPk)
+UserRepository -> PostgreSQL: SELECT users (is_deleted = false\nAND withdraw_requested_at IS NULL)
+PostgreSQL --> UserRepository: row
+UserRepository --> AuthService: user | null
+alt 유저 없음 (탈퇴 · 탈퇴 유예기간 중)
+  AuthService -[#red]-> Client: 401 User not found
+end
+note right of AuthService
+  클레임은 DB의 현재 status · type으로 다시 만듦.
+  가입 중 유형 변경 · 가입 완료 뒤에 refresh해도 어긋나지 않음
+end note
+
+AuthService -> AuthService: signAccessToken(user)\naccess token 서명 (RS256, 1시간, sub · type · status)
+AuthService -> UserRepository: updateLastActiveAt(userPk)
+UserRepository -> PostgreSQL: UPDATE users SET last_active_at = now()
+
+AuthService --> Service: { accessToken }
+Service --> Controller: { access_token }
+Controller --> Client: 201 { access_token }
+note right of Client: refresh token은 응답에 없음. 가지고 있던 토큰을 만료까지 계속 사용
 
 @enduml
