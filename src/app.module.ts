@@ -15,6 +15,7 @@ import { StudentModule } from "@src/student/student.module";
 import { CheersModule } from "@src/cheers/cheers.module";
 import { HealthModule } from "@src/health/health.module";
 import { ManagerModule } from "@src/manager/manager.module";
+import { BusinessCardModule } from "@src/manager/business-card/business-card.module";
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { ManagerModule } from "@src/manager/manager.module";
     CheersModule,
     HealthModule,
     ManagerModule,
+    BusinessCardModule,
   ],
   controllers: [],
   providers: [],

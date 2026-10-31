@@ -552,7 +552,11 @@ describe("UserService", () => {
         userRow({ status: "active", type: "graduated" }),
       );
       userRepository.findSignupProgress.mockResolvedValue(
-        progress({ hasMissingRequiredConsent: true }),
+        progress({
+          hasMissingRequiredConsent: true,
+          verified: true,
+          hasProfile: true,
+        }),
       );
       coffeeChatContactRepository.findByUserPk.mockResolvedValue(null);
       graduatedRepository.findByUserPkWithProfile.mockResolvedValue({
