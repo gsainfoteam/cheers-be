@@ -28,6 +28,7 @@ desc: |
   - 재학생 학과는 인증한 학교 이메일 도메인의 학교 소속이어야 함
   - 재학생의 `coffee_chat_contact`는 두 플래그 중 하나 이상이 true여야 함 (현업자는 둘 다 false 가능)
   - `student_profile`과 첨부는 프로필 수정 때 insert만 함. 지우는 경우는 가입 중 유형 변경과 탈퇴 처리뿐임
+  - `graduated.verified_at`이 null인 현업자는 `active`여도 재학생에게 보이지 않고 커피챗 요청을 받거나 처리할 수 없음 (어드민의 명함 인증 취소)
 
 comments:
   - table: admin_account
@@ -35,6 +36,12 @@ comments:
     columnComments:
       email: 소문자로 저장. IdP가 확인해 준 이메일과 비교
       role: superadmin만 어드민 계정을 등록 · 변경 · 삭제할 수 있음
+  - table: admin_access_log
+    tableComment: 어드민의 개인정보 열람 기록. insert만 함. 탈퇴 삭제(purge)를 막지 않도록 다른 테이블로 FK를 걸지 않음
+    columnComments:
+      admin_email: 열람 시점의 어드민 이메일. 어드민 계정을 지워도 남음
+      target_type: 열람한 개인정보 종류
+      target_id: "target_type = business_card: graduated.pk"
   - table: users
     tableComment: 모든 유저의 공통 정보. 유형별 정보는 student / graduated
     columnComments:
@@ -102,6 +109,7 @@ comments:
   - table: graduated
     tableComment: 현업자
     columnComments:
+      verified_at: 명함 등록 시각. 어드민이 인증을 취소하면 null (재업로드하면 다시 채움)
       business_card_key: 명함 사진 S3 object key (비공개 버킷, presigned URL로 접근)
   - table: graduated_profile
     tableComment: 현업자 추가 정보. 알림 수단 · 공유할 연락처는 coffee_chat_contact
