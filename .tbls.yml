@@ -1,0 +1,112 @@
+# docs/schema/ 생성 설정. 생성 · 검사 방법은 README 의 "DB 스키마 문서" 참고
+# DB 이름을 고정하지 않으면 문서 제목이 접속한 DB 이름을 따라가서 환경마다 diff 가 생김
+name: cheers
+docPath: docs/schema
+disableOutputSchema: true
+er:
+  format: mermaid
+exclude:
+  - __drizzle_migrations
+
+desc: |
+  [tbls](https://github.com/k1LoW/tbls)로 생성한 문서입니다. 직접 고치지 말고 `.tbls.yml`이나 `drizzle/schema/`를 고친 뒤 `bun run db:docs`로 다시 생성하세요.
+
+  FK는 모두 `ON DELETE NO ACTION`입니다. 부모 행을 지우기 전에 백엔드가 같은 트랜잭션에서 자식 행을 먼저 지웁니다.
+
+  서비스 로직으로 지키는 규칙:
+
+  - `users.type`과 `student` / `graduated` 행이 일치함. 유형은 가입 중에만 바꿀 수 있음
+  - `pending` 유저는 가입 절차 API만 호출할 수 있음
+  - 가입 후 · 마지막 활동 후 24시간이 지난 `pending` 유저는 스케줄러가 삭제함
+  - 필수 약관은 철회할 수 없음
+  - 재학생 학과는 인증한 학교 이메일 도메인의 학교 소속이어야 함
+  - 재학생의 `coffee_chat_contact`는 두 플래그 중 하나 이상이 true여야 함 (현업자는 둘 다 false 가능)
+  - `student_profile`과 첨부는 프로필 수정 때 insert만 함. 지우는 경우는 가입 중 유형 변경과 탈퇴 처리뿐임
+
+comments:
+  - table: users
+    tableComment: 모든 유저의 공통 정보. 유형별 정보는 student / graduated
+    columnComments:
+      is_deleted: 탈퇴 유예기간이 끝나 개인정보를 지운 유저면 true
+      status: 가입 진행 중이면 pending, 추가 정보 입력까지 마치면 active
+      type: OAuth 로그인 요청에서 받음
+      last_active_at: 로그인 · 토큰 갱신 · 내 정보 조회 때 갱신
+      name: 추가 정보 입력에서 한 번 받음 (OAuth 이름은 쓰지 않음). 이후 수정 불가
+      withdraw_requested_at: 탈퇴 요청 시각. 유예기간(active는 WITHDRAWAL_GRACE_DAYS, pending은 1일) 안에 다시 로그인하면 null로 되돌림
+  - table: user_oauth_account
+    tableComment: 유저에 연동된 OAuth 계정
+    columnComments:
+      email: Apple은 이메일을 숨기거나 최초 로그인 이후 제공하지 않을 수 있음
+  - table: refresh_token
+    tableComment: 리프레시 토큰. rotation 시 새 행 insert + 기존 행 delete
+    columnComments:
+      opaque_hash: 토큰 해시. 원문은 저장하지 않음
+  - table: jwt_signing_key
+    tableComment: 서버 전체에서 하나인 JWT 서명 키. replica가 각자 다른 키를 넣지 못하도록 행을 1개로 제한
+    columnComments:
+      private_key: 평문이라 DB가 유출되면 access token을 위조할 수 있음
+  - table: consent
+    tableComment: 약관 버전 기준 데이터. 새 버전은 행을 수정하지 말고 새 마이그레이션으로 추가
+    columnComments:
+      is_required: 필수 약관 여부. 필수 약관은 철회할 수 없음
+  - table: user_consent
+    tableComment: 동의 이력. 철회하면 revoked_at 기록, 재동의는 새 행
+    columnComments:
+      revoked_at: null이면 유효한 동의. 유효한 동의는 약관 버전당 1개
+  - table: coffee_chat_contact
+    tableComment: 커피챗 연락수단 (재학생 · 현업자 공통). 희망하지 않음 = 두 플래그 모두 false
+    columnComments:
+      phone: 하이픈 없이 정규화해서 저장. 카카오 알림톡을 끄면 null로 지움
+      email: 이메일 연락을 끄면 null로 지움
+  - table: student
+    tableComment: 재학생
+    columnComments:
+      email: 인증을 마친 학교 이메일
+  - table: student_email_verification
+    tableComment: 진행 중인 학교 이메일 인증. 학생당 1개, 재요청 시 upsert, 인증 성공 시 행 삭제
+    columnComments:
+      code: 인증번호의 HMAC-SHA256 (hex). 원문은 저장하지 않음
+  - table: student_email_send_log
+    tableComment: 학교 이메일 인증번호 전송 기록 (전송마다 새 행). 최근 24시간 전송 상한 · 누적 실패 상한에 씀. 유형을 바꾸면 student 행이 새로 만들어져 횟수가 초기화되므로 user_pk 기준
+    columnComments:
+      failed_attempt_count: 이 전송의 코드로 틀린 횟수. 재전송해도 이전 기록에 남음
+  - table: student_profile
+    tableComment: 재학생 추가 정보 버전. 수정하면 새 버전, 현재 값 = 가장 큰 version
+    columnComments:
+      interests: interest.name 값을 문자열로 저장
+      activities: 참여 활동 (마이페이지 선택 입력)
+  - table: student_profile_attachment
+    tableComment: CV · 포트폴리오. 이전 버전이 참조하므로 프로필 수정 때는 S3 파일을 지우지 않음. 행과 파일은 탈퇴 만료 처리 때 지움
+    columnComments:
+      url: "source = file: S3 object key (비공개 버킷, presigned URL로 접근), link: 외부 URL"
+      file_name: source = file일 때 원본 파일명
+  - table: school
+    tableComment: 학교 기준 데이터 (seed로 pk를 고정해서 넣음)
+    columnComments:
+      email_domain: 학교 이메일 인증 시 허용 도메인
+  - table: department
+    tableComment: 학과 기준 데이터. 학과명이 바뀌면 같은 행의 name만 수정 (버전 관리 안 함)
+  - table: interest
+    tableComment: 재학생이 고를 수 있는 고정 관심 분야 기준 데이터. 목록 수정은 어드민에서 하며, 서버는 기동 때 한 번 읽어 메모리에 둠
+  - table: graduated
+    tableComment: 현업자
+    columnComments:
+      business_card_key: 명함 사진 S3 object key (비공개 버킷, presigned URL로 접근)
+  - table: graduated_profile
+    tableComment: 현업자 추가 정보. 알림 수단 · 공유할 연락처는 coffee_chat_contact
+    columnComments:
+      nickname: 가입 후 수정 불가
+      department: 회사 부서 (비공개)
+      job: 직무
+      hashtags: 마이페이지에서 선택 입력
+      links: 마이페이지에서 선택 입력
+  - table: coffee_chat_request
+    tableComment: 커피챗 요청. 같은 현업자에게 중복 요청 가능. 진행 단계(현업자 확인 → 연락처 공유 → 재학생 확인)는 처음 했을 때 시각만 기록
+    columnComments:
+      student_profile_pk: 요청 당시의 재학생 정보 버전. 다른 학생의 버전이 들어가지 않도록 student_pk와 복합 FK
+      shared_phone: 공유 시점 현업자 연락처
+      shared_email: 공유 시점 현업자 연락처
+  - table: notification_log
+    tableComment: 이메일 · 카카오 알림톡 전송 로그 (channel로 구분). insert만 함, 재시도도 새 행
+    columnComments:
+      recipient: 이메일 주소 또는 전화번호
