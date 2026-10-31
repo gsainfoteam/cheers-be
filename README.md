@@ -4,8 +4,11 @@ Cheers 서비스 백엔드 (NestJS 11 + Drizzle + PostgreSQL, 런타임 bun)
 
 ## 시작하기
 
+`@gsainfoteam` 패키지를 GitHub Packages에서 받으므로 설치에 `read:packages` 권한이 있는 토큰이 필요합니다.
+
 ```bash
 cp .env-template .env
+export NPM_TOKEN=$(gh auth token)
 bun install
 docker compose up -d cheers-db
 bun run start:dev

@@ -1,0 +1,64 @@
+@startuml observability
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title 공통 흐름: metrics 수집과 trace 전송
+caption CRB-36 · src/instrumentation.ts · @gsainfoteam/nest-observability
+
+actor Client
+participant "MetricsInterceptor" as Interceptor
+participant "cheers-be" as App
+participant "Prometheus" as Prometheus
+participant "Tempo" as Tempo
+
+== 기동 — main.ts의 첫 import ==
+
+App -> App: instrumentation.ts 실행
+alt OTEL_EXPORTER_OTLP_TRACES_ENDPOINT 있음 (K8s)
+  App -> App: initializeOpenTelemetry: 자동 계측 등록 · METRICS_PORT(기본 9090)에 /metrics 열기
+  note right of App
+    express · pg를 불러오기 전에 등록해야 계측이 걸림
+    실패해도 로그만 남기고 기동 계속 (모니터링 때문에 서비스가 죽지 않게)
+  end note
+else 없음 (로컬 · 테스트)
+  App -> App: 계측 없음, metrics 포트 안 열림
+end
+App -> App: initializeMetrics(서비스 이름) · MetricsInterceptor 등록
+
+== 요청 처리 ==
+
+Client -> Interceptor: API 요청 (인터셉터 전에 가드를 통과한 요청)
+Interceptor -> App: 핸들러 실행
+App --> Client: 응답
+Interceptor -> Interceptor: http_requests_total · duration · in_flight 기록
+note right of Interceptor
+  route 라벨은 경로 템플릿 (/cheers/sent/:id)
+  가드에서 거부된 401 · 403은 인터셉터에 닿지 않아 집계되지 않음
+  health 요청은 집계됨 (경로 제외 옵션 없음)
+end note
+
+== metrics 수집 ==
+
+Prometheus -> App: GET :9090/metrics (15초 간격, ServiceMonitor)
+App --> Prometheus: Prometheus 형식 텍스트
+note right of App
+  ingress에 연결되지 않은 포트라 외부에 노출되지 않음
+end note
+
+== trace 전송 ==
+
+App ->> Tempo: OTLP HTTP로 span 묶음 전송 (HTTP · express · pg)
+note right of App
+  응답을 기다리지 않음. 전송 실패는 요청 처리에 영향 없음
+  /health, /health/ready, /metrics 요청은 span을 만들지 않음
+  SQL은 파라미터 자리표시자($1) 그대로 전송, 값은 포함되지 않음
+  url.query와 클라이언트 IP는 포함됨 (보관 24시간)
+end note
+
+@enduml

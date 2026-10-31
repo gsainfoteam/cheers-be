@@ -5,12 +5,13 @@ import { DocumentBuilder, OpenAPIObject, SwaggerModule } from "@nestjs/swagger";
 import { Test } from "@nestjs/testing";
 import * as request from "supertest";
 import { App } from "supertest/types";
-import { AppController } from "@src/app.controller";
 import { CheersGraduatedController } from "@src/cheers/cheers-graduated.controller";
 import { CheersStudentController } from "@src/cheers/cheers-student.controller";
 import { ConsentController } from "@src/consent/consent.controller";
 import { FileController } from "@src/file/file.controller";
 import { GraduatedController } from "@src/graduated/graduated.controller";
+import { HealthController } from "@src/health/health.controller";
+import { HealthService } from "@src/health/health.service";
 import { StudentController } from "@src/student/student.controller";
 import { UserController } from "@src/user/user.controller";
 import { isSwaggerEnabled, setupSwagger } from "./swagger.config";
@@ -19,7 +20,7 @@ const createConfig = (env: Record<string, string | undefined>) =>
   ({ get: (key: string) => env[key] }) as unknown as ConfigService;
 
 const CONTROLLERS: Type<unknown>[] = [
-  AppController,
+  HealthController,
   UserController,
   ConsentController,
   StudentController,
@@ -57,7 +58,10 @@ describe("setupSwagger", () => {
 
   const startApp = async (env: Record<string, string | undefined>) => {
     const moduleRef = await Test.createTestingModule({
-      controllers: [AppController],
+      controllers: [HealthController],
+      providers: [
+        { provide: HealthService, useValue: { isReady: async () => true } },
+      ],
     }).compile();
     app = moduleRef.createNestApplication();
     setupSwagger(app, createConfig(env));
@@ -82,6 +86,9 @@ describe("setupSwagger", () => {
       .expect(200);
     const document = json.body as OpenAPIObject;
     expect(document.paths["/health"]).toBeDefined();
+    expect(document.paths["/health/ready"].get?.responses).toHaveProperty(
+      "503",
+    );
     expect(document.components?.securitySchemes?.bearer).toMatchObject({
       type: "http",
       scheme: "bearer",
@@ -191,7 +198,7 @@ describe("API document", () => {
   it("lists every route handler", () => {
     const handlers = CONTROLLERS.flatMap(handlersOf);
 
-    expect(handlers).toHaveLength(24);
+    expect(handlers).toHaveLength(25);
     expect(operations()).toHaveLength(handlers.length);
   });
 

@@ -8,6 +8,9 @@ import {
 import { Observable, tap } from "rxjs";
 import { Request } from "express";
 
+// K8s probe가 주기적으로 호출하는 경로
+const UNLOGGED_PATHS = new Set(["/health", "/health/ready"]);
+
 @Injectable()
 export class HttpLoggingInterceptor implements NestInterceptor {
   private readonly logger = new Logger(HttpLoggingInterceptor.name);
@@ -36,8 +39,13 @@ export class HttpLoggingInterceptor implements NestInterceptor {
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const request: Request = context.switchToHttp().getRequest();
-    const clientIp = this.getClientIp(request);
     const uri = request.url.split("?")[0];
+
+    if (UNLOGGED_PATHS.has(uri)) {
+      return next.handle();
+    }
+
+    const clientIp = this.getClientIp(request);
 
     this.logger.log(
       `[Request][${

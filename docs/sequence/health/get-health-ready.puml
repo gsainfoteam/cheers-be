@@ -1,0 +1,58 @@
+@startuml get-health-ready
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /health/ready
+caption CRB-36 · 요청을 받을 수 있는지 확인 (readiness). DB 연결을 확인함
+
+actor "Kubelet · Uptime Kuma" as Client
+participant "HttpLoggingInterceptor" as Interceptor
+participant "HealthController" as Controller
+participant "HealthService" as Service
+participant "DatabaseService" as DatabaseService
+database PostgreSQL
+
+Client -> Interceptor: GET /health/ready
+note right of Client
+  인증 없음. 응답에 버전 · 에러 상세를 넣지 않음
+end note
+Interceptor -> Interceptor: health 경로는 요청 · 응답 로그를 남기지 않음
+Interceptor -> Controller: ready()
+Controller -> Service: isReady()
+Service -> DatabaseService: ping(2000ms)
+DatabaseService -> PostgreSQL: SELECT 1 (pool, query_timeout 2초)
+note right of DatabaseService
+  drizzle을 거치지 않아 쿼리 로그가 남지 않음
+  pool 대기는 query_timeout에 포함되지 않아 전체를 타이머로도 2초로 제한
+  2초 < probe timeoutSeconds 5초: probe가 끊기 전에 503으로 응답
+end note
+
+alt 2초 안에 성공
+  PostgreSQL --> DatabaseService: 1
+  DatabaseService --> Service: 성공
+  opt 직전 확인이 실패였음
+    Service -> Service: log: 복구됨
+  end
+  Service --> Controller: true
+  Controller --> Client: 200 { "result": "OK" }
+else 연결 실패 · 쿼리 오류 · 타임아웃 · pool이 2초 넘게 꽉 참
+  DatabaseService --> Service: 예외
+  opt 직전 확인이 성공이었음
+    Service -> Service: warn: 실패 원인 (상태가 바뀔 때 한 번만)
+  end
+  Service --> Controller: false
+  Controller -[#red]-> Client: 503 Service Unavailable
+  note right of Controller
+    예외를 던지지 않고 상태 코드만 설정: AllExceptionsFilter의
+    에러 로그 · 스택이 probe마다 (10초 간격) 쌓이지 않음
+    응답은 다른 에러와 같은 { statusCode, message }, 원인은 넣지 않음
+  end note
+end
+
+@enduml

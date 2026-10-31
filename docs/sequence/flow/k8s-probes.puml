@@ -1,0 +1,69 @@
+@startuml k8s-probes
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title 공통 흐름: K8s probe와 DB 장애 시 동작
+caption CRB-36 · icarus-gitops charts/service 기본값 + readinessProbe.path /health/ready 기준
+
+actor Client
+participant "Traefik" as Traefik
+participant "Kubelet" as Kubelet
+participant "cheers-be" as App
+database PostgreSQL
+
+== 기동 ==
+
+Kubelet -> App: startupProbe: TCP 3000 (10초 간격, 최대 15회)
+note right of App
+  start:prod = 마이그레이션 → onModuleInit (DB 연결 · 키 · 관심 분야 로드) → listen
+  포트가 열린 뒤에야 liveness · readiness가 시작됨
+  DB에 못 붙으면 기동 실패 → K8s가 재시작 (기존 동작)
+end note
+Kubelet -> App: readinessProbe: GET /health/ready (10초 간격)
+App --> Kubelet: 200
+Kubelet -> Traefik: Ready: 트래픽 전달 시작
+note over Traefik, App
+  maxSurge 1 · maxUnavailable 0: 새 Pod가 Ready가 되어야 이전 Pod를 내림
+  새 버전이 DB에 못 붙으면 이전 Pod가 계속 트래픽을 받음
+end note
+
+== 평상시 ==
+
+Client -> Traefik: API 요청
+Traefik -> App: 요청 전달
+App --> Client: 응답
+Kubelet -> App: livenessProbe: GET /health (60초 간격)
+App --> Kubelet: 200
+
+== DB 장애 ==
+
+PostgreSQL -[#red]-> App: 쉬고 있는 pool 연결 끊김
+App -> App: pool error 이벤트를 로그로 처리
+note right of App
+  리스너가 없으면 Node에서는 프로세스가 죽음 (Bun에서는 재현되지 않음)
+  실행 환경과 관계없이 로그로 남기고 프로세스를 유지. 끊긴 연결은 pool이 버림
+end note
+loop 10초 간격, 3회 연속 실패 (약 30초)
+  Kubelet -> App: GET /health/ready
+  App -[#red]-> Kubelet: 503
+end
+Kubelet -> Traefik: NotReady: 트래픽 전달 중단
+Client -> Traefik: API 요청 · GET /health/ready (Uptime Kuma)
+Traefik -[#red]-> Client: 503 (Pod 1개면 서비스 전체)
+Kubelet -> App: livenessProbe: GET /health
+App --> Kubelet: 200 (재시작하지 않음)
+
+== 복구 ==
+
+PostgreSQL --> App: 다시 연결 가능
+Kubelet -> App: GET /health/ready
+App --> Kubelet: 200 (1회 성공으로 Ready)
+Kubelet -> Traefik: Ready: 트래픽 전달 재개
+
+@enduml
