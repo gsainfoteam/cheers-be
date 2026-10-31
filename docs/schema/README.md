@@ -30,7 +30,7 @@ FK는 모두 `ON DELETE NO ACTION`입니다. 부모 행을 지우기 전에 백�
 | [public.graduated](public.graduated.md) | 6 | 현업자 | BASE TABLE |
 | [public.notification_log](public.notification_log.md) | 9 | 이메일 · 카카오 알림톡 전송 로그 (channel로 구분). insert만 함, 재시도도 새 행 | BASE TABLE |
 | [public.refresh_token](public.refresh_token.md) | 4 | 리프레시 토큰 | BASE TABLE |
-| [public.school](public.school.md) | 2 | 학교 기준 데이터 (seed로 pk를 고정해서 넣음) | BASE TABLE |
+| [public.school](public.school.md) | 3 | 학교 기준 데이터 (seed로 pk를 고정해서 넣음) | BASE TABLE |
 | [public.student_email_verification](public.student_email_verification.md) | 6 | 진행 중인 학교 이메일 인증. 학생당 1개, 재요청 시 upsert, 인증 성공 시 행 삭제 | BASE TABLE |
 | [public.student_profile_attachment](public.student_profile_attachment.md) | 7 | CV · 포트폴리오. 이전 버전이 참조하므로 프로필 수정 때는 S3 파일을 지우지 않음. 행과 파일은 탈퇴 만료 처리 때 지움 | BASE TABLE |
 | [public.student_profile](public.student_profile.md) | 7 | 재학생 추가 정보 버전. 수정하면 새 버전, 현재 값 = 가장 큰 version | BASE TABLE |
@@ -158,6 +158,7 @@ erDiagram
 "public.school" {
   integer *pk
   varchar_64_ name
+  varchar_128_ email_domain
 }
 "public.student_email_verification" {
   uuid student_pk FK

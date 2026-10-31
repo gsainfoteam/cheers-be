@@ -1,5 +1,5 @@
 {
-  "id": "7fade32e-2953-4f18-ab27-d4d28a0850b7",
+  "id": "5a3d4a58-815f-439c-a1de-77943bd121da",
   "prevId": "d8df27c2-77dd-4db3-a775-94178f943e5f",
   "version": "7",
   "dialect": "postgresql",
@@ -910,12 +910,26 @@
           "type": "varchar(64)",
           "primaryKey": false,
           "notNull": true
+        },
+        "email_domain": {
+          "name": "email_domain",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "school_email_domain_unique": {
+          "name": "school_email_domain_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "email_domain"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

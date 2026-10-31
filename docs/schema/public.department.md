@@ -54,6 +54,7 @@ erDiagram
 "public.school" {
   integer *pk
   varchar_64_ name
+  varchar_128_ email_domain
 }
 ```
 

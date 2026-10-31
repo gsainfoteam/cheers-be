@@ -94,6 +94,8 @@ comments:
       file_name: source = file일 때 원본 파일명
   - table: school
     tableComment: 학교 기준 데이터 (seed로 pk를 고정해서 넣음)
+    columnComments:
+      email_domain: 쓰지 않음 (school_email_domain으로 옮김). 배포 중 이전 버전 pod가 읽으므로 남겨 두고 다음 릴리스에서 지움
   - table: school_email_domain
     tableComment: 학교 이메일 인증 시 허용 도메인. 재학생의 학교를 정하는 기준이라 한 도메인은 한 학교에만 속함. 변경은 superadmin만 할 수 있음
     columnComments:
