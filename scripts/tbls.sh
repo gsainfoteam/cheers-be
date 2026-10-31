@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 고정된 버전의 tbls 를 받아 실행. 로컬과 CI 가 같은 버전을 쓰도록 이 스크립트로만 실행함
-# 버전을 올릴 때는 릴리스의 checksums-{darwin,linux}.txt 에서 해시를 함께 바꾸고 bun run db:docs 로 문서를 다시 생성
+# 버전을 올릴 때는 릴리스의 checksums-{darwin,linux}.txt 에서 해시를 함께 바꾸고, scripts/tbls-templates/ 를 새 기본 템플릿과 비교한 뒤 bun run db:docs 로 문서를 다시 생성
 set -euo pipefail
 
 VERSION="v1.96.1"

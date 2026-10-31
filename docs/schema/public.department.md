@@ -32,16 +32,16 @@
 ```mermaid
 erDiagram
 
-"public.student_profile" }o--|| "public.department" : "FOREIGN KEY (department_pk) REFERENCES department(pk)"
-"public.department" }o--|| "public.school" : "FOREIGN KEY (school_pk) REFERENCES school(pk)"
+"public.student_profile" }o--|| "public.department" : ""
+"public.department" }o--|| "public.school" : ""
 
 "public.department" {
-  integer pk
+  integer *pk
   integer school_pk FK
   varchar_64_ name
 }
 "public.student_profile" {
-  uuid pk
+  uuid *pk
   uuid student_pk FK
   integer version
   integer department_pk FK
@@ -50,7 +50,7 @@ erDiagram
   timestamp_with_time_zone created_at
 }
 "public.school" {
-  integer pk
+  integer *pk
   varchar_64_ name
   varchar_128_ email_domain
 }

@@ -39,16 +39,16 @@
 ```mermaid
 erDiagram
 
-"public.coffee_chat_contact" |o--|| "public.users" : "FOREIGN KEY (user_pk) REFERENCES users(pk)"
-"public.graduated" |o--|| "public.users" : "FOREIGN KEY (user_pk) REFERENCES users(pk)"
-"public.refresh_token" }o--|| "public.users" : "FOREIGN KEY (user_pk) REFERENCES users(pk)"
-"public.student" |o--|| "public.users" : "FOREIGN KEY (user_pk) REFERENCES users(pk)"
-"public.user_consent" }o--|| "public.users" : "FOREIGN KEY (user_pk) REFERENCES users(pk)"
-"public.user_oauth_account" }o--|| "public.users" : "FOREIGN KEY (user_pk) REFERENCES users(pk)"
-"public.student_email_send_log" }o--|| "public.users" : "FOREIGN KEY (user_pk) REFERENCES users(pk)"
+"public.coffee_chat_contact" |o--|| "public.users" : ""
+"public.graduated" |o--|| "public.users" : ""
+"public.refresh_token" }o--|| "public.users" : ""
+"public.student" |o--|| "public.users" : ""
+"public.user_consent" }o--|| "public.users" : ""
+"public.user_oauth_account" }o--|| "public.users" : ""
+"public.student_email_send_log" }o--|| "public.users" : ""
 
 "public.users" {
-  uuid pk
+  uuid *pk
   boolean is_deleted
   user_status status
   user_type type
@@ -70,7 +70,7 @@ erDiagram
   varchar_255_ email
 }
 "public.graduated" {
-  uuid pk
+  uuid *pk
   uuid user_pk FK
   timestamp_with_time_zone verified_at
   timestamp_with_time_zone created_at
@@ -84,7 +84,7 @@ erDiagram
   timestamp_with_time_zone created_at
 }
 "public.student" {
-  uuid pk
+  uuid *pk
   uuid user_pk FK
   varchar_255_ email
   timestamp_with_time_zone verified_at
@@ -92,7 +92,7 @@ erDiagram
   timestamp_with_time_zone updated_at
 }
 "public.user_consent" {
-  uuid pk
+  uuid *pk
   uuid user_pk FK
   varchar_64_ consent_type FK
   varchar_32_ consent_version FK
@@ -108,7 +108,7 @@ erDiagram
   varchar_255_ email
 }
 "public.student_email_send_log" {
-  uuid pk
+  uuid *pk
   uuid user_pk FK
   smallint failed_attempt_count
   timestamp_with_time_zone created_at

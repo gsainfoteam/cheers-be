@@ -33,7 +33,7 @@
 ```mermaid
 erDiagram
 
-"public.student_email_verification" |o--|| "public.student" : "FOREIGN KEY (student_pk) REFERENCES student(pk)"
+"public.student_email_verification" |o--|| "public.student" : ""
 
 "public.student_email_verification" {
   uuid student_pk FK
@@ -44,7 +44,7 @@ erDiagram
   varchar_255_ email
 }
 "public.student" {
-  uuid pk
+  uuid *pk
   uuid user_pk FK
   varchar_255_ email
   timestamp_with_time_zone verified_at

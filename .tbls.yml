@@ -5,6 +5,12 @@ docPath: docs/schema
 disableOutputSchema: true
 er:
   format: mermaid
+  hideDef: true
+# 컬럼명 pk 가 Mermaid 의 PK 예약어와 겹쳐 파싱에 실패하므로 *pk 로 출력 (tbls 기본 템플릿에서 이 부분만 수정)
+templates:
+  mermaid:
+    schema: scripts/tbls-templates/schema.mermaid.tmpl
+    table: scripts/tbls-templates/table.mermaid.tmpl
 exclude:
   - __drizzle_migrations
 

@@ -31,7 +31,7 @@
 ```mermaid
 erDiagram
 
-"public.user_consent" }o--|| "public.consent" : "FOREIGN KEY (consent_type, consent_version) REFERENCES consent(type, version)"
+"public.user_consent" }o--|| "public.consent" : ""
 
 "public.consent" {
   varchar_64_ type
@@ -41,7 +41,7 @@ erDiagram
   varchar_512_ url
 }
 "public.user_consent" {
-  uuid pk
+  uuid *pk
   uuid user_pk FK
   varchar_64_ consent_type FK
   varchar_32_ consent_version FK

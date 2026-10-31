@@ -32,7 +32,7 @@
 ```mermaid
 erDiagram
 
-"public.refresh_token" }o--|| "public.users" : "FOREIGN KEY (user_pk) REFERENCES users(pk)"
+"public.refresh_token" }o--|| "public.users" : ""
 
 "public.refresh_token" {
   text opaque_hash
@@ -41,7 +41,7 @@ erDiagram
   timestamp_with_time_zone created_at
 }
 "public.users" {
-  uuid pk
+  uuid *pk
   boolean is_deleted
   user_status status
   user_type type

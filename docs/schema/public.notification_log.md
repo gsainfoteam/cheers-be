@@ -37,10 +37,10 @@
 ```mermaid
 erDiagram
 
-"public.notification_log" }o--|| "public.coffee_chat_request" : "FOREIGN KEY (coffee_chat_request_pk) REFERENCES coffee_chat_request(pk)"
+"public.notification_log" }o--|| "public.coffee_chat_request" : ""
 
 "public.notification_log" {
-  uuid pk
+  uuid *pk
   uuid coffee_chat_request_pk FK
   notification_event event
   notification_channel channel
@@ -51,7 +51,7 @@ erDiagram
   text error
 }
 "public.coffee_chat_request" {
-  uuid pk
+  uuid *pk
   uuid graduated_pk FK
   uuid student_pk FK
   uuid student_profile_pk FK

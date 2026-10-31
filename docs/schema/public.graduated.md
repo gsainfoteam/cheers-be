@@ -35,12 +35,12 @@
 ```mermaid
 erDiagram
 
-"public.coffee_chat_request" }o--|| "public.graduated" : "FOREIGN KEY (graduated_pk) REFERENCES graduated(pk)"
-"public.graduated_profile" |o--|| "public.graduated" : "FOREIGN KEY (graduated_pk) REFERENCES graduated(pk)"
-"public.graduated" |o--|| "public.users" : "FOREIGN KEY (user_pk) REFERENCES users(pk)"
+"public.coffee_chat_request" }o--|| "public.graduated" : ""
+"public.graduated_profile" |o--|| "public.graduated" : ""
+"public.graduated" |o--|| "public.users" : ""
 
 "public.graduated" {
-  uuid pk
+  uuid *pk
   uuid user_pk FK
   timestamp_with_time_zone verified_at
   timestamp_with_time_zone created_at
@@ -48,7 +48,7 @@ erDiagram
   text business_card_key
 }
 "public.coffee_chat_request" {
-  uuid pk
+  uuid *pk
   uuid graduated_pk FK
   uuid student_pk FK
   uuid student_profile_pk FK
@@ -73,7 +73,7 @@ erDiagram
   text__ links
 }
 "public.users" {
-  uuid pk
+  uuid *pk
   boolean is_deleted
   user_status status
   user_type type

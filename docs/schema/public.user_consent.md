@@ -36,11 +36,11 @@
 ```mermaid
 erDiagram
 
-"public.user_consent" }o--|| "public.users" : "FOREIGN KEY (user_pk) REFERENCES users(pk)"
-"public.user_consent" }o--|| "public.consent" : "FOREIGN KEY (consent_type, consent_version) REFERENCES consent(type, version)"
+"public.user_consent" }o--|| "public.users" : ""
+"public.user_consent" }o--|| "public.consent" : ""
 
 "public.user_consent" {
-  uuid pk
+  uuid *pk
   uuid user_pk FK
   varchar_64_ consent_type FK
   varchar_32_ consent_version FK
@@ -48,7 +48,7 @@ erDiagram
   timestamp_with_time_zone revoked_at
 }
 "public.users" {
-  uuid pk
+  uuid *pk
   boolean is_deleted
   user_status status
   user_type type

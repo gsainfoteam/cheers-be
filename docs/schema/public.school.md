@@ -31,15 +31,15 @@
 ```mermaid
 erDiagram
 
-"public.department" }o--|| "public.school" : "FOREIGN KEY (school_pk) REFERENCES school(pk)"
+"public.department" }o--|| "public.school" : ""
 
 "public.school" {
-  integer pk
+  integer *pk
   varchar_64_ name
   varchar_128_ email_domain
 }
 "public.department" {
-  integer pk
+  integer *pk
   integer school_pk FK
   varchar_64_ name
 }

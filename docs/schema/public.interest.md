@@ -33,7 +33,7 @@ erDiagram
 
 
 "public.interest" {
-  integer pk
+  integer *pk
   varchar_50_ name
   integer sort_order
 }

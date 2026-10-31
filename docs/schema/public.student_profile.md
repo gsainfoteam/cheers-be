@@ -40,13 +40,13 @@
 ```mermaid
 erDiagram
 
-"public.coffee_chat_request" }o--|| "public.student_profile" : "FOREIGN KEY (student_profile_pk, student_pk) REFERENCES student_profile(pk, student_pk)"
-"public.student_profile_attachment" }o--|| "public.student_profile" : "FOREIGN KEY (profile_pk) REFERENCES student_profile(pk)"
-"public.student_profile" }o--|| "public.student" : "FOREIGN KEY (student_pk) REFERENCES student(pk)"
-"public.student_profile" }o--|| "public.department" : "FOREIGN KEY (department_pk) REFERENCES department(pk)"
+"public.coffee_chat_request" }o--|| "public.student_profile" : ""
+"public.student_profile_attachment" }o--|| "public.student_profile" : ""
+"public.student_profile" }o--|| "public.student" : ""
+"public.student_profile" }o--|| "public.department" : ""
 
 "public.student_profile" {
-  uuid pk
+  uuid *pk
   uuid student_pk FK
   integer version
   integer department_pk FK
@@ -55,7 +55,7 @@ erDiagram
   timestamp_with_time_zone created_at
 }
 "public.coffee_chat_request" {
-  uuid pk
+  uuid *pk
   uuid graduated_pk FK
   uuid student_pk FK
   uuid student_profile_pk FK
@@ -69,7 +69,7 @@ erDiagram
   varchar_255_ shared_email
 }
 "public.student_profile_attachment" {
-  uuid pk
+  uuid *pk
   uuid profile_pk FK
   attachment_kind kind
   attachment_source source
@@ -78,7 +78,7 @@ erDiagram
   varchar_255_ file_name
 }
 "public.student" {
-  uuid pk
+  uuid *pk
   uuid user_pk FK
   varchar_255_ email
   timestamp_with_time_zone verified_at
@@ -86,7 +86,7 @@ erDiagram
   timestamp_with_time_zone updated_at
 }
 "public.department" {
-  integer pk
+  integer *pk
   integer school_pk FK
   varchar_64_ name
 }

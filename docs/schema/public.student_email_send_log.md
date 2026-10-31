@@ -34,17 +34,17 @@
 ```mermaid
 erDiagram
 
-"public.student_email_send_log" }o--|| "public.users" : "FOREIGN KEY (user_pk) REFERENCES users(pk)"
+"public.student_email_send_log" }o--|| "public.users" : ""
 
 "public.student_email_send_log" {
-  uuid pk
+  uuid *pk
   uuid user_pk FK
   smallint failed_attempt_count
   timestamp_with_time_zone created_at
   varchar_255_ email
 }
 "public.users" {
-  uuid pk
+  uuid *pk
   boolean is_deleted
   user_status status
   user_type type

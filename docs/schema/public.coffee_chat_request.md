@@ -43,13 +43,13 @@
 ```mermaid
 erDiagram
 
-"public.notification_log" }o--|| "public.coffee_chat_request" : "FOREIGN KEY (coffee_chat_request_pk) REFERENCES coffee_chat_request(pk)"
-"public.coffee_chat_request" }o--|| "public.graduated" : "FOREIGN KEY (graduated_pk) REFERENCES graduated(pk)"
-"public.coffee_chat_request" }o--|| "public.student_profile" : "FOREIGN KEY (student_profile_pk, student_pk) REFERENCES student_profile(pk, student_pk)"
-"public.coffee_chat_request" }o--|| "public.student" : "FOREIGN KEY (student_pk) REFERENCES student(pk)"
+"public.notification_log" }o--|| "public.coffee_chat_request" : ""
+"public.coffee_chat_request" }o--|| "public.graduated" : ""
+"public.coffee_chat_request" }o--|| "public.student_profile" : ""
+"public.coffee_chat_request" }o--|| "public.student" : ""
 
 "public.coffee_chat_request" {
-  uuid pk
+  uuid *pk
   uuid graduated_pk FK
   uuid student_pk FK
   uuid student_profile_pk FK
@@ -63,7 +63,7 @@ erDiagram
   varchar_255_ shared_email
 }
 "public.notification_log" {
-  uuid pk
+  uuid *pk
   uuid coffee_chat_request_pk FK
   notification_event event
   notification_channel channel
@@ -74,7 +74,7 @@ erDiagram
   text error
 }
 "public.graduated" {
-  uuid pk
+  uuid *pk
   uuid user_pk FK
   timestamp_with_time_zone verified_at
   timestamp_with_time_zone created_at
@@ -82,7 +82,7 @@ erDiagram
   text business_card_key
 }
 "public.student_profile" {
-  uuid pk
+  uuid *pk
   uuid student_pk FK
   integer version
   integer department_pk FK
@@ -91,7 +91,7 @@ erDiagram
   timestamp_with_time_zone created_at
 }
 "public.student" {
-  uuid pk
+  uuid *pk
   uuid user_pk FK
   varchar_255_ email
   timestamp_with_time_zone verified_at

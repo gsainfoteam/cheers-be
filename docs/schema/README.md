@@ -59,24 +59,24 @@ FK는 모두 `ON DELETE NO ACTION`입니다. 부모 행을 지우기 전에 백�
 ```mermaid
 erDiagram
 
-"public.coffee_chat_contact" |o--|| "public.users" : "FOREIGN KEY (user_pk) REFERENCES users(pk)"
-"public.coffee_chat_request" }o--|| "public.graduated" : "FOREIGN KEY (graduated_pk) REFERENCES graduated(pk)"
-"public.coffee_chat_request" }o--|| "public.student_profile" : "FOREIGN KEY (student_profile_pk, student_pk) REFERENCES student_profile(pk, student_pk)"
-"public.coffee_chat_request" }o--|| "public.student" : "FOREIGN KEY (student_pk) REFERENCES student(pk)"
-"public.department" }o--|| "public.school" : "FOREIGN KEY (school_pk) REFERENCES school(pk)"
-"public.graduated_profile" |o--|| "public.graduated" : "FOREIGN KEY (graduated_pk) REFERENCES graduated(pk)"
-"public.graduated" |o--|| "public.users" : "FOREIGN KEY (user_pk) REFERENCES users(pk)"
-"public.notification_log" }o--|| "public.coffee_chat_request" : "FOREIGN KEY (coffee_chat_request_pk) REFERENCES coffee_chat_request(pk)"
-"public.refresh_token" }o--|| "public.users" : "FOREIGN KEY (user_pk) REFERENCES users(pk)"
-"public.student_email_verification" |o--|| "public.student" : "FOREIGN KEY (student_pk) REFERENCES student(pk)"
-"public.student_profile_attachment" }o--|| "public.student_profile" : "FOREIGN KEY (profile_pk) REFERENCES student_profile(pk)"
-"public.student_profile" }o--|| "public.department" : "FOREIGN KEY (department_pk) REFERENCES department(pk)"
-"public.student_profile" }o--|| "public.student" : "FOREIGN KEY (student_pk) REFERENCES student(pk)"
-"public.student" |o--|| "public.users" : "FOREIGN KEY (user_pk) REFERENCES users(pk)"
-"public.user_consent" }o--|| "public.consent" : "FOREIGN KEY (consent_type, consent_version) REFERENCES consent(type, version)"
-"public.user_consent" }o--|| "public.users" : "FOREIGN KEY (user_pk) REFERENCES users(pk)"
-"public.user_oauth_account" }o--|| "public.users" : "FOREIGN KEY (user_pk) REFERENCES users(pk)"
-"public.student_email_send_log" }o--|| "public.users" : "FOREIGN KEY (user_pk) REFERENCES users(pk)"
+"public.coffee_chat_contact" |o--|| "public.users" : ""
+"public.coffee_chat_request" }o--|| "public.graduated" : ""
+"public.coffee_chat_request" }o--|| "public.student_profile" : ""
+"public.coffee_chat_request" }o--|| "public.student" : ""
+"public.department" }o--|| "public.school" : ""
+"public.graduated_profile" |o--|| "public.graduated" : ""
+"public.graduated" |o--|| "public.users" : ""
+"public.notification_log" }o--|| "public.coffee_chat_request" : ""
+"public.refresh_token" }o--|| "public.users" : ""
+"public.student_email_verification" |o--|| "public.student" : ""
+"public.student_profile_attachment" }o--|| "public.student_profile" : ""
+"public.student_profile" }o--|| "public.department" : ""
+"public.student_profile" }o--|| "public.student" : ""
+"public.student" |o--|| "public.users" : ""
+"public.user_consent" }o--|| "public.consent" : ""
+"public.user_consent" }o--|| "public.users" : ""
+"public.user_oauth_account" }o--|| "public.users" : ""
+"public.student_email_send_log" }o--|| "public.users" : ""
 
 "public.coffee_chat_contact" {
   uuid user_pk FK
@@ -88,7 +88,7 @@ erDiagram
   varchar_255_ email
 }
 "public.coffee_chat_request" {
-  uuid pk
+  uuid *pk
   uuid graduated_pk FK
   uuid student_pk FK
   uuid student_profile_pk FK
@@ -109,7 +109,7 @@ erDiagram
   varchar_512_ url
 }
 "public.department" {
-  integer pk
+  integer *pk
   integer school_pk FK
   varchar_64_ name
 }
@@ -125,7 +125,7 @@ erDiagram
   text__ links
 }
 "public.graduated" {
-  uuid pk
+  uuid *pk
   uuid user_pk FK
   timestamp_with_time_zone verified_at
   timestamp_with_time_zone created_at
@@ -133,7 +133,7 @@ erDiagram
   text business_card_key
 }
 "public.notification_log" {
-  uuid pk
+  uuid *pk
   uuid coffee_chat_request_pk FK
   notification_event event
   notification_channel channel
@@ -150,7 +150,7 @@ erDiagram
   timestamp_with_time_zone created_at
 }
 "public.school" {
-  integer pk
+  integer *pk
   varchar_64_ name
   varchar_128_ email_domain
 }
@@ -163,7 +163,7 @@ erDiagram
   varchar_255_ email
 }
 "public.student_profile_attachment" {
-  uuid pk
+  uuid *pk
   uuid profile_pk FK
   attachment_kind kind
   attachment_source source
@@ -172,7 +172,7 @@ erDiagram
   varchar_255_ file_name
 }
 "public.student_profile" {
-  uuid pk
+  uuid *pk
   uuid student_pk FK
   integer version
   integer department_pk FK
@@ -181,7 +181,7 @@ erDiagram
   timestamp_with_time_zone created_at
 }
 "public.student" {
-  uuid pk
+  uuid *pk
   uuid user_pk FK
   varchar_255_ email
   timestamp_with_time_zone verified_at
@@ -189,7 +189,7 @@ erDiagram
   timestamp_with_time_zone updated_at
 }
 "public.user_consent" {
-  uuid pk
+  uuid *pk
   uuid user_pk FK
   varchar_64_ consent_type FK
   varchar_32_ consent_version FK
@@ -205,7 +205,7 @@ erDiagram
   varchar_255_ email
 }
 "public.users" {
-  uuid pk
+  uuid *pk
   boolean is_deleted
   user_status status
   user_type type
@@ -224,14 +224,14 @@ erDiagram
   timestamp_with_time_zone created_at
 }
 "public.student_email_send_log" {
-  uuid pk
+  uuid *pk
   uuid user_pk FK
   smallint failed_attempt_count
   timestamp_with_time_zone created_at
   varchar_255_ email
 }
 "public.interest" {
-  integer pk
+  integer *pk
   varchar_50_ name
   integer sort_order
 }

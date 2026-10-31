@@ -35,10 +35,10 @@ CV · 포트폴리오. 이전 버전이 참조하므로 프로필 수정 때는 
 ```mermaid
 erDiagram
 
-"public.student_profile_attachment" }o--|| "public.student_profile" : "FOREIGN KEY (profile_pk) REFERENCES student_profile(pk)"
+"public.student_profile_attachment" }o--|| "public.student_profile" : ""
 
 "public.student_profile_attachment" {
-  uuid pk
+  uuid *pk
   uuid profile_pk FK
   attachment_kind kind
   attachment_source source
@@ -47,7 +47,7 @@ erDiagram
   varchar_255_ file_name
 }
 "public.student_profile" {
-  uuid pk
+  uuid *pk
   uuid student_pk FK
   integer version
   integer department_pk FK

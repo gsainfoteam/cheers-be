@@ -37,13 +37,13 @@
 ```mermaid
 erDiagram
 
-"public.coffee_chat_request" }o--|| "public.student" : "FOREIGN KEY (student_pk) REFERENCES student(pk)"
-"public.student_email_verification" |o--|| "public.student" : "FOREIGN KEY (student_pk) REFERENCES student(pk)"
-"public.student_profile" }o--|| "public.student" : "FOREIGN KEY (student_pk) REFERENCES student(pk)"
-"public.student" |o--|| "public.users" : "FOREIGN KEY (user_pk) REFERENCES users(pk)"
+"public.coffee_chat_request" }o--|| "public.student" : ""
+"public.student_email_verification" |o--|| "public.student" : ""
+"public.student_profile" }o--|| "public.student" : ""
+"public.student" |o--|| "public.users" : ""
 
 "public.student" {
-  uuid pk
+  uuid *pk
   uuid user_pk FK
   varchar_255_ email
   timestamp_with_time_zone verified_at
@@ -51,7 +51,7 @@ erDiagram
   timestamp_with_time_zone updated_at
 }
 "public.coffee_chat_request" {
-  uuid pk
+  uuid *pk
   uuid graduated_pk FK
   uuid student_pk FK
   uuid student_profile_pk FK
@@ -73,7 +73,7 @@ erDiagram
   varchar_255_ email
 }
 "public.student_profile" {
-  uuid pk
+  uuid *pk
   uuid student_pk FK
   integer version
   integer department_pk FK
@@ -82,7 +82,7 @@ erDiagram
   timestamp_with_time_zone created_at
 }
 "public.users" {
-  uuid pk
+  uuid *pk
   boolean is_deleted
   user_status status
   user_type type

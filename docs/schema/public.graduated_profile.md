@@ -36,7 +36,7 @@
 ```mermaid
 erDiagram
 
-"public.graduated_profile" |o--|| "public.graduated" : "FOREIGN KEY (graduated_pk) REFERENCES graduated(pk)"
+"public.graduated_profile" |o--|| "public.graduated" : ""
 
 "public.graduated_profile" {
   uuid graduated_pk FK
@@ -50,7 +50,7 @@ erDiagram
   text__ links
 }
 "public.graduated" {
-  uuid pk
+  uuid *pk
   uuid user_pk FK
   timestamp_with_time_zone verified_at
   timestamp_with_time_zone created_at

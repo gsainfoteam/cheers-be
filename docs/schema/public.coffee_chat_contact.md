@@ -36,7 +36,7 @@
 ```mermaid
 erDiagram
 
-"public.coffee_chat_contact" |o--|| "public.users" : "FOREIGN KEY (user_pk) REFERENCES users(pk)"
+"public.coffee_chat_contact" |o--|| "public.users" : ""
 
 "public.coffee_chat_contact" {
   uuid user_pk FK
@@ -48,7 +48,7 @@ erDiagram
   varchar_255_ email
 }
 "public.users" {
-  uuid pk
+  uuid *pk
   boolean is_deleted
   user_status status
   user_type type

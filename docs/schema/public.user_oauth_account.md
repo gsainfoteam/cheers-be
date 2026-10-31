@@ -35,7 +35,7 @@
 ```mermaid
 erDiagram
 
-"public.user_oauth_account" }o--|| "public.users" : "FOREIGN KEY (user_pk) REFERENCES users(pk)"
+"public.user_oauth_account" }o--|| "public.users" : ""
 
 "public.user_oauth_account" {
   oauth_provider provider
@@ -46,7 +46,7 @@ erDiagram
   varchar_255_ email
 }
 "public.users" {
-  uuid pk
+  uuid *pk
   boolean is_deleted
   user_status status
   user_type type
