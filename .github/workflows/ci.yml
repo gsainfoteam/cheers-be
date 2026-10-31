@@ -125,3 +125,11 @@ jobs:
             git diff drizzle
             exit 1
           fi
+
+      # tbls 버전은 scripts/tbls.sh 에 고정. 시크릿 없이 위 Postgres 만 읽음
+      - name: Check schema docs
+        run: |
+          if ! bun run db:docs:check; then
+            echo "::error::docs/schema 가 스키마와 다릅니다. bun run db:migrate 후 bun run db:docs 로 다시 생성해 커밋하세요"
+            exit 1
+          fi
