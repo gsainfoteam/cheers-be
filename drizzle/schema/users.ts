@@ -56,6 +56,7 @@ export const users = pgTable(
     email: varchar("email", { length: 255 }),
     // 회원 탈퇴 요청 시각. 유예기간(active: WITHDRAWAL_GRACE_DAYS, pending: 1일) 동안은 비활성,
     // 그 안에 다시 로그인하면 null로 되돌림. 지나면 스케줄러가 개인정보 삭제 + is_deleted = true
+    tblsCheck: varchar("tbls_check", { length: 8 }),
     withdrawRequestedAt: timestamp("withdraw_requested_at", {
       withTimezone: true,
     }),

@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "tbls_check" varchar(8);
