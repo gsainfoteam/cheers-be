@@ -6,6 +6,7 @@ import {
   IsInt,
   IsNotEmpty,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -17,6 +18,9 @@ export const INTEREST_PK_MAX = 2147483647;
 // 눈에 같은 이름이 따로 저장되지 않도록 앞뒤 공백을 지우고 유니코드 표현을 맞춤 (공백뿐이면 @IsNotEmpty에 걸림)
 const normalizeName = ({ value }: { value: unknown }) =>
   typeof value === "string" ? value.trim().normalize("NFC") : value;
+
+// 제어 문자(NUL은 PostgreSQL이 거부해 500이 됨)를 막고, 폭 없는 문자만으로 된 이름처럼 눈에 안 보이는 이름도 막음
+const VISIBLE_NAME = /^(?=.*[^\p{Z}\p{C}])\P{Cc}*$/su;
 
 export class AdminInterestDto {
   pk: number;
@@ -31,6 +35,7 @@ export class AdminInterestNameRequestDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(50)
+  @Matches(VISIBLE_NAME)
   name: string;
 }
 

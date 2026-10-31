@@ -32,7 +32,7 @@ group transaction (DatabaseService.db.transaction)
   Service -> AdminInterestRepository: lockForWrite(tx)
   AdminInterestRepository -> PostgreSQL: LOCK TABLE interest IN SHARE ROW EXCLUSIVE MODE
   note right of AdminInterestRepository
-    pk · sort_order를 MAX + 1로 정하고 이름 중복을 미리 확인하므로 쓰기를 한 줄로 세움.
+    sort_order를 MAX + 1로 정하고 이름 중복을 미리 확인하므로 쓰기를 한 줄로 세움.
     SELECT는 막지 않음. 어드민 쓰기는 드물어 대기가 거의 없음
   end note
   Service -> AdminInterestRepository: findByName(name, tx)
@@ -42,7 +42,8 @@ group transaction (DatabaseService.db.transaction)
     Service -[#red]-> Client: 409 This interest name already exists.
   end
   Service -> AdminInterestRepository: insert(name, tx)
-  AdminInterestRepository -> PostgreSQL: INSERT interest (pk = MAX(pk) + 1, name, sort_order = MAX(sort_order) + 1) RETURNING
+  AdminInterestRepository -> PostgreSQL: INSERT interest (name, sort_order = MAX(sort_order) + 1) RETURNING
+  note right of AdminInterestRepository: pk는 시퀀스로 발급. 삭제한 pk를 다시 쓰지 않아 열려 있는 옛 화면의 요청이 새 항목에 닿지 않음
   PostgreSQL --> AdminInterestRepository: row
 end
 note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답

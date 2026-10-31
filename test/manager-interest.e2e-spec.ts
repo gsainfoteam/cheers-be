@@ -126,6 +126,7 @@ describe("manager interest", () => {
       expect(schemas.AdminInterestNameRequestDto.properties.name).toMatchObject(
         { type: "string", maxLength: 50 },
       );
+      expect(schemas.ReorderAdminInterestRequestDto.required).toEqual(["pks"]);
       expect(item.patch?.parameters).toEqual([
         expect.objectContaining({
           name: "pk",
@@ -188,10 +189,11 @@ describe("manager interest", () => {
 
       const created = await post("  우주  ").expect(201);
       expect(created.body).toEqual({
-        pk: seed.at(-1)!.pk + 1,
+        pk: expect.any(Number),
         name: "우주",
         sort_order: seed.at(-1)!.sortOrder + 1,
       });
+      expect(created.body.pk).toBeGreaterThan(seed.at(-1)!.pk);
       expect(await appList(session)).toEqual([...names, "우주"]);
 
       const renamed = await patch(created.body.pk, "우주항공").expect(200);
@@ -240,7 +242,7 @@ describe("manager interest", () => {
       expect(job.cronTime.source).toBe(CronExpression.EVERY_MINUTE);
     });
 
-    it("마지막 항목까지 지우면 빈 목록. 다시 추가하면 pk는 1부터", async () => {
+    it("마지막 항목까지 지우면 빈 목록. 다시 추가하면 sort_order는 1부터", async () => {
       const session = await signupStudent(ctx);
       for (const row of seed) {
         await remove(row.pk).expect(200);
@@ -248,8 +250,24 @@ describe("manager interest", () => {
       expect(await appList(session)).toEqual([]);
 
       const created = await post("우주").expect(201);
-      expect(created.body).toEqual({ pk: 1, name: "우주", sort_order: 1 });
+      expect(created.body).toEqual({
+        pk: expect.any(Number),
+        name: "우주",
+        sort_order: 1,
+      });
       expect(await appList(session)).toEqual(["우주"]);
+    });
+
+    it("가장 큰 pk를 지우고 추가해도 pk를 다시 쓰지 않아, 옛 화면의 요청이 새 항목에 닿지 않음", async () => {
+      const first = await post("우주").expect(201);
+      await remove(first.body.pk).expect(200);
+
+      const second = await post("항공").expect(201);
+      expect(second.body.pk).toBeGreaterThan(first.body.pk);
+
+      await patch(first.body.pk, "옛 화면").expect(404);
+      await remove(first.body.pk).expect(404);
+      expect((await adminList()).map((row) => row.name)).toContain("항공");
     });
   });
 
@@ -260,6 +278,14 @@ describe("manager interest", () => {
         await patch(seed[0].pk, name).expect(400);
       }
       await post("가".repeat(50)).expect(201);
+    });
+
+    it("제어 문자가 있거나 눈에 안 보이는 이름은 400", async () => {
+      for (const name of ["우\0주", "우\n주", "​", "​ ‍"]) {
+        await post(name).expect(400);
+        await patch(seed[0].pk, name).expect(400);
+      }
+      await post("우주 항공").expect(201);
     });
 
     it("같은 이름은 409. 공백 · 유니코드 표현이 달라도 같은 이름", async () => {

@@ -14,7 +14,7 @@ export class AdminInterestRepository {
   /*
   LOCK TABLE interest IN SHARE ROW EXCLUSIVE MODE;
    */
-  // 어드민 쓰기를 한 줄로 세움. pk · sort_order의 MAX + 1과 이름 중복 확인이 어긋나지 않게 하며, SELECT는 막지 않음
+  // 어드민 쓰기를 한 줄로 세움. sort_order의 MAX + 1과 이름 중복 확인이 어긋나지 않게 하며, SELECT는 막지 않음
   async lockForWrite(tx: TxType): Promise<void> {
     await tx.execute(sql`LOCK TABLE ${interest} IN SHARE ROW EXCLUSIVE MODE`);
   }
@@ -51,16 +51,15 @@ export class AdminInterestRepository {
   }
 
   /*
-  INSERT INTO interest (pk, name, sort_order)
-  VALUES ((SELECT COALESCE(MAX(pk), 0) + 1 FROM interest), ?1, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM interest))
+  INSERT INTO interest (name, sort_order)
+  VALUES (?1, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM interest))
   RETURNING *;
    */
-  // pk는 자동 증가가 아니라서 직접 정함. lockForWrite 뒤에 호출하므로 충돌 없음
+  // lockForWrite 뒤에 호출하므로 sort_order가 겹치지 않음
   async insert(name: string, tx: TxType): Promise<AdminInterestRow> {
     const result = await tx
       .insert(interest)
       .values({
-        pk: sql`(SELECT COALESCE(MAX(${interest.pk}), 0) + 1 FROM ${interest})`,
         name,
         sortOrder: sql`(SELECT COALESCE(MAX(${interest.sortOrder}), 0) + 1 FROM ${interest})`,
       })

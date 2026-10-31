@@ -48,6 +48,7 @@ ref over InterestService, PostgreSQL: 재조회
 note over Cron, PostgreSQL
   메시지 브로커 · Redis 없이 DB만 다시 읽음.
   쓰기를 처리하지 않은 인스턴스는 다음 주기까지 옛 목록을 보여 줌 → 인스턴스 사이에 최대 1분 차이가 있음.
+  재조회가 실패하면 다음 성공까지 차이가 더 길어질 수 있음 (로그만 남김).
   옛 목록이 보여도 저장 API가 목록과 대조하지 않으므로 저장은 실패하지 않음
 end note
 

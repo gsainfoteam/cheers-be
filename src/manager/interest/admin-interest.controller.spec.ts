@@ -4,7 +4,6 @@ import { AdminInterestController } from "@src/manager/interest/admin-interest.co
 
 const BASE = "/api/manager/v1/interest";
 
-// 단위 테스트 설정만 nest build와 같은 Swagger 플러그인을 거침 (e2e 설정은 거치지 않음)
 describe("AdminInterestController API document", () => {
   let document: OpenAPIObject;
 
