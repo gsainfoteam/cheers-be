@@ -9,6 +9,7 @@ CREATE TYPE "attachment_source" AS ENUM ('file', 'link');
 CREATE TYPE "notification_event" AS ENUM ('coffee_chat_requested', 'contact_shared');
 CREATE TYPE "notification_channel" AS ENUM ('email', 'kakao_alimtalk');
 CREATE TYPE "notification_status" AS ENUM ('sent', 'failed');
+CREATE TYPE "admin_account_role" AS ENUM ('admin', 'superadmin');
 */
 
 // 가입 진행 중이면 pending, 추가 정보 입력까지 마치면 active
@@ -40,4 +41,10 @@ export const notificationChannel = pgEnum("notification_channel", [
 export const notificationStatus = pgEnum("notification_status", [
   "sent",
   "failed",
+]);
+
+// superadmin만 어드민 계정을 등록 · 변경 · 삭제할 수 있음
+export const adminAccountRole = pgEnum("admin_account_role", [
+  "admin",
+  "superadmin",
 ]);
