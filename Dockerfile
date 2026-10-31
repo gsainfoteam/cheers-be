@@ -16,6 +16,13 @@ COPY . .
 
 RUN bun run build
 
+# 어드민 화면. VITE_* 값은 빌드 때 번들에 들어가므로 런타임 env가 아니라 빌드 인자로 받음
+ARG VITE_IDP_AUTHORIZE_URL
+ARG VITE_IDP_CLIENT_ID
+RUN cd admin \
+  && bun install --frozen-lockfile \
+  && bun run build
+
 FROM oven/bun:1-slim AS production
 
 RUN apt-get update \
@@ -32,6 +39,8 @@ RUN --mount=type=secret,id=npm_token,env=NPM_TOKEN \
 COPY --from=builder --chown=bun:bun /app/drizzle ./drizzle
 
 COPY --from=builder --chown=bun:bun /app/dist ./dist
+
+COPY --from=builder --chown=bun:bun /app/admin/dist ./admin/dist
 
 USER bun
 

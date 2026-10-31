@@ -41,6 +41,11 @@ jobs:
       - name: Test
         run: bun run test
 
+      - name: Build admin
+        run: |
+          bun install --cwd admin --frozen-lockfile
+          bun run --cwd admin build
+
   # AppModule 을 테스트 안에서 띄워 일회용 Postgres 로 API 흐름을 검증.
   # Google · 메일 · Slack · S3 는 가짜로 대체하므로 저장소 시크릿을 쓰지 않음
   e2e:
