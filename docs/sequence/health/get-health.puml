@@ -1,0 +1,32 @@
+@startuml get-health
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /health
+caption CRB-36 · 프로세스 생존 확인 (liveness). 의존성을 확인하지 않음
+
+actor "Kubelet · Client" as Client
+participant "HttpLoggingInterceptor" as Interceptor
+participant "HealthController" as Controller
+
+Client -> Interceptor: GET /health
+note right of Client
+  인증 없음. 응답에 버전 · 에러 상세를 넣지 않음
+end note
+Interceptor -> Interceptor: health 경로는 요청 · 응답 로그를 남기지 않음
+Interceptor -> Controller: live()
+Controller --> Client: 200 { "result": "OK" }
+
+note over Client, Controller
+  DB를 조회하지 않음: DB 장애는 재시작으로 풀리지 않고, 재시작이 겹치면 복구만 늦어짐
+  공용 chart의 liveness probe는 timeoutSeconds를 넘기지 않아 K8s 기본값 1초가 적용되므로 빠르게 응답해야 함
+  이 요청에 응답하지 못하면 (이벤트 루프 멈춤 등) 60초 간격 5회 실패 후 K8s가 재시작
+end note
+
+@enduml
