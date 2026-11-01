@@ -41,7 +41,7 @@ alt crypto.subtle 없음 (HTTPS · localhost가 아닌 주소)
   Admin --> Operator: 오류 안내 (plain으로 되돌아가지 않음)
 end
 Admin -> Admin: code_verifier를 sessionStorage에 저장
-Admin -> IdP: 리다이렉트 /authorize\nresponse_type=code, client_id, redirect_uri=<서버 origin>/admin/callback,\nscope=profile email, code_challenge, code_challenge_method=S256
+Admin -> IdP: 리다이렉트 /authorize\nresponse_type=code, client_id, redirect_uri=<서버 origin>/admin/callback,\nscope=email, code_challenge, code_challenge_method=S256
 Operator -> IdP: 로그인 · 동의
 IdP --> Admin: 리다이렉트 /admin/callback?code=...
 

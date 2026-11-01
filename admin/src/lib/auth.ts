@@ -75,7 +75,7 @@ export async function buildIdpAuthorizeUrl(): Promise<string> {
     response_type: "code",
     client_id: import.meta.env.VITE_IDP_CLIENT_ID,
     redirect_uri: getRedirectUri(),
-    scope: "profile email",
+    scope: "email",
     code_challenge: codeChallenge,
     code_challenge_method: "S256",
   });
