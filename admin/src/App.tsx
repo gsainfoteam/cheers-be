@@ -4,11 +4,14 @@ import { getAccessToken } from "./lib/auth";
 import { AdminAccountsPage } from "./pages/AdminAccountsPage";
 import { BusinessCardsPage } from "./pages/BusinessCardsPage";
 import { CallbackPage } from "./pages/CallbackPage";
+import { CoffeeChatRequestDetailPage } from "./pages/CoffeeChatRequestDetailPage";
+import { CoffeeChatRequestsPage } from "./pages/CoffeeChatRequestsPage";
 import { ConsentsPage } from "./pages/ConsentsPage";
 import { DashboardLayout, PLACEHOLDER_MENUS } from "./pages/DashboardLayout";
 import { HomePage } from "./pages/HomePage";
 import { InterestsPage } from "./pages/InterestsPage";
 import { LoginPage } from "./pages/LoginPage";
+import { NotificationLogsPage } from "./pages/NotificationLogsPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -41,6 +44,12 @@ export function App() {
           />
         ))}
         <Route path="interests" element={<InterestsPage />} />
+        <Route path="coffee-chats" element={<CoffeeChatRequestsPage />} />
+        <Route
+          path="coffee-chats/:pk"
+          element={<CoffeeChatRequestDetailPage />}
+        />
+        <Route path="notification-logs" element={<NotificationLogsPage />} />
         <Route path="business-cards" element={<BusinessCardsPage />} />
         <Route path="admin-accounts" element={<AdminAccountsPage />} />
       </Route>

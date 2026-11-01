@@ -210,6 +210,10 @@ select {
   margin-bottom: 16px;
 }
 
+.table-scroll {
+  overflow-x: auto;
+}
+
 .row-actions {
   display: flex;
   gap: 6px;
@@ -222,6 +226,27 @@ select {
   gap: 12px;
   margin-top: 16px;
   font-size: 14px;
+}
+
+.detail-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 16px;
+  margin: 0;
+  font-size: 14px;
+}
+
+.detail-list dt {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.detail-list dd {
+  margin: 0;
+}
+
+.pre-wrap {
+  white-space: pre-wrap;
 }
 
 .business-card-viewer {

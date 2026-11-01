@@ -16,6 +16,7 @@ import { CheersModule } from "@src/cheers/cheers.module";
 import { HealthModule } from "@src/health/health.module";
 import { AdminInterestModule } from "@src/manager/interest/admin-interest.module";
 import { ManagerModule } from "@src/manager/manager.module";
+import { ManagerCoffeeChatModule } from "@src/manager/coffee-chat/manager-coffee-chat.module";
 import { ManagerConsentModule } from "@src/manager/consent/manager-consent.module";
 import { BusinessCardModule } from "@src/manager/business-card/business-card.module";
 
@@ -55,6 +56,7 @@ import { BusinessCardModule } from "@src/manager/business-card/business-card.mod
     HealthModule,
     ManagerModule,
     AdminInterestModule,
+    ManagerCoffeeChatModule,
     ManagerConsentModule,
     BusinessCardModule,
   ],

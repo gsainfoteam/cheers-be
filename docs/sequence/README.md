@@ -59,6 +59,9 @@
 | [manager/patch-interest-pk.puml](manager/patch-interest-pk.puml)                                                                     | `PATCH /api/manager/v1/interest/{pk}`                                  |
 | [manager/delete-interest-pk.puml](manager/delete-interest-pk.puml)                                                                   | `DELETE /api/manager/v1/interest/{pk}`                                 |
 | [manager/put-interest-order.puml](manager/put-interest-order.puml)                                                                   | `PUT /api/manager/v1/interest/order`                                   |
+| [manager/get-coffee-chat-request.puml](manager/get-coffee-chat-request.puml)                                                         | `GET /api/manager/v1/coffee-chat/request`                              |
+| [manager/get-coffee-chat-request-pk.puml](manager/get-coffee-chat-request-pk.puml)                                                   | `GET /api/manager/v1/coffee-chat/request/{pk}`                         |
+| [manager/get-coffee-chat-notification-log.puml](manager/get-coffee-chat-notification-log.puml)                                       | `GET /api/manager/v1/coffee-chat/notification-log`                     |
 
 ## 보기
 
