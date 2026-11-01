@@ -54,6 +54,9 @@
 | [manager/get-consent.puml](manager/get-consent.puml)                                                                                 | `GET /api/manager/v1/consent`                                          |
 | [manager/post-consent.puml](manager/post-consent.puml)                                                                               | `POST /api/manager/v1/consent`                                         |
 | [manager/get-consent-type-version-status.puml](manager/get-consent-type-version-status.puml)                                         | `GET /api/manager/v1/consent/{type}/{version}/status`                  |
+| [manager/get-coffee-chat-request.puml](manager/get-coffee-chat-request.puml)                                                         | `GET /api/manager/v1/coffee-chat/request`                              |
+| [manager/get-coffee-chat-request-pk.puml](manager/get-coffee-chat-request-pk.puml)                                                   | `GET /api/manager/v1/coffee-chat/request/{pk}`                         |
+| [manager/get-coffee-chat-notification-log.puml](manager/get-coffee-chat-notification-log.puml)                                       | `GET /api/manager/v1/coffee-chat/notification-log`                     |
 
 ## 보기
 
