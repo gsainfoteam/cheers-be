@@ -60,7 +60,7 @@ export class UserInfoDto {
   id: string;
   type: UserType;
   status: UserStatus;
-  /** 가입 중일 때 다음 단계. 가입을 마쳤으면 null */
+  /** 다음 단계. 가입을 마쳤으면 null. 어드민이 명함 인증을 취소한 active 현업자는 verify */
   // 플러그인이 타입 별칭의 null을 빠뜨려 직접 지정
   @ApiProperty({
     type: String,

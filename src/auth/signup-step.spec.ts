@@ -11,10 +11,16 @@ describe("calculateNextStep", () => {
     expect(
       calculateNextStep("active", {
         hasMissingRequiredConsent: true,
-        verified: false,
+        verified: true,
         hasProfile: false,
       }),
     ).toBeNull();
+  });
+
+  it("returns verify for active users whose verification was canceled", () => {
+    expect(calculateNextStep("active", { ...done, verified: false })).toBe(
+      "verify",
+    );
   });
 
   it("returns consent first when a required consent is missing", () => {

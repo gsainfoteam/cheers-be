@@ -1,0 +1,43 @@
+@startuml get-manager-consent-type-version-status
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/manager/v1/consent/{type}/{version}/status
+caption CRB-39 · 버전별 동의 · 철회 현황. admin도 조회 가능
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "ManagerConsentController" as Controller
+participant "ManagerConsentService" as Service
+participant "AdminConsentRepository" as AdminConsentRepository
+database PostgreSQL
+
+Client -> Guard: GET /api/manager/v1/consent/{type}/{version}/status\nAuthorization: Bearer <manager token>
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Pipe: 통과
+alt path 검증 실패 (type · version 형식 · 길이)
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+Pipe -> Controller: getStatus(params)
+Controller -> Service: getStatus(type, version)
+Service -> AdminConsentRepository: exists(type, version)
+AdminConsentRepository -> PostgreSQL: SELECT consent WHERE type, version
+PostgreSQL --> AdminConsentRepository: row | 0행
+alt 0행
+  Service -[#red]-> Client: 404 Consent version not found.
+end
+Service -> AdminConsentRepository: countStatus(type, version)
+AdminConsentRepository -> PostgreSQL: SELECT user_consent JOIN users\n사용자별로 묶어 유효한 동의 여부와 탈퇴 여부로 집계
+note right: 철회 후 재동의하면 행이 2개라 행이 아니라 사용자를 셈.\n세 값은 겹치지 않음. agreed · revoked는 is_deleted = false 전체\n(가입 미완료 · 탈퇴 유예 중 포함), withdrawn은 is_deleted = true
+PostgreSQL --> AdminConsentRepository: agreed, revoked, withdrawn
+Service --> Controller: ConsentStatusDto
+Controller --> Client: 200 { type, version, agreed_count, revoked_count, withdrawn_count }
+
+@enduml

@@ -57,7 +57,8 @@ loop prefix마다 (business-card/, attachment/)
         AttachmentRepository -> PostgreSQL: SELECT url FROM student_profile_attachment\nWHERE source = 'file' AND url IN (keys)
         note right
           모든 프로필 버전의 첨부를 봄: 이전 버전도 커피챗 요청이 참조하므로 살아 있는 참조.
-          탈퇴 만료 처리는 첨부 행을 지우고, 명함은 key를 NULL로 바꾸므로 그 뒤에는 고아로 잡힘
+          탈퇴 만료 처리는 첨부 행을 지우고, 명함은 key를 NULL로 바꾸므로 그 뒤에는 고아로 잡힘.
+          어드민 명함 인증 취소도 key를 NULL로 바꾸고 파일은 여기에 맡김 (CRB-44)
         end note
       end
       alt DB 조회 실패

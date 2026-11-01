@@ -1,0 +1,51 @@
+@startuml get-manager-business-card
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/manager/v1/business-card
+caption CRB-44 · 현업자 명함 현황 목록 (최근 인증 순). 명함 파일에 접근하지 않아 열람 기록을 남기지 않음
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "BusinessCardController" as Controller
+participant "BusinessCardService" as Service
+participant "AdminGraduatedRepository" as AdminGraduatedRepository
+database PostgreSQL
+
+Client -> Guard: GET /api/manager/v1/business-card?page=&size=\nAuthorization: Bearer <manager token>
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Pipe: 통과
+alt query 검증 실패 (page < 1, size < 1 또는 > 50, 정수가 아님)
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+note right of Pipe: 기본값 page = 1, size = 20
+Pipe -> Controller: list(query)
+Controller -> Service: list(query)
+
+par 동시에 조회 — 같은 조건
+  Service -> AdminGraduatedRepository: findPage(offset, limit)
+  AdminGraduatedRepository -> PostgreSQL: SELECT g.pk, g.verified_at, business_card_key IS NOT NULL,\nu.status, u.withdraw_requested_at, u.name,\ngp.nickname, gp.company, gp.job\nFROM graduated g JOIN users u\nLEFT JOIN graduated_profile gp\nWHERE u.is_deleted = false\nORDER BY g.verified_at DESC NULLS LAST, g.pk LIMIT OFFSET
+  note right
+    탈퇴 처리가 끝난 현업자는 명함과 이름이 지워져 관리할 것이 없어 뺌.
+    business_card_key 값은 내려주지 않고 있는지만 봄.
+    가입 중(프로필 없음)이면 nickname · company · job은 null
+  end note
+  AdminGraduatedRepository --> Service: rows
+else
+  Service -> AdminGraduatedRepository: (count)
+  AdminGraduatedRepository -> PostgreSQL: SELECT count(*) (같은 FROM · WHERE)
+  AdminGraduatedRepository --> Service: total
+end
+
+Service -> Service: signup_status 계산\nwithdraw_requested_at 있음 → "withdrawal_requested"\n그 외 → users.status (pending | active)
+Service --> Controller: { items, page, size, total }
+Controller --> Client: 200 { items: BusinessCardGraduatedDto[], page, size, total }\nitem = { graduated_pk, name, nickname, company, job,\nhas_business_card, verified_at, signup_status }
+
+@enduml
