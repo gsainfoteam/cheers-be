@@ -3,7 +3,7 @@ import { asc } from "drizzle-orm";
 import { DatabaseService } from "@src/database/database.service";
 import { interest } from "@drizzle/schema/interest";
 
-// 기준 데이터 (seed). 조회만 함
+// 기준 데이터. 앱에서는 조회만 하고, 수정은 AdminInterestRepository
 @Injectable()
 export class InterestRepository {
   constructor(private readonly dbService: DatabaseService) {}

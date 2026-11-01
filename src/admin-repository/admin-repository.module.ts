@@ -5,6 +5,7 @@ import { AdminCoffeeChatRequestRepository } from "@src/admin-repository/admin-co
 import { AdminNotificationLogRepository } from "@src/admin-repository/admin-notification-log.repository";
 import { AdminConsentRepository } from "@src/admin-repository/admin-consent.repository";
 import { AdminGraduatedRepository } from "@src/admin-repository/admin-graduated.repository";
+import { AdminInterestRepository } from "@src/admin-repository/admin-interest.repository";
 import { DatabaseModule } from "@src/database/database.module";
 
 const repositories = [
@@ -14,6 +15,7 @@ const repositories = [
   AdminAccessLogRepository,
   AdminConsentRepository,
   AdminGraduatedRepository,
+  AdminInterestRepository,
 ];
 
 // 어드민 API에서 쓰는 레포지토리. 앱 API용 src/database/repository와 섞지 않음.

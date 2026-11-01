@@ -9,6 +9,7 @@ import { CoffeeChatRequestsPage } from "./pages/CoffeeChatRequestsPage";
 import { ConsentsPage } from "./pages/ConsentsPage";
 import { DashboardLayout, PLACEHOLDER_MENUS } from "./pages/DashboardLayout";
 import { HomePage } from "./pages/HomePage";
+import { InterestsPage } from "./pages/InterestsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NotificationLogsPage } from "./pages/NotificationLogsPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
@@ -42,6 +43,7 @@ export function App() {
             element={<PlaceholderPage title={menu.label} />}
           />
         ))}
+        <Route path="interests" element={<InterestsPage />} />
         <Route path="coffee-chats" element={<CoffeeChatRequestsPage />} />
         <Route
           path="coffee-chats/:pk"

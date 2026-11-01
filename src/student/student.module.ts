@@ -12,5 +12,6 @@ import { StudentVerificationService } from "./student-verification.service";
   imports: [DatabaseModule, AuthModule, MailModule, FileModule],
   controllers: [StudentController],
   providers: [StudentVerificationService, StudentService, InterestService],
+  exports: [InterestService],
 })
 export class StudentModule {}
