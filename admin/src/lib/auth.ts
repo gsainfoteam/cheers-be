@@ -40,19 +40,35 @@ export function getRedirectUri(): string {
   return `${window.location.origin}${import.meta.env.BASE_URL}callback`;
 }
 
-function generateCodeVerifier(): string {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
+function base64UrlEncode(bytes: Uint8Array): string {
   return btoa(String.fromCharCode(...bytes))
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "");
 }
 
-export function buildIdpAuthorizeUrl(): string {
-  // IdP가 code_challenge_method=plain을 쓰므로 verifier를 그대로 challenge로 보내고,
-  // 콜백에서 같은 값을 code_verifier로 다시 보냄
+function generateCodeVerifier(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return base64UrlEncode(bytes);
+}
+
+// crypto.subtle은 HTTPS와 localhost에서만 있음. 그 밖에서는 여기서 reject되고, plain으로 되돌아가지 않음
+export async function computeCodeChallenge(
+  codeVerifier: string,
+): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(codeVerifier),
+  );
+  return base64UrlEncode(new Uint8Array(digest));
+}
+
+export async function buildIdpAuthorizeUrl(): Promise<string> {
+  // authorize에는 verifier의 SHA-256 해시를 challenge로 보내고,
+  // 콜백에서 verifier 원문을 code_verifier로 보냄
   const codeVerifier = generateCodeVerifier();
+  const codeChallenge = await computeCodeChallenge(codeVerifier);
   writeStorage(session, PKCE_VERIFIER_KEY, codeVerifier);
 
   const params = new URLSearchParams({
@@ -60,8 +76,8 @@ export function buildIdpAuthorizeUrl(): string {
     client_id: import.meta.env.VITE_IDP_CLIENT_ID,
     redirect_uri: getRedirectUri(),
     scope: "profile email",
-    code_challenge: codeVerifier,
-    code_challenge_method: "plain",
+    code_challenge: codeChallenge,
+    code_challenge_method: "S256",
   });
 
   return `${import.meta.env.VITE_IDP_AUTHORIZE_URL}?${params.toString()}`;
