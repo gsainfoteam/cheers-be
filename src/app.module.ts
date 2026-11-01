@@ -16,6 +16,8 @@ import { CheersModule } from "@src/cheers/cheers.module";
 import { HealthModule } from "@src/health/health.module";
 import { AdminInterestModule } from "@src/manager/interest/admin-interest.module";
 import { ManagerModule } from "@src/manager/manager.module";
+import { ManagerConsentModule } from "@src/manager/consent/manager-consent.module";
+import { BusinessCardModule } from "@src/manager/business-card/business-card.module";
 
 @Module({
   imports: [
@@ -53,6 +55,8 @@ import { ManagerModule } from "@src/manager/manager.module";
     HealthModule,
     ManagerModule,
     AdminInterestModule,
+    ManagerConsentModule,
+    BusinessCardModule,
   ],
   controllers: [],
   providers: [],

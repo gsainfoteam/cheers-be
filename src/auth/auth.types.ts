@@ -3,7 +3,7 @@ import { UserRow } from "@src/database/repository/user.repository";
 export type UserType = UserRow["type"];
 export type UserStatus = UserRow["status"];
 
-// 가입 중일 때 다음 단계. 가입을 마쳤으면 null
+// 다음 단계. 가입을 마쳤으면 null (명함 인증이 취소된 active 현업자는 verify)
 export type NextStep = "consent" | "verify" | "profile" | null;
 export type SignupStepName = Exclude<NextStep, null>;
 

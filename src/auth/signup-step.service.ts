@@ -8,10 +8,8 @@ import { calculateNextStep } from "@src/auth/signup-step";
 export class SignupStepService {
   constructor(private readonly userRepository: UserRepository) {}
 
-  // 내 정보 API, 가입 단계 가드, 토큰 재발급에서 같이 사용
+  // 가입 단계 가드에서 사용
   async getNextStep(user: TokenSubject, tx?: TxType): Promise<NextStep> {
-    if (user.status === "active") return null;
-
     const progress = await this.userRepository.findSignupProgress(
       user.pk,
       user.type,

@@ -10,6 +10,7 @@ CREATE TYPE "notification_event" AS ENUM ('coffee_chat_requested', 'contact_shar
 CREATE TYPE "notification_channel" AS ENUM ('email', 'kakao_alimtalk');
 CREATE TYPE "notification_status" AS ENUM ('sent', 'failed');
 CREATE TYPE "admin_account_role" AS ENUM ('admin', 'superadmin');
+CREATE TYPE "admin_access_target_type" AS ENUM ('business_card');
 */
 
 // 가입 진행 중이면 pending, 추가 정보 입력까지 마치면 active
@@ -47,4 +48,9 @@ export const notificationStatus = pgEnum("notification_status", [
 export const adminAccountRole = pgEnum("admin_account_role", [
   "admin",
   "superadmin",
+]);
+
+// 어드민이 열람한 개인정보 종류
+export const adminAccessTargetType = pgEnum("admin_access_target_type", [
+  "business_card",
 ]);

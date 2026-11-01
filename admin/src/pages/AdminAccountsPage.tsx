@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { api, errorMessage } from "../lib/api";
+import { api } from "../lib/api";
 import { AdminRole, useCurrentManager } from "../lib/current-manager";
+import { errorMessage, formatDateTime } from "../lib/format";
 
 const BASE_PATH = "/api/manager/v1/admin-account";
 const ROLES: AdminRole[] = ["admin", "superadmin"];
@@ -12,17 +13,6 @@ type AdminAccount = {
   created_at: string;
   updated_at: string;
 };
-
-function formatDateTime(value: string): string {
-  return new Date(value).toLocaleString("ko-KR", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-}
 
 export function AdminAccountsPage() {
   const me = useCurrentManager();

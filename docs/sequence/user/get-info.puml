@@ -93,6 +93,7 @@ Service -> Service: next_step = calculateNextStep(status, progress)\nconsent_req
 note right of Service
   pending: next_step으로 안내 (consent → verify → profile), consent_required = false
   active: next_step = null, 개정된 필수 약관에 동의하지 않았으면 consent_required = true
+  active지만 어드민이 명함 인증을 취소한 현업자: next_step = verify (재업로드하면 null). 추가 정보는 다시 받지 않음
   null 배열(activities, hashtags, links)은 []로 응답
 end note
 Service --> Controller: UserInfoDto

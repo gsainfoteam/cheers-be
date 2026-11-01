@@ -1,9 +1,54 @@
 {
-  "id": "d8293587-8295-4164-a1be-ba8f1c762ffb",
+  "id": "91a124d9-d14c-4efc-9a87-83bb37ab813c",
   "prevId": "d8df27c2-77dd-4db3-a775-94178f943e5f",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
+    "public.admin_access_log": {
+      "name": "admin_access_log",
+      "schema": "",
+      "columns": {
+        "pk": {
+          "name": "pk",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "admin_email": {
+          "name": "admin_email",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_type": {
+          "name": "target_type",
+          "type": "admin_access_target_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_id": {
+          "name": "target_id",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.admin_account": {
       "name": "admin_account",
       "schema": "",
@@ -569,18 +614,7 @@
           "name": "pk",
           "type": "integer",
           "primaryKey": true,
-          "notNull": true,
-          "identity": {
-            "type": "byDefault",
-            "name": "interest_pk_seq",
-            "schema": "public",
-            "increment": "1",
-            "startWith": "1",
-            "minValue": "1",
-            "maxValue": "2147483647",
-            "cache": "1",
-            "cycle": false
-          }
+          "notNull": true
         },
         "name": {
           "name": "name",
@@ -1633,6 +1667,13 @@
     }
   },
   "enums": {
+    "public.admin_access_target_type": {
+      "name": "admin_access_target_type",
+      "schema": "public",
+      "values": [
+        "business_card"
+      ]
+    },
     "public.admin_account_role": {
       "name": "admin_account_role",
       "schema": "public",

@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { and, asc, count, desc, eq, SQL, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, isNotNull, SQL, sql } from "drizzle-orm";
 import { DatabaseService } from "@src/database/database.service";
 import { TxType } from "@src/global/types/tx.types";
 import { CoffeeChatContactRow } from "@src/database/repository/coffee-chat-contact.repository";
@@ -35,10 +35,12 @@ export type GraduatedRequestTarget = {
   contact: CoffeeChatContactRow | null;
 };
 
-// 다른 회원(재학생)에게 보이는 현업자: 가입을 마쳤고(active) 탈퇴 · 탈퇴 유예기간 중이 아님 (user.sql.ts)
+// 다른 회원(재학생)에게 보이는 현업자: 가입을 마쳤고(active) 명함 인증이 유효하며(어드민 인증 취소 제외)
+// 탈퇴 · 탈퇴 유예기간 중이 아님 (user.sql.ts)
 const isVisibleGraduated = and(
   eq(users.type, "graduated"),
   eq(users.status, "active"),
+  isNotNull(graduated.verifiedAt),
   isActiveAccount,
 );
 
@@ -54,7 +56,7 @@ export class GraduatedCardRepository {
   JOIN users u ON u.pk = g.user_pk
   JOIN graduated_profile gp ON gp.graduated_pk = g.pk
   LEFT JOIN coffee_chat_contact c ON c.user_pk = g.user_pk
-  WHERE u.type = 'graduated' AND u.status = 'active'
+  WHERE u.type = 'graduated' AND u.status = 'active' AND g.verified_at IS NOT NULL
     AND u.is_deleted = false AND u.withdraw_requested_at IS NULL
   ORDER BY <sort>, g.pk LIMIT ?1 OFFSET ?2;
   SELECT count(*) ... (같은 FROM · WHERE);
@@ -110,10 +112,10 @@ export class GraduatedCardRepository {
   JOIN users u ON u.pk = g.user_pk
   JOIN graduated_profile gp ON gp.graduated_pk = g.pk
   LEFT JOIN coffee_chat_contact c ON c.user_pk = g.user_pk
-  WHERE g.pk = ?1 AND u.type = 'graduated' AND u.status = 'active'
+  WHERE g.pk = ?1 AND u.type = 'graduated' AND u.status = 'active' AND g.verified_at IS NOT NULL
     AND u.is_deleted = false AND u.withdraw_requested_at IS NULL;
    */
-  // 커피챗 요청 대상. 목록에 보이지 않는 현업자(탈퇴 · 유예기간 · 가입 미완료)는 null
+  // 커피챗 요청 대상. 목록에 보이지 않는 현업자(탈퇴 · 유예기간 · 가입 미완료 · 인증 취소)는 null
   async findRequestTarget(
     graduatedPk: string,
     tx?: TxType,

@@ -49,8 +49,8 @@ group transaction (DatabaseService.db.transaction)
   end
 
   Service -> GraduatedCardRepository: findRequestTarget(graduated_id, tx)
-  GraduatedCardRepository -> PostgreSQL: SELECT g.pk, u.name, c.*\nFROM graduated g JOIN users u JOIN graduated_profile gp\nLEFT JOIN coffee_chat_contact c\nWHERE g.pk = ? AND u.type = 'graduated' AND u.status = 'active'\nAND isActiveAccount
-  note right: 목록과 같은 조건.\n탈퇴 · 탈퇴 유예기간 중 · 가입 미완료 현업자는 없는 것으로 봄
+  GraduatedCardRepository -> PostgreSQL: SELECT g.pk, u.name, c.*\nFROM graduated g JOIN users u JOIN graduated_profile gp\nLEFT JOIN coffee_chat_contact c\nWHERE g.pk = ? AND u.type = 'graduated' AND u.status = 'active'\nAND g.verified_at IS NOT NULL AND isActiveAccount
+  note right: 목록과 같은 조건.\n탈퇴 · 탈퇴 유예기간 중 · 가입 미완료 · 명함 인증 취소 현업자는 없는 것으로 봄
   GraduatedCardRepository --> Service: { graduatedPk, name, contact | null } | null
   alt 현업자 없음
     Service -[#red]-> Client: 404 Graduated not found
