@@ -46,7 +46,7 @@ note right of Service
   S3 호출 없음
 end note
 Service --> Controller: { url, key, headers, expiresIn }
-Controller --> Client: 200 { url, method: "PUT", key, headers: { Content-Type }, expires_in }
+Controller --> Client: 201 { url, method: "PUT", key, headers: { Content-Type }, expires_in }
 
 == 업로드 (브라우저 → S3, 백엔드 거치지 않음) ==
 

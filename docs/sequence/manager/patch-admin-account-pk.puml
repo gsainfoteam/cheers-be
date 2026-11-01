@@ -13,7 +13,7 @@ caption CRB-35 · 어드민 권한 변경 (superadmin 전용, 자기 자신은 �
 
 actor Client
 participant "ManagerGuard\n+ SuperAdminGuard" as Guard
-participant "ValidationPipe" as Pipe
+participant "ParseUUIDPipe\n+ ValidationPipe" as Pipe
 participant "AdminAccountController" as Controller
 participant "AdminAccountService" as Service
 participant "AdminAccountRepository" as AdminAccountRepository

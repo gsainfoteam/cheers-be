@@ -16,11 +16,11 @@ participant "UserGuard\n+ UserTypeGuard" as Guard
 participant "ParseUUIDPipe" as Pipe
 participant "CheersGraduatedController" as Controller
 participant "CheersGraduatedService" as Service
+participant "NotificationService" as NotificationService
 participant "GraduatedRepository" as GraduatedRepository
 participant "CoffeeChatRequestRepository" as CoffeeChatRequestRepository
 participant "CoffeeChatContactRepository" as CoffeeChatContactRepository
 participant "UserRepository" as UserRepository
-participant "NotificationService" as NotificationService
 database PostgreSQL
 participant "SMTP"
 participant "Aligo"

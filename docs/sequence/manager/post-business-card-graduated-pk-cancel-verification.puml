@@ -13,7 +13,7 @@ caption CRB-44 · 명함 인증 취소 (superadmin 전용). 재업로드하면 �
 
 actor Client
 participant "ManagerGuard\n+ SuperAdminGuard" as Guard
-participant "ValidationPipe" as Pipe
+participant "ParseUUIDPipe" as Pipe
 participant "BusinessCardController" as Controller
 participant "BusinessCardService" as Service
 participant "AdminGraduatedRepository" as AdminGraduatedRepository

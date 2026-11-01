@@ -53,8 +53,8 @@ else claimType = graduated
 else
   Service -> AuthService: touchLastActive(userPk)
   AuthService -> UserRepository: updateLastActiveAt(userPk)
-  UserRepository -> PostgreSQL: UPDATE users SET last_active_at = now()\nWHERE is_deleted = false
-  note right: 유저 조회와 동시에 실행되므로\n탈퇴한 유저는 건드리지 않게 조건을 둠
+  UserRepository -> PostgreSQL: UPDATE users SET last_active_at = now()\nWHERE is_deleted = false AND withdraw_requested_at IS NULL
+  note right: 유저 조회와 동시에 실행되므로\n탈퇴 · 탈퇴 요청한 유저는 건드리지 않게 조건을 둠
 end
 note right of Service: 트랜잭션 없음 (조회 + 최근 접속 시각 갱신만)
 

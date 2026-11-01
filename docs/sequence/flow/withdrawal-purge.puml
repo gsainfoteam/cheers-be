@@ -18,6 +18,7 @@ participant "UserRepository" as UserRepository
 participant "UserOauthAccountRepository" as UserOauthAccountRepository
 participant "RefreshTokenRepository" as RefreshTokenRepository
 participant "CoffeeChatContactRepository" as CoffeeChatContactRepository
+participant "StudentEmailSendLogRepository" as SendLogRepository
 participant "StudentRepository" as StudentRepository
 participant "StudentEmailVerificationRepository" as StudentEmailVerificationRepository
 participant "StudentProfileAttachmentRepository" as AttachmentRepository
@@ -52,6 +53,9 @@ loop 더 처리할 유저가 없을 때까지
         AuthService -> RefreshTokenRepository: deleteByUserPk(pk, tx)
         Service -> CoffeeChatContactRepository: deleteByUserPk(pk, tx)
         CoffeeChatContactRepository -> PostgreSQL: DELETE coffee_chat_contact (연락 이메일 · 전화번호)
+        Service -> SendLogRepository: deleteByUserPk(pk, tx)
+        SendLogRepository -> PostgreSQL: DELETE student_email_send_log
+        note right: 재학생이었다가 유형을 바꾼 유저에게도 남아 있어 유형과 상관없이 지움
         alt type = student
           Service -> StudentRepository: findByUserPk(pk, tx)
           opt 재학생 행이 있음
@@ -80,7 +84,7 @@ loop 더 처리할 유저가 없을 때까지
       end
     end
     opt 명함 key를 지웠음
-      Service -> S3: deleteFile(businessCardKey)
+      Service -> S3: deleteFileQuietly(businessCardKey)
       note right: 실패하면 로그만 (DB에는 이미 참조가 없음)
     end
     opt 첨부 파일 행을 지웠음

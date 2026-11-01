@@ -1,4 +1,4 @@
-@startuml post-info
+@startuml post-student-info
 skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
 skinparam responseMessageBelowArrow true
 skinparam sequenceMessageAlign left
@@ -17,13 +17,13 @@ participant "ValidationPipe" as Pipe
 participant "StudentController" as Controller
 participant "StudentService" as Service
 participant "FileService" as FileService
+participant "AuthService" as AuthService
 participant "UserRepository" as UserRepository
 participant "StudentRepository" as StudentRepository
 participant "DepartmentRepository" as DepartmentRepository
 participant "StudentProfileRepository" as ProfileRepository
 participant "StudentProfileAttachmentRepository" as AttachmentRepository
 participant "CoffeeChatContactRepository" as ContactRepository
-participant "AuthService" as AuthService
 database PostgreSQL
 participant "S3"
 
@@ -81,6 +81,8 @@ opt tmp/ key 가 있음 (새로 올린 파일)
     Service -> DepartmentRepository: findByPkAndEmailDomain(department_id, student.email 의 @ 뒤)
     alt 재학생 행 없음
       Service -[#red]-> Client: 403 User type not allowed
+    else student.email 없음
+      Service -[#red]-> Client: 404 Verified student email not found
     else 없는 학과이거나 다른 학교의 학과
       Service -[#red]-> Client: 400 Department does not belong to your school
     else 비활성 학과이고 현재 프로필의 학과가 아님
@@ -125,6 +127,8 @@ group transaction (DatabaseService.db.transaction)
   StudentRepository --> Service: { student, latest | null } | null
   alt 재학생 행 없음 (가드 통과 뒤 다른 기기에서 현업자로 유형 변경)
     Service -[#red]-> Client: 403 User type not allowed
+  else student.email 없음
+    Service -[#red]-> Client: 404 Verified student email not found
   end
 
   Service -> DepartmentRepository: findByPkAndEmailDomain(department_id, student.email 의 @ 뒤, tx)

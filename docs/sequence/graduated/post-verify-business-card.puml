@@ -97,7 +97,7 @@ alt 트랜잭션 실패 (401 · 403 포함)
 end
 
 opt 이전 명함 key 있음 (재등록. 인증 취소 뒤에는 key가 NULL이라 해당 없음: 취소된 파일은 고아 파일 정리가 지움)
-  Service -> FileService: deleteFile(이전 key)
+  Service -> FileService: deleteFileQuietly(이전 key)
   FileService -> S3: DeleteObject
   note right of Service
     커밋 뒤에 지움 (탈퇴 만료 처리와 같은 방식).

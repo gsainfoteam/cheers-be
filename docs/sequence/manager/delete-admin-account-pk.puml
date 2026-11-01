@@ -13,7 +13,7 @@ caption CRB-35 · 어드민 계정 삭제 (superadmin 전용, 자기 자신 · s
 
 actor Client
 participant "ManagerGuard\n+ SuperAdminGuard" as Guard
-participant "ValidationPipe" as Pipe
+participant "ParseUUIDPipe" as Pipe
 participant "AdminAccountController" as Controller
 participant "AdminAccountService" as Service
 participant "AdminAccountRepository" as AdminAccountRepository

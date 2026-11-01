@@ -16,12 +16,12 @@ participant "SignupStepGuard\nUserTypeGuard" as Guard
 participant "ValidationPipe" as Pipe
 participant "StudentController" as Controller
 participant "StudentVerificationService" as Service
+participant "MailService" as MailService
 participant "SchoolRepository" as SchoolRepository
 participant "StudentRepository" as StudentRepository
 participant "StudentEmailVerificationRepository" as VerificationRepository
 participant "StudentEmailSendLogRepository" as SendLogRepository
 database PostgreSQL
-participant "MailService" as MailService
 participant "SMTP"
 
 Client -> Guard: POST /api/v1/user/student/verify/send-code\nAuthorization: Bearer <access token>\n{ email }
@@ -47,6 +47,8 @@ SchoolRepository --> Service: school | null
 alt 등록된 학교 도메인이 아님 (서브도메인 · 대소문자 차이 없이 정확히 일치해야 함)
   Service -[#red]-> Client: 400 Email domain not allowed
 end
+
+Service -> Service: code = crypto.randomInt(0, 1_000_000)\n6자리 0 채움, created_at = now, expires_at = now + 5분
 
 group transaction (DatabaseService.db.transaction)
   Service -> StudentRepository: findByUserPkForUpdate(userPk, tx)
@@ -117,7 +119,6 @@ group transaction (DatabaseService.db.transaction)
     동시에 보내면 조금 넘을 수 있음 (계정당 상한으로 제한됨)
   end note
 
-  Service -> Service: code = crypto.randomInt(0, 1_000_000)\n6자리 0 채움
   Service -> Service: codeHash = HMAC-SHA256(key, code)
   note right of Service: key는 JWT 서명 개인키(JwtKeyService)에서 파생.\n원문 코드는 저장하지 않음
   Service -> VerificationRepository: upsert({ studentPk, email, code: codeHash,\ncreated_at: now, expires_at: now + 5분 }, tx)
@@ -127,7 +128,7 @@ group transaction (DatabaseService.db.transaction)
   SendLogRepository -> PostgreSQL: INSERT student_email_send_log (failed_attempt_count = 0)
   note right
     재전송해도 기록이 남아 횟수 · 누적 실패가 유지됨.
-    24시간 지난 행은 정리 스케줄러가 지움 (CRB-29)
+    48시간 지난 행은 정리 스케줄러가 지움 (CRB-29)
   end note
 end
 note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답

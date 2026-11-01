@@ -1,4 +1,4 @@
-@startuml post-info
+@startuml post-graduated-info
 skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
 skinparam responseMessageBelowArrow true
 skinparam sequenceMessageAlign left
@@ -16,11 +16,11 @@ participant "SignupStepGuard\nUserTypeGuard" as Guard
 participant "ValidationPipe" as Pipe
 participant "GraduatedController" as Controller
 participant "GraduatedService" as Service
+participant "AuthService" as AuthService
 participant "UserRepository" as UserRepository
 participant "GraduatedRepository" as GraduatedRepository
 participant "GraduatedProfileRepository" as ProfileRepository
 participant "CoffeeChatContactRepository" as ContactRepository
-participant "AuthService" as AuthService
 database PostgreSQL
 
 Client -> Guard: POST /api/v1/user/graduated/info\nAuthorization: Bearer <access token>\n{ name?, nickname?, company, department, job, hashtags?, links?, contact }

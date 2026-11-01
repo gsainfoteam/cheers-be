@@ -13,12 +13,12 @@ caption CRB-44 · 명함 이미지 presigned GET URL 발급. 열람 기록을 �
 
 actor Client
 participant "ManagerGuard" as Guard
-participant "ValidationPipe" as Pipe
+participant "ParseUUIDPipe" as Pipe
 participant "BusinessCardController" as Controller
 participant "BusinessCardService" as Service
+participant "FileService" as FileService
 participant "AdminGraduatedRepository" as AdminGraduatedRepository
 participant "AdminAccessLogRepository" as AdminAccessLogRepository
-participant "FileService" as FileService
 database PostgreSQL
 
 Client -> Guard: GET /api/manager/v1/business-card/{graduatedPk}\nAuthorization: Bearer <manager token>

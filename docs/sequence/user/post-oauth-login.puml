@@ -152,7 +152,7 @@ end
 note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
 
 opt 유형 변경으로 명함 key를 지웠음
-  Service -> S3: deleteFile(businessCardKey)
+  Service -> S3: deleteFileQuietly(businessCardKey)
   alt S3 삭제 실패
     note over Service, S3: 로그만 남기고 계속 진행 (DB에는 이미 참조가 없음)
   end

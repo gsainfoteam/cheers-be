@@ -16,8 +16,8 @@ participant "ManagerGuard" as Guard
 participant "ParseInterestPkPipe\n+ ValidationPipe" as Pipe
 participant "AdminInterestController" as Controller
 participant "AdminInterestService" as Service
-participant "AdminInterestRepository" as AdminInterestRepository
 participant "InterestService" as InterestService
+participant "AdminInterestRepository" as AdminInterestRepository
 database PostgreSQL
 
 Client -> Guard: PATCH /api/manager/v1/interest/{pk}\nAuthorization: Bearer <manager token>\n{ name }

@@ -54,10 +54,10 @@ note over Guard
   authenticate()보다 먼저 확인
 end note
 Guard -> UserRepository: findByPk(userPk)
-UserRepository -> PostgreSQL: SELECT users (is_deleted = false)
+UserRepository -> PostgreSQL: SELECT users (is_deleted = false\nAND withdraw_requested_at IS NULL)
 PostgreSQL --> UserRepository: row
 UserRepository --> Guard: user | null
-alt 유저 없음 (탈퇴 포함)
+alt 유저 없음 (탈퇴 · 탈퇴 유예기간 중)
   Guard -[#red]-> Client: 401 User not found
 end
 Guard -> Guard: request.user = UserContext(DB의 pk, type, status)
