@@ -16,8 +16,8 @@ participant "ManagerGuard" as Guard
 participant "ParseInterestPkPipe" as Pipe
 participant "AdminInterestController" as Controller
 participant "AdminInterestService" as Service
-participant "AdminInterestRepository" as AdminInterestRepository
 participant "InterestService" as InterestService
+participant "AdminInterestRepository" as AdminInterestRepository
 database PostgreSQL
 
 Client -> Guard: DELETE /api/manager/v1/interest/{pk}\nAuthorization: Bearer <manager token>

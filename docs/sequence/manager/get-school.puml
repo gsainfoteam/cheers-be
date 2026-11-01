@@ -23,12 +23,15 @@ Client -> Guard: GET /api/manager/v1/school\nAuthorization: Bearer <manager toke
 ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
 Guard -> Controller: listSchools()
 Controller -> Service: listSchools()
-Service -> SchoolRepository: findAll()
-SchoolRepository -> PostgreSQL: SELECT school ORDER BY pk
-PostgreSQL --> SchoolRepository: rows
-Service -> DomainRepository: findAll()
-DomainRepository -> PostgreSQL: SELECT school_email_domain ORDER BY pk
-PostgreSQL --> DomainRepository: rows
+par 동시에 조회
+  Service -> SchoolRepository: findAll()
+  SchoolRepository -> PostgreSQL: SELECT school ORDER BY pk
+  PostgreSQL --> SchoolRepository: rows
+else
+  Service -> DomainRepository: findAll()
+  DomainRepository -> PostgreSQL: SELECT school_email_domain ORDER BY pk
+  PostgreSQL --> DomainRepository: rows
+end
 Service -> Service: 학교별로 도메인을 묶음
 Service --> Controller: SchoolDto[]
 Controller --> Client: 200 [{ pk, name, email_domains }]

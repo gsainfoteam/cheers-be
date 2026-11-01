@@ -31,10 +31,13 @@ alt created_from이 created_to보다 늦음
   Service -[#red]-> Client: 400 created_from must not be after created_to
 end
 Service -> RequestRepository: findPage(filter, offset, limit)
-RequestRepository -> PostgreSQL: SELECT 요청 + 재학생 이름 · 요청 당시 학과 + 현업자 닉네임 · 회사 · 직무\nORDER BY created_at DESC, pk DESC LIMIT OFFSET
-PostgreSQL --> RequestRepository: rows
-RequestRepository -> PostgreSQL: SELECT count(*) (같은 조건)
-PostgreSQL --> RequestRepository: total
+par 동시에 조회 — 같은 조건
+  RequestRepository -> PostgreSQL: SELECT 요청 + 재학생 이름 · 요청 당시 학과 + 현업자 닉네임 · 회사 · 직무\nORDER BY created_at DESC, pk DESC LIMIT OFFSET
+  PostgreSQL --> RequestRepository: rows
+else
+  RequestRepository -> PostgreSQL: SELECT count(*) (같은 조건)
+  PostgreSQL --> RequestRepository: total
+end
 note right of RequestRepository
   shared_phone · shared_email은 SELECT하지 않음.
   상태는 시각 컬럼으로 계산: contact_shared_at → graduated_viewed_at 순

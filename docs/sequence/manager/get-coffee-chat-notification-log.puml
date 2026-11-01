@@ -31,10 +31,13 @@ alt created_from이 created_to보다 늦음
   Service -[#red]-> Client: 400 created_from must not be after created_to
 end
 Service -> LogRepository: findPage(filter, offset, limit)
-LogRepository -> PostgreSQL: SELECT notification_log ORDER BY created_at DESC, pk DESC LIMIT OFFSET
-PostgreSQL --> LogRepository: rows
-LogRepository -> PostgreSQL: SELECT count(*) (같은 조건)
-PostgreSQL --> LogRepository: total
+par 동시에 조회 — 같은 조건
+  LogRepository -> PostgreSQL: SELECT notification_log ORDER BY created_at DESC, pk DESC LIMIT OFFSET
+  PostgreSQL --> LogRepository: rows
+else
+  LogRepository -> PostgreSQL: SELECT count(*) (같은 조건)
+  PostgreSQL --> LogRepository: total
+end
 LogRepository --> Service: { rows, total }
 note right of Service
   recipient는 응답에 넣지 않음.

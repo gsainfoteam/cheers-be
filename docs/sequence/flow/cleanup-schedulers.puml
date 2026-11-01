@@ -110,6 +110,9 @@ end
 
 Service --> Scheduler: 삭제한 유저 수
 Scheduler -> Scheduler: 로그 (Deleted N incomplete signup(s))
+alt purgeIncompleteSignups 자체가 실패 (DB 연결 등)
+  note over Scheduler: 에러 로그만 남기고 다음 날 다시 실행
+end
 
 == ② ③ 03:30 만료된 인증 데이터 삭제 ==
 

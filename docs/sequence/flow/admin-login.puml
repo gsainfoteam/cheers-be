@@ -37,7 +37,7 @@ end
 
 Operator -> Admin: 로그인 버튼
 Admin -> Admin: code_verifier 생성, sessionStorage 저장
-Admin -> IdP: 리다이렉트 /authorize\nresponse_type=code, client_id, redirect_uri=<서버 origin>/admin/callback,\nscope=profile email, code_challenge, code_challenge_method
+Admin -> IdP: 리다이렉트 /authorize\nresponse_type=code, client_id, redirect_uri=<서버 origin>/admin/callback,\nscope=profile email, code_challenge = code_verifier, code_challenge_method=plain
 Operator -> IdP: 로그인 · 동의
 IdP --> Admin: 리다이렉트 /admin/callback?code=...
 

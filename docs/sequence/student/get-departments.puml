@@ -38,8 +38,11 @@ StudentRepository --> Service: student | null
 alt 재학생 행 없음 (가드 통과 뒤 다른 기기에서 현업자로 유형 변경)
   Service -[#red]-> Client: 403 User type not allowed
 end
+alt student.email 없음
+  Service -[#red]-> Client: 404 Verified student email not found
+end
 note right of Service
-  student.email은 항상 있음
+  정상 흐름에서는 항상 있음
   (profile 단계 = verified_at 있음, active = 인증 완료)
 end note
 

@@ -16,9 +16,9 @@ participant "UserGuard\n+ UserTypeGuard" as Guard
 participant "ParseUUIDPipe" as Pipe
 participant "CheersGraduatedController" as Controller
 participant "CheersGraduatedService" as Service
+participant "FileService" as FileService
 participant "GraduatedRepository" as GraduatedRepository
 participant "CoffeeChatRequestRepository" as CoffeeChatRequestRepository
-participant "FileService" as FileService
 database PostgreSQL
 participant "S3"
 

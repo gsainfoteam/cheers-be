@@ -50,8 +50,9 @@ Service -> S3: DeleteObject(key)
 Service --> Feature: 최종 key
 Feature -> PostgreSQL: 최종 key 저장 (예: graduated.business_card_key)
 opt 이전 파일이 있었음 (교체)
-  Feature -> Service: deleteFile(이전 key)
+  Feature -> Service: deleteFileQuietly(이전 key)
   Service -> S3: DeleteObject
+  note right of Service: 실패해도 DB는 새 key를 가리키므로 로그만 남김
 end
 note over Feature, S3
   DB 저장이 실패해도 새 파일을 지우지 않음: COMMIT 직후 연결이 끊겨 예외가 나면 DB는 커밋됐는데 파일만 지워지기 때문.
@@ -75,7 +76,8 @@ S3 --> Client: 파일
 
 == 4. 삭제 — 유형 변경 · 탈퇴(CRB-10), 교체 ==
 
-Feature -> Service: deleteFile(key) / deleteFiles(keys)
+Feature -> Service: deleteFileQuietly(key)
 Service -> S3: DeleteObject
+note right of Service: DB 커밋 뒤에 호출. 실패해도 로그만 남기고, 남은 파일은 flow/s3-orphan-cleanup.puml이 정리
 
 @enduml

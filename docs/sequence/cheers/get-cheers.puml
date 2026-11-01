@@ -35,14 +35,13 @@ Pipe -> Controller: getGraduatedList(query)
 Controller -> Service: getGraduatedList(query)
 
 Service -> Service: offset = (page - 1) * size
-opt sort = random
-  Service -> Service: seed = floor(now / CHEERS_RANDOM_SEED_MINUTES분)
-  note right of Service
-    CHEERS_RANDOM_SEED_MINUTES 기본 60.
-    같은 구간 안에서는 seed가 같아 페이지를 넘겨도 순서가 유지됨.
-    구간이 바뀌는 순간 넘기면 중복 · 누락이 생길 수 있음
-  end note
-end
+Service -> Service: seed = floor(now / CHEERS_RANDOM_SEED_MINUTES분)
+note right of Service
+  항상 계산하고 sort = random일 때만 쓰임.
+  CHEERS_RANDOM_SEED_MINUTES 기본 60.
+  같은 구간 안에서는 seed가 같아 페이지를 넘겨도 순서가 유지됨.
+  구간이 바뀌는 순간 넘기면 중복 · 누락이 생길 수 있음
+end note
 
 par 동시에 조회 — 같은 조건
   Service -> GraduatedCardRepository: findPage({ sort, offset, limit: size, seed })
