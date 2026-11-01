@@ -1,5 +1,5 @@
 {
-  "id": "5a0928ee-36cc-44b5-aa62-f0932a8accf1",
+  "id": "8dfa55c7-9110-4cce-9d40-75b885966db1",
   "prevId": "91a124d9-d14c-4efc-9a87-83bb37ab813c",
   "version": "7",
   "dialect": "postgresql",
@@ -404,18 +404,7 @@
           "name": "pk",
           "type": "integer",
           "primaryKey": true,
-          "notNull": true,
-          "identity": {
-            "type": "byDefault",
-            "name": "department_pk_seq",
-            "schema": "public",
-            "increment": "1",
-            "startWith": "1",
-            "minValue": "1",
-            "maxValue": "2147483647",
-            "cache": "1",
-            "cycle": false
-          }
+          "notNull": true
         },
         "school_pk": {
           "name": "school_pk",
@@ -428,13 +417,6 @@
           "type": "varchar(64)",
           "primaryKey": false,
           "notNull": true
-        },
-        "is_active": {
-          "name": "is_active",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
         }
       },
       "indexes": {},
@@ -632,7 +614,18 @@
           "name": "pk",
           "type": "integer",
           "primaryKey": true,
-          "notNull": true
+          "notNull": true,
+          "identity": {
+            "type": "byDefault",
+            "name": "interest_pk_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
         },
         "name": {
           "name": "name",
@@ -876,70 +869,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.school_email_domain": {
-      "name": "school_email_domain",
-      "schema": "",
-      "columns": {
-        "pk": {
-          "name": "pk",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "identity": {
-            "type": "byDefault",
-            "name": "school_email_domain_pk_seq",
-            "schema": "public",
-            "increment": "1",
-            "startWith": "1",
-            "minValue": "1",
-            "maxValue": "2147483647",
-            "cache": "1",
-            "cycle": false
-          }
-        },
-        "school_pk": {
-          "name": "school_pk",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "domain": {
-          "name": "domain",
-          "type": "varchar(128)",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "school_email_domain_school_pk_school_pk_fk": {
-          "name": "school_email_domain_school_pk_school_pk_fk",
-          "tableFrom": "school_email_domain",
-          "tableTo": "school",
-          "columnsFrom": [
-            "school_pk"
-          ],
-          "columnsTo": [
-            "pk"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "school_email_domain_domain_unique": {
-          "name": "school_email_domain_domain_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "domain"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.school": {
       "name": "school",
       "schema": "",
@@ -960,7 +889,7 @@
           "name": "email_domain",
           "type": "varchar(128)",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         }
       },
       "indexes": {},

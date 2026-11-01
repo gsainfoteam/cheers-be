@@ -1,0 +1,48 @@
+@startuml delete-manager-interest-pk
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title DELETE /api/manager/v1/interest/{pk}
+caption CRB-58 · 관심 분야 삭제 (student_profile.interests의 옛 값은 그대로)
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ParseInterestPkPipe" as Pipe
+participant "AdminInterestController" as Controller
+participant "AdminInterestService" as Service
+participant "AdminInterestRepository" as AdminInterestRepository
+participant "InterestService" as InterestService
+database PostgreSQL
+
+Client -> Guard: DELETE /api/manager/v1/interest/{pk}\nAuthorization: Bearer <manager token>
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Pipe: 통과
+alt pk가 1 ~ 2147483647의 정수가 아님
+  Pipe -[#red]-> Client: 400 pk must be a positive integer.
+end
+Pipe -> Controller: remove(pk)
+Controller -> Service: remove(pk)
+Service -> AdminInterestRepository: deleteByPk(pk)
+AdminInterestRepository -> PostgreSQL: DELETE interest WHERE pk = ? RETURNING pk
+note right of AdminInterestRepository: 한 문장이라 트랜잭션 없음. 다른 쓰기가 잡은 잠금이 풀릴 때까지 기다림
+PostgreSQL --> AdminInterestRepository: pk | 0행
+alt 0행
+  Service -[#red]-> Client: 404 Interest not found.
+end
+note right of Service
+  FK가 없어 지울 자식이 없음.
+  student_profile.interests는 문자열 복사본이라 그대로 남음.
+  sort_order 빈 번호는 메우지 않음 (순서만 쓰므로 문제없음)
+end note
+Service -> InterestService: refresh()
+ref over Service, PostgreSQL: 삭제 뒤 이 인스턴스 캐시를 다시 읽음 — flow/interest-cache-bootstrap.puml\n재조회 실패는 로그만 남기고 응답은 성공
+Service --> Controller: void
+Controller --> Client: 200 { result: "OK" }
+
+@enduml

@@ -112,7 +112,7 @@ comments:
     columnComments:
       is_active: false면 앱의 학과 목록에서 숨기고 새로 고를 수 없음. 이미 고른 학생의 프로필과 조회는 그대로
   - table: interest
-    tableComment: 재학생이 고를 수 있는 고정 관심 분야 기준 데이터. 목록 수정은 어드민에서 하며, 서버는 기동 때 한 번 읽어 메모리에 둠
+    tableComment: 재학생이 고를 수 있는 고정 관심 분야 기준 데이터. 목록 수정은 어드민에서 하며(이미 저장된 student_profile.interests는 바꾸지 않음), 서버는 기동 때 읽어 메모리에 두고 쓰기 직후 · 1분마다 다시 읽음
   - table: graduated
     tableComment: 현업자
     columnComments:

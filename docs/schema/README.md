@@ -41,7 +41,7 @@ FK는 모두 `ON DELETE NO ACTION`입니다. 부모 행을 지우기 전에 백�
 | [public.users](public.users.md) | 10 | 모든 유저의 공통 정보. 유형별 정보는 student / graduated | BASE TABLE |
 | [public.jwt_signing_key](public.jwt_signing_key.md) | 4 | 서버 전체에서 하나인 JWT 서명 키. replica가 각자 다른 키를 넣지 못하도록 행을 1개로 제한 | BASE TABLE |
 | [public.student_email_send_log](public.student_email_send_log.md) | 5 | 학교 이메일 인증번호 전송 기록 (전송마다 새 행). 최근 24시간 전송 상한 · 누적 실패 상한에 씀. 유형을 바꾸면 student 행이 새로 만들어져 횟수가 초기화되므로 user_pk 기준 | BASE TABLE |
-| [public.interest](public.interest.md) | 3 | 재학생이 고를 수 있는 고정 관심 분야 기준 데이터. 목록 수정은 어드민에서 하며, 서버는 기동 때 한 번 읽어 메모리에 둠 | BASE TABLE |
+| [public.interest](public.interest.md) | 3 | 재학생이 고를 수 있는 고정 관심 분야 기준 데이터. 목록 수정은 어드민에서 하며(이미 저장된 student_profile.interests는 바꾸지 않음), 서버는 기동 때 읽어 메모리에 두고 쓰기 직후 · 1분마다 다시 읽음 | BASE TABLE |
 | [public.admin_account](public.admin_account.md) | 5 | 어드민 페이지에 로그인할 수 있는 이메일 목록. 앱 유저(users)와 관계없음 | BASE TABLE |
 | [public.admin_access_log](public.admin_access_log.md) | 5 | 어드민의 개인정보 열람 기록. insert만 함. 탈퇴 삭제(purge)를 막지 않도록 다른 테이블로 FK를 걸지 않음 | BASE TABLE |
 | [public.school_email_domain](public.school_email_domain.md) | 3 | 학교 이메일 인증 시 허용 도메인. 재학생의 학교를 정하는 기준이라 한 도메인은 한 학교에만 속함. 변경은 superadmin만 할 수 있음 | BASE TABLE |

@@ -1,16 +1,21 @@
 import { Module } from "@nestjs/common";
 import { AdminAccessLogRepository } from "@src/admin-repository/admin-access-log.repository";
 import { AdminAccountRepository } from "@src/admin-repository/admin-account.repository";
+import { AdminCoffeeChatRequestRepository } from "@src/admin-repository/admin-coffee-chat-request.repository";
+import { AdminNotificationLogRepository } from "@src/admin-repository/admin-notification-log.repository";
 import { AdminConsentRepository } from "@src/admin-repository/admin-consent.repository";
 import { AdminGraduatedRepository } from "@src/admin-repository/admin-graduated.repository";
 import { AdminDepartmentRepository } from "@src/admin-repository/admin-department.repository";
 import { AdminSchoolEmailDomainRepository } from "@src/admin-repository/admin-school-email-domain.repository";
 import { AdminSchoolRepository } from "@src/admin-repository/admin-school.repository";
 import { AdminStudentRepository } from "@src/admin-repository/admin-student.repository";
+import { AdminInterestRepository } from "@src/admin-repository/admin-interest.repository";
 import { DatabaseModule } from "@src/database/database.module";
 
 const repositories = [
   AdminAccountRepository,
+  AdminCoffeeChatRequestRepository,
+  AdminNotificationLogRepository,
   AdminAccessLogRepository,
   AdminConsentRepository,
   AdminGraduatedRepository,
@@ -18,6 +23,7 @@ const repositories = [
   AdminSchoolEmailDomainRepository,
   AdminSchoolRepository,
   AdminStudentRepository,
+  AdminInterestRepository,
 ];
 
 // 어드민 API에서 쓰는 레포지토리. 앱 API용 src/database/repository와 섞지 않음.

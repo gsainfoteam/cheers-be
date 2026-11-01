@@ -1,0 +1,31 @@
+@startuml get-manager-interest
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/manager/v1/interest
+caption CRB-58 · 관심 분야 목록 (캐시가 아니라 DB에서 바로 읽음)
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "AdminInterestController" as Controller
+participant "AdminInterestService" as Service
+participant "AdminInterestRepository" as AdminInterestRepository
+database PostgreSQL
+
+Client -> Guard: GET /api/manager/v1/interest\nAuthorization: Bearer <manager token>
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Controller: list()
+Controller -> Service: list()
+Service -> AdminInterestRepository: findAll()
+AdminInterestRepository -> PostgreSQL: SELECT interest ORDER BY sort_order, pk
+PostgreSQL --> AdminInterestRepository: rows
+Service --> Controller: AdminInterestDto[]
+Controller --> Client: 200 [{ pk, name, sort_order }]
+
+@enduml

@@ -31,7 +31,8 @@ Controller -> Service: getInterests()
 Service -> InterestService: getNames()
 InterestService --> Service: name[]
 note right of InterestService
-  서버 기동 시 interest 테이블에서 한 번 읽어 메모리에 보관한 목록 (DB 조회 없음)
+  interest 테이블을 읽어 메모리에 보관한 목록 (이 요청에서 DB 조회 없음)
+  기동 시 로드, 어드민 쓰기 후 · 1분마다 갱신 (인스턴스 사이 최대 1분 차이)
   flow/interest-cache-bootstrap.puml
   화면에 띄울 추천 목록일 뿐, 저장 API 가 이 값만 받는 것은 아님
   순서는 sort_order
