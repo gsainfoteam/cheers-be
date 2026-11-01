@@ -15,10 +15,8 @@ import {
   ValidateIf,
   ValidateNested,
 } from "class-validator";
+import { trim } from "@src/global/dto/transforms";
 import { ContactRequestDto } from "@src/user/dto/contact-request.dto";
-
-const trim = ({ value }: { value: unknown }) =>
-  typeof value === "string" ? value.trim() : value;
 
 // 배열의 문자열 항목마다 trim (공백뿐인 항목은 빈 문자열이 되어 @IsNotEmpty에 걸림)
 const trimEach = ({ value }: { value: unknown }) =>

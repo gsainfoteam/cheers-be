@@ -89,6 +89,7 @@ erDiagram
   integer *pk
   integer school_pk FK
   varchar_64_ name
+  boolean is_active
 }
 ```
 

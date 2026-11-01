@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title POST /api/v1/user/student/info
-caption CRB-31, CRB-52, CRB-38 · 재학생 추가 정보 저장 · 수정 (바뀌었을 때만 새 버전), 이름은 첫 저장 때 입력 후 수정 불가, 연락 설정, 가입 완료 시 토큰 재발급
+caption CRB-31, CRB-52, CRB-38, CRB-43 · 재학생 추가 정보 저장 · 수정 (바뀌었을 때만 새 버전), 이름은 첫 저장 때 입력 후 수정 불가, 연락 설정, 가입 완료 시 토큰 재발급
 
 actor Client
 participant "SignupStepGuard\nUserTypeGuard" as Guard
@@ -83,6 +83,8 @@ opt tmp/ key 가 있음 (새로 올린 파일)
       Service -[#red]-> Client: 403 User type not allowed
     else 없는 학과이거나 다른 학교의 학과
       Service -[#red]-> Client: 400 Department does not belong to your school
+    else 비활성 학과이고 현재 프로필의 학과가 아님
+      Service -[#red]-> Client: 400 Department is no longer available
     else 기존 key 가 내 현재 첨부가 아님
       Service -[#red]-> Client: 400 Invalid file key
     end
@@ -126,12 +128,15 @@ group transaction (DatabaseService.db.transaction)
   end
 
   Service -> DepartmentRepository: findByPkAndEmailDomain(department_id, student.email 의 @ 뒤, tx)
-  DepartmentRepository -> PostgreSQL: SELECT d.* FROM department d JOIN school s ON s.pk = d.school_pk\nWHERE d.pk = ? AND s.email_domain = ?
+  DepartmentRepository -> PostgreSQL: SELECT d.* FROM department d JOIN school_email_domain sd ON sd.school_pk = d.school_pk\nWHERE d.pk = ? AND sd.domain = ?
   PostgreSQL --> DepartmentRepository: row
   DepartmentRepository --> Service: department | null
   alt 없는 학과이거나 다른 학교의 학과
     Service -[#red]-> Client: 400 Department does not belong to your school
+  else 비활성 학과이고 latest 의 학과가 아님 (새로 고를 수 없음)
+    Service -[#red]-> Client: 400 Department is no longer available
   end
+  note right of Service: 이미 고른 학과가 비활성화돼도 학과를 그대로 두고 다른 항목을 수정할 수 있음
 
   Service -> Service: tmp/ 가 아닌 file key 가 latest.attachments 의 file key 중 하나인지 확인
   alt 내 현재 첨부가 아닌 key (이미 지나간 버전의 파일 · 임의 key)

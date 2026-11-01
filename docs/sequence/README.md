@@ -62,6 +62,11 @@
 | [manager/get-coffee-chat-request.puml](manager/get-coffee-chat-request.puml)                                                         | `GET /api/manager/v1/coffee-chat/request`                              |
 | [manager/get-coffee-chat-request-pk.puml](manager/get-coffee-chat-request-pk.puml)                                                   | `GET /api/manager/v1/coffee-chat/request/{pk}`                         |
 | [manager/get-coffee-chat-notification-log.puml](manager/get-coffee-chat-notification-log.puml)                                       | `GET /api/manager/v1/coffee-chat/notification-log`                     |
+| [manager/get-school.puml](manager/get-school.puml)                                                                                   | `GET /api/manager/v1/school`                                           |
+| [manager/get-school-pk-department.puml](manager/get-school-pk-department.puml)                                                       | `GET /api/manager/v1/school/{schoolPk}/department`                     |
+| [manager/post-school-pk-department.puml](manager/post-school-pk-department.puml)                                                     | `POST /api/manager/v1/school/{schoolPk}/department`                    |
+| [manager/patch-school-pk-department-pk.puml](manager/patch-school-pk-department-pk.puml)                                             | `PATCH /api/manager/v1/school/{schoolPk}/department/{departmentPk}`    |
+| [manager/put-school-pk-email-domain.puml](manager/put-school-pk-email-domain.puml)                                                   | `PUT /api/manager/v1/school/{schoolPk}/email-domain`                   |
 
 ## 보기
 

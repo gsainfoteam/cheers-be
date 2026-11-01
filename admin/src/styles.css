@@ -210,12 +210,19 @@ select {
   margin-bottom: 16px;
 }
 
+.row-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .table-scroll {
   overflow-x: auto;
 }
 
 .row-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 

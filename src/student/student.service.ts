@@ -199,6 +199,13 @@ export class StudentService {
         "Department does not belong to your school",
       );
     }
+    // 비활성 학과는 새로 고를 수 없지만, 이미 고른 학생은 학과를 그대로 두고 다른 항목을 수정할 수 있음
+    if (
+      !department.isActive &&
+      current.latest?.profile.departmentPk !== departmentPk
+    ) {
+      throw new BadRequestException("Department is no longer available");
+    }
 
     // 새로 올린 파일이 아닌 key는 내 현재 첨부의 파일이어야 함 (남의 파일 · 임의 key 거부)
     const currentFileKeys = new Set(

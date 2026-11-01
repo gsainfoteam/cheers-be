@@ -5,6 +5,10 @@ import { AdminCoffeeChatRequestRepository } from "@src/admin-repository/admin-co
 import { AdminNotificationLogRepository } from "@src/admin-repository/admin-notification-log.repository";
 import { AdminConsentRepository } from "@src/admin-repository/admin-consent.repository";
 import { AdminGraduatedRepository } from "@src/admin-repository/admin-graduated.repository";
+import { AdminDepartmentRepository } from "@src/admin-repository/admin-department.repository";
+import { AdminSchoolEmailDomainRepository } from "@src/admin-repository/admin-school-email-domain.repository";
+import { AdminSchoolRepository } from "@src/admin-repository/admin-school.repository";
+import { AdminStudentRepository } from "@src/admin-repository/admin-student.repository";
 import { AdminInterestRepository } from "@src/admin-repository/admin-interest.repository";
 import { DatabaseModule } from "@src/database/database.module";
 
@@ -15,6 +19,10 @@ const repositories = [
   AdminAccessLogRepository,
   AdminConsentRepository,
   AdminGraduatedRepository,
+  AdminDepartmentRepository,
+  AdminSchoolEmailDomainRepository,
+  AdminSchoolRepository,
+  AdminStudentRepository,
   AdminInterestRepository,
 ];
 

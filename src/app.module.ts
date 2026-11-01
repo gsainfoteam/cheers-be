@@ -19,6 +19,7 @@ import { ManagerModule } from "@src/manager/manager.module";
 import { ManagerCoffeeChatModule } from "@src/manager/coffee-chat/manager-coffee-chat.module";
 import { ManagerConsentModule } from "@src/manager/consent/manager-consent.module";
 import { BusinessCardModule } from "@src/manager/business-card/business-card.module";
+import { SchoolDepartmentModule } from "@src/manager/department/school-department.module";
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { BusinessCardModule } from "@src/manager/business-card/business-card.mod
     ManagerCoffeeChatModule,
     ManagerConsentModule,
     BusinessCardModule,
+    SchoolDepartmentModule,
   ],
   controllers: [],
   providers: [],
