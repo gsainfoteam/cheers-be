@@ -36,8 +36,12 @@ alt localStorage에 매니저 토큰 있음
 end
 
 Operator -> Admin: 로그인 버튼
-Admin -> Admin: code_verifier 생성, sessionStorage 저장
-Admin -> IdP: 리다이렉트 /authorize\nresponse_type=code, client_id, redirect_uri=<서버 origin>/admin/callback,\nscope=profile email, code_challenge = code_verifier, code_challenge_method=plain
+Admin -> Admin: code_verifier 생성,\ncode_challenge = BASE64URL(SHA-256(code_verifier)) 계산
+alt crypto.subtle 없음 (HTTPS · localhost가 아닌 주소)
+  Admin --> Operator: 오류 안내 (plain으로 되돌아가지 않음)
+end
+Admin -> Admin: code_verifier를 sessionStorage에 저장
+Admin -> IdP: 리다이렉트 /authorize\nresponse_type=code, client_id, redirect_uri=<서버 origin>/admin/callback,\nscope=profile email, code_challenge, code_challenge_method=S256
 Operator -> IdP: 로그인 · 동의
 IdP --> Admin: 리다이렉트 /admin/callback?code=...
 
