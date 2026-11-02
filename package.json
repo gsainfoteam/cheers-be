@@ -23,7 +23,8 @@
     "db:seed-admin": "bun drizzle/seed-admin.ts",
     "db:seed:dev": "bun drizzle/seed-dev.ts",
     "db:docs": "scripts/tbls.sh doc --rm-dist",
-    "db:docs:check": "scripts/tbls.sh diff"
+    "db:docs:check": "scripts/tbls.sh diff",
+    "smoke:staging": "bun scripts/smoke-staging.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1156.0",
