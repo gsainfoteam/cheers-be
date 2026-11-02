@@ -21,6 +21,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun drizzle/migrate.ts",
     "db:seed-admin": "bun drizzle/seed-admin.ts",
+    "db:seed:dev": "bun drizzle/seed-dev.ts",
     "db:docs": "scripts/tbls.sh doc --rm-dist",
     "db:docs:check": "scripts/tbls.sh diff"
   },
