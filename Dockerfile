@@ -16,6 +16,13 @@ COPY . .
 
 RUN bun run build
 
+# 개발용 seed는 staging 이미지에만 넣음 (staging.yml). 인자를 빠뜨리면 빠지는 쪽이 기본값.
+# production 단계는 여기서 복사해 가므로 최종 이미지의 어느 레이어에도 남지 않음
+ARG INCLUDE_DEV_SEED=false
+RUN if [ "$INCLUDE_DEV_SEED" != "true" ]; then \
+    rm -rf drizzle/seed-dev* dist/drizzle/seed-dev*; \
+  fi
+
 # 어드민 화면. VITE_* 값은 빌드 때 번들에 들어가므로 런타임 env가 아니라 빌드 인자로 받음
 ARG VITE_IDP_AUTHORIZE_URL
 ARG VITE_IDP_CLIENT_ID

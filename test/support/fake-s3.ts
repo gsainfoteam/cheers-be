@@ -4,6 +4,7 @@ import {
   GetObjectCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
+  PutObjectCommand,
   S3Client,
   S3ServiceException,
 } from "@aws-sdk/client-s3";
@@ -83,6 +84,11 @@ export class FakeS3 {
       await this.onDelete?.(key);
       this.objects.delete(key);
       this.deletedKeys.push(key);
+      return {};
+    }
+    // 서버는 presigned URL만 쓰고, 직접 올리는 곳은 개발용 seed뿐
+    if (command instanceof PutObjectCommand) {
+      this.put(command.input.Key ?? "", command.input.Body as Buffer);
       return {};
     }
     if (command instanceof ListObjectsV2Command) {
