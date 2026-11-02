@@ -36,8 +36,17 @@ services:
       - TZ=Asia/Seoul
     build:
       context: .
+      args:
+        VITE_IDP_AUTHORIZE_URL: ${IDP_AUTHORIZE_URL}
+        VITE_IDP_CLIENT_ID: ${IDP_CLIENT_ID}
+      secrets:
+        - npm_token
     ports:
       - "3000:3000"
+
+secrets:
+  npm_token:
+    environment: NPM_TOKEN
 
 volumes:
   cheers-db-data:
