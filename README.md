@@ -29,6 +29,7 @@ bun run start:dev
 | `bun run db:seed:dev`             | 개발용 가짜 데이터 넣기 (아래 참고)          |
 | `bun run db:docs`                 | `docs/schema/` 생성 (아래 참고)              |
 | `bun run db:docs:check`           | `docs/schema/`와 DB 비교                     |
+| `bun run smoke:staging`           | 배포 서버 스모크 테스트                      |
 | `bun run test`                    | 단위 테스트                                  |
 | `bun run test:e2e`                | e2e 테스트 (아래 참고)                       |
 
