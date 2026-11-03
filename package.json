@@ -9,7 +9,7 @@
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
-    "start:prod": "bun run db:migrate && bun dist/src/main.js",
+    "start:prod": "bun run db:migrate && node --import ./dist/src/instrumentation.js dist/src/main",
     "lint": "oxlint --fix",
     "lint:check": "oxlint",
     "format": "oxfmt",
@@ -84,7 +84,9 @@
     ],
     "moduleNameMapper": {
       "^@src/(.*)$": "<rootDir>/$1",
-      "^@drizzle/(.*)$": "<rootDir>/../drizzle/$1"
+      "^@drizzle/(.*)$": "<rootDir>/../drizzle/$1",
+      "^@kubiks/otel-drizzle$": "<rootDir>/../jest.mocks/otel-drizzle.js",
+      "^@gsainfoteam/nest-observability$": "<rootDir>/../jest.mocks/nest-observability.js"
     },
     "rootDir": "src",
     "testEnvironment": "node",
