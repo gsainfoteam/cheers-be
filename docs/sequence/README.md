@@ -67,6 +67,8 @@
 | [manager/post-school-pk-department.puml](manager/post-school-pk-department.puml)                                                     | `POST /api/manager/v1/school/{schoolPk}/department`                    |
 | [manager/patch-school-pk-department-pk.puml](manager/patch-school-pk-department-pk.puml)                                             | `PATCH /api/manager/v1/school/{schoolPk}/department/{departmentPk}`    |
 | [manager/put-school-pk-email-domain.puml](manager/put-school-pk-email-domain.puml)                                                   | `PUT /api/manager/v1/school/{schoolPk}/email-domain`                   |
+| [manager/get-dev-user.puml](manager/get-dev-user.puml)                                                                               | `GET /api/manager/v1/dev/user`                                         |
+| [manager/delete-dev-user-pk.puml](manager/delete-dev-user-pk.puml)                                                                   | `DELETE /api/manager/v1/dev/user/{userPk}`                             |
 
 ## 보기
 
