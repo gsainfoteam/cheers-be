@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title 공통 흐름: metrics 수집과 trace 전송
-caption CRB-36 · src/instrumentation.ts · @gsainfoteam/nest-observability
+caption CRB-36 · src/instrumentation.mts · @gsainfoteam/nest-observability
 
 actor Client
 participant "MetricsInterceptor" as Interceptor
@@ -19,7 +19,7 @@ participant "Tempo" as Tempo
 
 == 기동 — main.ts의 첫 import ==
 
-App -> App: instrumentation.ts 실행
+App -> App: instrumentation.mts 실행
 alt OTEL_EXPORTER_OTLP_TRACES_ENDPOINT 있음 (K8s)
   App -> App: initializeOpenTelemetry: 자동 계측 등록 · METRICS_PORT(기본 9090)에 /metrics 열기
   note right of App
