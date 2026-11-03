@@ -1,4 +1,3 @@
-import { serviceName } from "./instrumentation";
 import {
   initializeMetrics,
   MetricsInterceptor,
@@ -9,10 +8,9 @@ import { ConfigService } from "@nestjs/config";
 import { configureApp } from "@src/global/app.config";
 import { LoggerService } from "@src/global/logger/logger.service";
 import { setupSwagger } from "@src/global/swagger/swagger.config";
+import { Logger } from "@nestjs/common";
 
 async function bootstrap() {
-  initializeMetrics(serviceName);
-
   const app = await NestFactory.create(AppModule);
 
   const loggerService: LoggerService = app.get(LoggerService);
@@ -29,4 +27,17 @@ async function bootstrap() {
 
   await app.listen(configService.get<number>("PORT") ?? 3000);
 }
-bootstrap();
+
+const bootstrapWithOTEL = async () => {
+  const logger = new Logger("Bootstrap");
+  try {
+    const serviceName = process.env.OTEL_SERVICE_NAME ?? "cheers-be";
+    initializeMetrics(serviceName);
+    await bootstrap();
+  } catch (error) {
+    logger.error("Failed to bootstrap application", error);
+    process.exit(1);
+  }
+};
+
+void bootstrapWithOTEL();
