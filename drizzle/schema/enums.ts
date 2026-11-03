@@ -53,4 +53,6 @@ export const adminAccountRole = pgEnum("admin_account_role", [
 // 어드민이 열람한 개인정보 종류
 export const adminAccessTargetType = pgEnum("admin_access_target_type", [
   "business_card",
+  // 개발용 회원 완전탈퇴 (CRB-72). 열람이 아니라 삭제 기록
+  "dev_user_hard_delete",
 ]);

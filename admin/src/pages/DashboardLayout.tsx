@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { clearAccessToken } from "../lib/auth";
 import { CurrentManagerProvider } from "../lib/current-manager";
+import { DEV_USER_DELETE_ENABLED } from "../lib/dev-user-delete";
 
 // 메뉴 자리만 둠. 기능은 각 하위 이슈에서 추가
 export const PLACEHOLDER_MENUS: { path: string; label: string }[] = [];
@@ -19,6 +20,9 @@ const NAV_ITEMS = [
   { to: "/business-cards", label: "현업자 명함", end: false },
   { to: "/departments", label: "학과", end: false },
   { to: "/admin-accounts", label: "어드민 계정", end: false },
+  ...(DEV_USER_DELETE_ENABLED
+    ? [{ to: "/dev-users", label: "완전탈퇴 (개발용)", end: false }]
+    : []),
 ];
 
 export function DashboardLayout() {

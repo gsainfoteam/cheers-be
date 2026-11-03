@@ -1,0 +1,1 @@
+ALTER TYPE "public"."admin_access_target_type" ADD VALUE 'dev_user_hard_delete';
