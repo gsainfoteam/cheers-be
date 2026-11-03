@@ -50,7 +50,7 @@ FK는 모두 `ON DELETE NO ACTION`입니다. 부모 행을 지우기 전에 백�
 
 | Name | Values |
 | ---- | ------- |
-| public.admin_access_target_type | business_card |
+| public.admin_access_target_type | business_card, dev_user_hard_delete |
 | public.admin_account_role | admin, superadmin |
 | public.attachment_kind | cv, portfolio |
 | public.attachment_source | file, link |
