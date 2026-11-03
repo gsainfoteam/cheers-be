@@ -68,6 +68,7 @@ jobs:
             VITE_IDP_AUTHORIZE_URL=${{ vars.DEV_IDP_AUTHORIZE_URL }}
             VITE_IDP_CLIENT_ID=${{ vars.DEV_IDP_CLIENT_ID }}
             INCLUDE_DEV_SEED=true
+            VITE_DEV_USER_DELETE_ENABLED=true
           secrets: |
             npm_token=${{ secrets.GITHUB_TOKEN }}
 

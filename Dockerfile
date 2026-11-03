@@ -26,6 +26,8 @@ RUN if [ "$INCLUDE_DEV_SEED" != "true" ]; then \
 # 어드민 화면. VITE_* 값은 빌드 때 번들에 들어가므로 런타임 env가 아니라 빌드 인자로 받음
 ARG VITE_IDP_AUTHORIZE_URL
 ARG VITE_IDP_CLIENT_ID
+# 개발용 회원 완전탈퇴 메뉴. staging.yml에서만 true (API는 런타임 env DEV_USER_DELETE_ENABLED로 따로 막음)
+ARG VITE_DEV_USER_DELETE_ENABLED=false
 RUN cd admin \
   && bun install --frozen-lockfile \
   && bun run build
