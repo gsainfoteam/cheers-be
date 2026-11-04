@@ -39,7 +39,7 @@ export class CheersStudentController {
   /** 현업자 목록 */
   @Get()
   @UseGuards(UserGuard, UserTypeGuard)
-  @UserTypes(["student"])
+  @UserTypes(["student", "graduated"])
   @ApiPageResponse(CheersCardDto)
   @ApiErrors({
     400: "query 형식 오류",
