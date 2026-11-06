@@ -244,4 +244,244 @@ describe("회사 alias", () => {
       .set("Authorization", auth)
       .expect(200);
   });
+
+  describe("이름 변경 · 표기 관리", () => {
+    const patch = (pk: number, body: object) =>
+      http(ctx)
+        .patch(`${ADMIN_BASE}/${pk}`)
+        .set("Authorization", auth)
+        .send(body);
+    const addName = (pk: number, name: string) =>
+      http(ctx)
+        .post(`${ADMIN_BASE}/${pk}/name`)
+        .set("Authorization", auth)
+        .send({ name });
+    const removeName = (pk: number, namePk: number) =>
+      http(ctx)
+        .delete(`${ADMIN_BASE}/${pk}/name/${namePk}`)
+        .set("Authorization", auth);
+
+    it("이름을 바꾸면 앱 검색 · 현업자 카드에 새 이름이 보이고, 예전 이름으로도 찾음", async () => {
+      const graduate = await signupGraduated(ctx, { company_name: "인포텍" });
+      const [company] = await adminList();
+      expect(company.needs_review).toBe(true);
+
+      const renamed = await patch(company.company_id, {
+        name: "인포테크",
+      }).expect(200);
+      expect(renamed.body).toMatchObject({
+        name: "인포테크",
+        needs_review: true,
+      });
+      expect(renamed.body.names.map((n: { name: string }) => n.name)).toEqual(
+        expect.arrayContaining(["인포텍", "인포테크"]),
+      );
+
+      // 예전 이름은 표기로 남아 그대로 검색되고, 결과에는 새 이름이 보임
+      for (const q of ["인포테크", "인포텍"]) {
+        expect(await search(graduate, q)).toEqual([
+          expect.objectContaining({
+            company_id: company.company_id,
+            name: "인포테크",
+            matched_name: q,
+          }),
+        ]);
+      }
+      const student = await signupStudent(ctx);
+      expect((await cards(student))[0].company).toBe("인포테크");
+    });
+
+    it("검토 완료하면 검토 대기 표시가 꺼지고 목록에서 검토 대기 회사 아래로 내려감", async () => {
+      await signupGraduated(ctx, { company_name: "첫회사" });
+      await signupGraduated(ctx, { company_name: "둘째회사" });
+      const before = await adminList();
+      expect(before.map((c) => c.needs_review)).toEqual([true, true]);
+      const target = before[0];
+
+      const reviewed = await patch(target.company_id, {
+        needs_review: false,
+      }).expect(200);
+      expect(reviewed.body).toMatchObject({
+        name: target.name,
+        needs_review: false,
+      });
+
+      const after = await adminList();
+      expect(after.map((c) => [c.company_id, c.needs_review])).toEqual([
+        [before[1].company_id, true],
+        [target.company_id, false],
+      ]);
+    });
+
+    it("표기를 추가하면 그 표기로 찾고, 지우면 더는 찾지 못함", async () => {
+      const graduate = await signupGraduated(ctx);
+      const company = await createCompany({ name: "Amazon" }).expect(201);
+      const pk = company.body.company_id;
+
+      const added = await addName(pk, "아마존").expect(201);
+      const alias = added.body.names.find(
+        (n: { name: string }) => n.name === "아마존",
+      );
+      expect(alias).toBeDefined();
+      expect(await search(graduate, "아마존")).toEqual([
+        expect.objectContaining({
+          company_id: pk,
+          name: "Amazon",
+          matched_name: "아마존",
+        }),
+      ]);
+
+      const removed = await removeName(pk, alias.name_id).expect(200);
+      expect(
+        removed.body.names.map((n: { name: string }) => n.name),
+      ).not.toContain("아마존");
+      expect(await search(graduate, "아마존")).toEqual([]);
+    });
+
+    it("회사 이름 표기는 지울 수 없고, 다른 회사의 표기는 404", async () => {
+      const amazon = await createCompany({ name: "Amazon" }).expect(201);
+      const google = await createCompany({
+        name: "Google",
+        names: ["구글"],
+      }).expect(201);
+      const own = amazon.body.names.find(
+        (n: { name: string }) => n.name === "Amazon",
+      );
+      const googleAlias = google.body.names.find(
+        (n: { name: string }) => n.name === "구글",
+      );
+
+      await removeName(amazon.body.company_id, own.name_id).expect(400);
+      await removeName(amazon.body.company_id, googleAlias.name_id).expect(404);
+    });
+
+    it("다른 회사에 등록된 표기는 등록 · 이름 변경 · 표기 추가 모두 409이고 바뀌지 않음", async () => {
+      const amazon = await createCompany({ name: "Amazon" }).expect(201);
+      await createCompany({ name: "Google", names: ["구글"] }).expect(201);
+      const pk = amazon.body.company_id;
+
+      await createCompany({ name: "구글" }).expect(409);
+      await createCompany({ name: "Apple", names: ["Google"] }).expect(409);
+      await patch(pk, { name: "구글" }).expect(409);
+      await addName(pk, " google ").expect(409);
+
+      const [row] = (await adminList()).filter((c) => c.company_id === pk);
+      expect(row).toMatchObject({ name: "Amazon" });
+      expect(row.names.map((n) => n.name)).toEqual(["Amazon"]);
+    });
+
+    it("없는 회사는 404, pk · 요청 형식 오류와 자기 자신 병합은 400", async () => {
+      const company = await createCompany({ name: "Amazon" }).expect(201);
+      const pk = company.body.company_id;
+      const missing = pk + 1000;
+
+      await patch(missing, { name: "새이름" }).expect(404);
+      await addName(missing, "새표기").expect(404);
+      await http(ctx)
+        .delete(`${ADMIN_BASE}/${missing}`)
+        .set("Authorization", auth)
+        .expect(404);
+      await http(ctx)
+        .post(`${ADMIN_BASE}/${missing}/merge`)
+        .set("Authorization", auth)
+        .send({ target_id: pk })
+        .expect(404);
+      await http(ctx)
+        .post(`${ADMIN_BASE}/${pk}/merge`)
+        .set("Authorization", auth)
+        .send({ target_id: missing })
+        .expect(404);
+      const upload = await http(ctx)
+        .post(`${ADMIN_BASE}/logo/upload-url`)
+        .set("Authorization", auth)
+        .send({ content_type: "image/png", size: PNG_BYTES.length })
+        .expect(201);
+      ctx.s3.put(upload.body.key, PNG_BYTES);
+      await http(ctx)
+        .put(`${ADMIN_BASE}/${missing}/logo`)
+        .set("Authorization", auth)
+        .send({ key: upload.body.key })
+        .expect(404);
+
+      await http(ctx)
+        .post(`${ADMIN_BASE}/${pk}/merge`)
+        .set("Authorization", auth)
+        .send({ target_id: pk })
+        .expect(400);
+      await patch(pk, { name: "   " }).expect(400);
+      await patch(pk, { needs_review: "no" }).expect(400);
+      await addName(pk, "").expect(400);
+      for (const bad of ["abc", "0", "2147483648"]) {
+        await http(ctx)
+          .patch(`${ADMIN_BASE}/${bad}`)
+          .set("Authorization", auth)
+          .send({ name: "새이름" })
+          .expect(400);
+      }
+    });
+  });
+
+  describe("로고 업로드 오류", () => {
+    const uploadUrl = (manager: string, body: object) =>
+      http(ctx)
+        .post(`${ADMIN_BASE}/logo/upload-url`)
+        .set("Authorization", manager)
+        .send(body);
+    const putLogo = (pk: number, key: string) =>
+      http(ctx)
+        .put(`${ADMIN_BASE}/${pk}/logo`)
+        .set("Authorization", auth)
+        .send({ key });
+    const logoKeyOf = async (pk: number) => {
+      const [row] = await ctx.db
+        .select()
+        .from(companyAlias)
+        .where(eq(companyAlias.pk, pk));
+      return row.logoKey;
+    };
+
+    it("허용되지 않은 형식은 400, 2MB를 넘으면 413", async () => {
+      await uploadUrl(auth, { content_type: "image/gif", size: 10 }).expect(
+        400,
+      );
+      await uploadUrl(auth, {
+        content_type: "image/png",
+        size: 2 * 1024 * 1024 + 1,
+      }).expect(413);
+    });
+
+    it("다른 어드민이 받은 key · 업로드하지 않은 key · 내용이 이미지가 아닌 파일은 400이고 로고가 그대로", async () => {
+      const company = await createCompany({ name: "Amazon" }).expect(201);
+      const pk = company.body.company_id;
+
+      const otherAuth = await loginManager(
+        ctx,
+        "other-admin@gm.gist.ac.kr",
+        "admin",
+      );
+      const others = await uploadUrl(otherAuth, {
+        content_type: "image/png",
+        size: PNG_BYTES.length,
+      }).expect(201);
+      ctx.s3.put(others.body.key, PNG_BYTES);
+      await putLogo(pk, others.body.key).expect(400);
+
+      const notUploaded = await uploadUrl(auth, {
+        content_type: "image/png",
+        size: PNG_BYTES.length,
+      }).expect(201);
+      await putLogo(pk, notUploaded.body.key).expect(400);
+
+      const text = await uploadUrl(auth, {
+        content_type: "image/png",
+        size: 8,
+      }).expect(201);
+      ctx.s3.put(text.body.key, Buffer.from("not png!"));
+      await putLogo(pk, text.body.key).expect(400);
+      // 정책과 다른 파일은 tmp에서 지움
+      expect(ctx.s3.objects.has(text.body.key)).toBe(false);
+
+      expect(await logoKeyOf(pk)).toBeNull();
+    });
+  });
 });
