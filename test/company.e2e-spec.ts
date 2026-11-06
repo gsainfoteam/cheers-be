@@ -1,6 +1,4 @@
-import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { adminAccount } from "@drizzle/schema/admin-account";
 import { companyAlias } from "@drizzle/schema/company-alias";
 import { createE2eApp, E2eContext } from "./support/app";
 import {
@@ -8,6 +6,7 @@ import {
   getInfo,
   graduatedInfoBody,
   http,
+  loginManager,
   Session,
   signupGraduated,
   signupStudent,
@@ -29,7 +28,7 @@ type AdminCompany = {
   graduated_count: number;
 };
 
-describe("company alias", () => {
+describe("회사 alias", () => {
   let ctx: E2eContext;
   let auth: string;
 
@@ -68,22 +67,11 @@ describe("company alias", () => {
   });
   beforeEach(async () => {
     await ctx.reset();
-    await ctx.db
-      .insert(adminAccount)
-      .values({ pk: randomUUID(), email: ADMIN, role: "admin" });
-    const res = await http(ctx)
-      .post("/api/manager/v1/auth/login")
-      .send({
-        code: `fake-idp-code:${ADMIN}`,
-        redirect_uri: "http://localhost:5174/admin/callback",
-        code_verifier: "e2e-verifier",
-      })
-      .expect(201);
-    auth = `Bearer ${res.body.access_token}`;
+    auth = await loginManager(ctx, ADMIN, "admin");
   });
   afterAll(() => ctx.close());
 
-  it("registers an unknown typed name for review and reuses it for the same name written differently", async () => {
+  it("모르는 이름은 검토 대상으로 등록하고, 표기만 다른 같은 이름은 그 회사를 다시 씀", async () => {
     const first = await signupGraduated(ctx, { company_name: "인포 테크" });
     await signupGraduated(ctx, { company_name: "  인포   테크 " });
 
@@ -110,7 +98,7 @@ describe("company alias", () => {
     });
   });
 
-  it("lets graduates find a pre-registered company by any of its names", async () => {
+  it("미리 등록한 회사를 어느 표기로든 찾음", async () => {
     const created = await createCompany({
       name: "Microsoft",
       names: ["마이크로소프트", "마소"],
@@ -158,7 +146,7 @@ describe("company alias", () => {
       .expect(403);
   });
 
-  it("merges a typed company into a registered one", async () => {
+  it("직접 입력한 회사를 등록된 회사로 병합", async () => {
     const target = await createCompany({ name: "Microsoft" }).expect(201);
     const graduate = await signupGraduated(ctx, {
       company_name: "MS코리아",
@@ -210,7 +198,7 @@ describe("company alias", () => {
       .expect(404);
   });
 
-  it("uploads a logo and shows it on the graduate cards", async () => {
+  it("로고를 올리면 현업자 카드에 보임", async () => {
     const company = await createCompany({ name: "Microsoft" }).expect(201);
     await signupGraduated(ctx, {
       company_id: company.body.company_id,
@@ -241,7 +229,7 @@ describe("company alias", () => {
     expect(card.company_logo_url).toContain(row.logoKey);
   });
 
-  it("does not delete a company picked by graduates", async () => {
+  it("현업자가 고른 회사는 지우지 않음", async () => {
     await signupGraduated(ctx, { company_name: "인포테크" });
     const [company] = await adminList();
 

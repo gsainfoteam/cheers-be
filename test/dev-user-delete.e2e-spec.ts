@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { adminAccessLog } from "@drizzle/schema/admin-access-log";
-import { adminAccount } from "@drizzle/schema/admin-account";
 import { coffeeChatContact } from "@drizzle/schema/coffee-chat-contact";
 import { coffeeChatRequest } from "@drizzle/schema/coffee-chat-request";
 import { graduated } from "@drizzle/schema/graduated";
@@ -21,6 +20,7 @@ import {
   getInfo,
   http,
   login,
+  loginManager,
   saveStudentInfo,
   Session,
   signupGraduated,
@@ -31,23 +31,6 @@ import {
 const BASE = "/api/manager/v1/dev/user";
 const SUPER = "super@gm.gist.ac.kr";
 const ADMIN = "admin@gm.gist.ac.kr";
-
-const managerAuth = async (
-  ctx: E2eContext,
-  email: string,
-  role: "admin" | "superadmin",
-): Promise<string> => {
-  await ctx.db.insert(adminAccount).values({ pk: randomUUID(), email, role });
-  const res = await http(ctx)
-    .post("/api/manager/v1/auth/login")
-    .send({
-      code: `fake-idp-code:${email}`,
-      redirect_uri: "http://localhost:5174/admin/callback",
-      code_verifier: "e2e-verifier",
-    })
-    .expect(201);
-  return `Bearer ${res.body.access_token}`;
-};
 
 describe("개발용 회원 완전탈퇴 (DEV_USER_DELETE_ENABLED=true)", () => {
   let ctx: E2eContext;
@@ -138,7 +121,7 @@ describe("개발용 회원 완전탈퇴 (DEV_USER_DELETE_ENABLED=true)", () => {
   });
   beforeEach(async () => {
     await ctx.reset();
-    auth = await managerAuth(ctx, SUPER, "superadmin");
+    auth = await loginManager(ctx, SUPER, "superadmin");
   });
   afterAll(async () => {
     await ctx.close();
@@ -348,7 +331,7 @@ describe("개발용 회원 완전탈퇴 (DEV_USER_DELETE_ENABLED=true)", () => {
   it("superadmin만 쓸 수 있고, 없는 유저는 404 · 잘못된 pk는 400", async () => {
     const session = await signupStudent(ctx);
     const userPk = await userPkOf(session);
-    const adminAuth = await managerAuth(ctx, ADMIN, "admin");
+    const adminAuth = await loginManager(ctx, ADMIN, "admin");
 
     await http(ctx).get(BASE).expect(401);
     await http(ctx).delete(`${BASE}/${userPk}`).expect(401);
@@ -382,7 +365,7 @@ describe("개발용 회원 완전탈퇴 (DEV_USER_DELETE_ENABLED 꺼짐, 기본�
   afterAll(() => ctx.close());
 
   it("토큰 · 권한과 상관없이 목록 · 삭제 모두 없는 경로와 같은 404이고 아무것도 지우지 않음", async () => {
-    const auth = await managerAuth(ctx, SUPER, "superadmin");
+    const auth = await loginManager(ctx, SUPER, "superadmin");
     const session = await signupStudent(ctx);
     const userPk = await userPkOf(session);
 

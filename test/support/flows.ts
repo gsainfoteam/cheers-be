@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import * as request from "supertest";
+import { adminAccount } from "@drizzle/schema/admin-account";
 import { E2eContext } from "./app";
 
 export type Session = {
@@ -35,6 +36,27 @@ export async function login(
     accessToken: res.body.access_token,
     refreshToken: res.body.refresh_token,
   };
+}
+
+// 어드민 계정을 등록하고(이미 있으면 그대로) IdP 로그인으로 토큰을 받음. Authorization 헤더 값으로 반환
+export async function loginManager(
+  ctx: E2eContext,
+  email: string,
+  role: "admin" | "superadmin",
+): Promise<string> {
+  await ctx.db
+    .insert(adminAccount)
+    .values({ pk: randomUUID(), email, role })
+    .onConflictDoNothing();
+  const res = await http(ctx)
+    .post("/api/manager/v1/auth/login")
+    .send({
+      code: `fake-idp-code:${email}`,
+      redirect_uri: "http://localhost:5174/admin/callback",
+      code_verifier: "e2e-verifier",
+    })
+    .expect(201);
+  return `Bearer ${res.body.access_token}`;
 }
 
 export async function getInfo(ctx: E2eContext, session: Session) {
@@ -130,11 +152,12 @@ export async function saveStudentInfo(
 export async function signupStudent(
   ctx: E2eContext,
   email: string = `s${randomUUID().slice(0, 8)}@gm.gist.ac.kr`,
+  infoOverrides: Record<string, unknown> = {},
 ): Promise<Session> {
   const session = await login(ctx, "student");
   await agreeConsents(ctx, session);
   await verifyStudentEmail(ctx, session, email);
-  return saveStudentInfo(ctx, session);
+  return saveStudentInfo(ctx, session, infoOverrides);
 }
 
 // 업로드 URL 발급 → (presigned PUT 대신) 가짜 S3에 직접 넣기 → 제출
@@ -209,3 +232,14 @@ const withSignupTokens = (
   accessToken: body.access_token ?? session.accessToken,
   refreshToken: body.refresh_token ?? session.refreshToken,
 });
+
+// 응답 뒤에 비동기로 처리되는 일(알림 발송 · notification_log 기록)을 기다림
+export async function waitUntil(
+  condition: () => boolean | Promise<boolean>,
+): Promise<void> {
+  for (let i = 0; i < 100; i++) {
+    if (await condition()) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error("Condition not met in time");
+}

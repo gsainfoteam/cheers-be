@@ -9,12 +9,18 @@ import { configureApp } from "@src/global/app.config";
 import { MailService } from "@src/mail/mail.service";
 import { MailResult, SendMailInput } from "@src/mail/mail.types";
 import { InfoteamIdpService } from "@src/manager/infoteam-idp.service";
+import { AlimtalkService } from "@src/notification/alimtalk.service";
+import {
+  AlimtalkResult,
+  SendAlimtalkInput,
+} from "@src/notification/alimtalk.types";
 import { GoogleVerifier } from "@src/user/oauth/google.verifier";
 import { OAuthProfile, OAuthVerifier } from "@src/user/oauth/oauth.types";
 import { FakeS3 } from "./fake-s3";
 
 // skipped는 env가 비었을 때의 실제 동작과 같음
 const MAIL_SKIPPED: MailResult = { success: true, skipped: true };
+const ALIMTALK_SKIPPED: AlimtalkResult = { success: true, skipped: true };
 
 // token 문자열 → 계정. 실제 서명 검증은 src/user/oauth/id-token.verifier.spec.ts에서 확인
 class FakeGoogleVerifier implements OAuthVerifier {
@@ -50,6 +56,18 @@ export class FakeMailService {
   }
 }
 
+// 알리고로 나가지 않게 받은 요청을 모아 둠. 알리고 요청 본문(템플릿 · 버튼)은 src/notification/alimtalk.service.spec.ts에서 확인
+export class FakeAlimtalkService {
+  readonly sent: SendAlimtalkInput[] = [];
+  // notification_log 기록을 확인할 때만 바꿈 (skipped면 기록하지 않음). reset에서 되돌림
+  sendResult: AlimtalkResult = ALIMTALK_SKIPPED;
+
+  async send(input: SendAlimtalkInput): Promise<AlimtalkResult> {
+    this.sent.push(input);
+    return this.sendResult;
+  }
+}
+
 // code 문자열 → IdP가 확인해 준 이메일. 실제 HTTP 호출은 src/manager/infoteam-idp.service.spec.ts에서 확인
 class FakeInfoteamIdpService {
   async exchangeAuthorizationCode(code: string): Promise<string> {
@@ -78,6 +96,7 @@ export type E2eContext = {
   db: DatabaseService["db"];
   s3: FakeS3;
   mail: FakeMailService;
+  alimtalk: FakeAlimtalkService;
   slack: FakeSlackService;
   // 테스트 사이 데이터 초기화
   reset: () => Promise<void>;
@@ -88,11 +107,12 @@ export type E2eContext = {
 export async function createE2eApp(): Promise<E2eContext> {
   const s3 = new FakeS3();
   const mail = new FakeMailService();
+  const alimtalk = new FakeAlimtalkService();
   const slack = new FakeSlackService();
   s3.install();
 
-  // 메일 · 슬랙 · S3는 가짜이고, 남은 외부 호출(Aligo)은 키가 없어 fetch까지 가지 않음.
-  // 호출하는 쪽이 예외를 삼킬 수 있으므로(AlimtalkService) close에서 호출 여부를 확인해 실패시킴
+  // 메일 · 알림톡 · 슬랙 · S3는 모두 가짜라 외부로 나가는 호출이 없어야 함.
+  // 호출하는 쪽이 예외를 삼킬 수 있으므로 close에서 fetch 호출 여부를 확인해 실패시킴
   const fetchSpy = jest
     .spyOn(globalThis, "fetch")
     .mockImplementation((input) => {
@@ -106,6 +126,8 @@ export async function createE2eApp(): Promise<E2eContext> {
     .useValue(new FakeInfoteamIdpService())
     .overrideProvider(MailService)
     .useValue(mail)
+    .overrideProvider(AlimtalkService)
+    .useValue(alimtalk)
     .overrideProvider(SlackService)
     .useValue(slack)
     .compile();
@@ -130,6 +152,7 @@ export async function createE2eApp(): Promise<E2eContext> {
     db,
     s3,
     mail,
+    alimtalk,
     slack,
     reset: async () => {
       // 테스트 DB 전용 (test/setup-env.ts에서 로컬 *_e2e DB만 허용). users를 참조하는 테이블과 admin_account, admin_access_log,
@@ -140,6 +163,8 @@ export async function createE2eApp(): Promise<E2eContext> {
       s3.reset();
       mail.sent.length = 0;
       mail.sendResult = MAIL_SKIPPED;
+      alimtalk.sent.length = 0;
+      alimtalk.sendResult = ALIMTALK_SKIPPED;
       slack.messages.length = 0;
     },
     close: async () => {

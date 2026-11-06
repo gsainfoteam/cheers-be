@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { adminAccount } from "@drizzle/schema/admin-account";
 import { coffeeChatRequest } from "@drizzle/schema/coffee-chat-request";
 import { notificationLog } from "@drizzle/schema/notification-log";
 import { student } from "@drizzle/schema/student";
@@ -9,6 +8,7 @@ import { createE2eApp, E2eContext } from "./support/app";
 import {
   bearer,
   http,
+  loginManager,
   Session,
   signupGraduated,
   signupStudent,
@@ -25,22 +25,6 @@ const CONTACT_PHONE = "01098765432";
 describe("어드민 커피챗 요청 관리", () => {
   let ctx: E2eContext;
   let auth: string;
-
-  const managerAuth = async (
-    email: string,
-    role: "admin" | "superadmin",
-  ): Promise<string> => {
-    await ctx.db.insert(adminAccount).values({ pk: randomUUID(), email, role });
-    const res = await http(ctx)
-      .post("/api/manager/v1/auth/login")
-      .send({
-        code: `fake-idp-code:${email}`,
-        redirect_uri: "http://localhost:5174/admin/callback",
-        code_verifier: "e2e-verifier",
-      })
-      .expect(201);
-    return `Bearer ${res.body.access_token}`;
-  };
 
   const signupGraduatedWithPhone = (nickname: string) =>
     signupGraduated(ctx, {
@@ -124,7 +108,7 @@ describe("어드민 커피챗 요청 관리", () => {
   });
   beforeEach(async () => {
     await ctx.reset();
-    auth = await managerAuth(ADMIN, "admin");
+    auth = await loginManager(ctx, ADMIN, "admin");
   });
   afterAll(() => ctx.close());
 
@@ -141,7 +125,7 @@ describe("어드민 커피챗 요청 관리", () => {
     });
 
     it("admin · superadmin 모두 읽을 수 있음", async () => {
-      const superAuth = await managerAuth(SUPER, "superadmin");
+      const superAuth = await loginManager(ctx, SUPER, "superadmin");
       for (const authorization of [auth, superAuth]) {
         await http(ctx)
           .get(REQUESTS)

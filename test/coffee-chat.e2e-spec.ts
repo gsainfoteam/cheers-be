@@ -8,6 +8,7 @@ import {
   Session,
   signupGraduated,
   signupStudent,
+  waitUntil,
 } from "./support/flows";
 
 // graduatedInfoBody의 연락처
@@ -189,13 +190,3 @@ describe("시나리오 2: 현업자 가입 → 재학생 목록 조회 → 커�
       .expect(409);
   });
 });
-
-async function waitUntil(
-  condition: () => boolean | Promise<boolean>,
-): Promise<void> {
-  for (let i = 0; i < 100; i++) {
-    if (await condition()) return;
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
-  throw new Error("Condition not met in time");
-}
