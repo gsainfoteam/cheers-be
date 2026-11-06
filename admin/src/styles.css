@@ -216,6 +216,58 @@ select {
   gap: 8px;
 }
 
+.company-logo {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
+
+.company-search {
+  margin-bottom: 16px;
+}
+
+.company-search input {
+  width: 100%;
+  max-width: 480px;
+}
+
+.company-search-results {
+  max-width: 480px;
+  margin: 4px 0 0;
+  padding: 4px 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.company-search-results li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--primary-light);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.tag-remove {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
 .table-scroll {
   overflow-x: auto;
 }
