@@ -71,6 +71,7 @@ erDiagram
   timestamp_with_time_zone updated_at
   text__ hashtags
   text__ links
+  integer company_alias_pk FK
 }
 "public.users" {
   uuid *pk
