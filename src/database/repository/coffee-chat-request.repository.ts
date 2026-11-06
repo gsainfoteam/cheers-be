@@ -13,7 +13,9 @@ import { studentProfileAttachment } from "@drizzle/schema/student-profile-attach
 import { graduated } from "@drizzle/schema/graduated";
 import { graduatedProfile } from "@drizzle/schema/graduated-profile";
 import { users } from "@drizzle/schema/users";
+import { companyAlias } from "@drizzle/schema/company-alias";
 import { CoffeeChatContactRow } from "./coffee-chat-contact.repository";
+import { isProfileCompany, profileCompanyName } from "./company.sql";
 import { StudentAttachment } from "./student.repository";
 import { isActiveAccount } from "./user.sql";
 
@@ -128,7 +130,7 @@ const sentRequestColumns = {
   graduated: {
     graduatedPk: graduatedProfile.graduatedPk,
     nickname: graduatedProfile.nickname,
-    company: graduatedProfile.company,
+    company: profileCompanyName,
     job: graduatedProfile.job,
   },
   graduatedActive: sql<boolean>`${isActiveAccount}`,
@@ -164,11 +166,12 @@ export class CoffeeChatRequestRepository {
 
   /*
   SELECT r.pk, r.message, r.created_at, r.graduated_viewed_at, r.contact_shared_at,
-    gp.graduated_pk, gp.nickname, gp.company, gp.job,
+    gp.graduated_pk, gp.nickname, COALESCE(ca.name, gp.company) AS company, gp.job,
     (u.is_deleted = false AND u.withdraw_requested_at IS NULL) AS graduated_active
   FROM coffee_chat_request r
   JOIN student s ON s.pk = r.student_pk AND s.user_pk = ?1
   JOIN graduated_profile gp ON gp.graduated_pk = r.graduated_pk
+  LEFT JOIN company_alias ca ON ca.pk = gp.company_alias_pk
   JOIN graduated g ON g.pk = r.graduated_pk
   JOIN users u ON u.pk = g.user_pk
   ORDER BY r.created_at DESC, r.pk DESC LIMIT ?2 OFFSET ?3;
@@ -190,6 +193,7 @@ export class CoffeeChatRequestRepository {
           graduatedProfile,
           eq(graduatedProfile.graduatedPk, coffeeChatRequest.graduatedPk),
         )
+        .leftJoin(companyAlias, isProfileCompany)
         .innerJoin(graduated, eq(graduated.pk, coffeeChatRequest.graduatedPk))
         .innerJoin(users, eq(users.pk, graduated.userPk))
         .orderBy(desc(coffeeChatRequest.createdAt), desc(coffeeChatRequest.pk))
@@ -205,11 +209,12 @@ export class CoffeeChatRequestRepository {
   }
 
   /*
-  SELECT r.*, gp.graduated_pk, gp.nickname, gp.company, gp.job, u.name,
+  SELECT r.*, gp.graduated_pk, gp.nickname, COALESCE(ca.name, gp.company) AS company, gp.job, u.name,
     (u.is_deleted = false AND u.withdraw_requested_at IS NULL) AS graduated_active
   FROM coffee_chat_request r
   JOIN student s ON s.pk = r.student_pk AND s.user_pk = ?2
   JOIN graduated_profile gp ON gp.graduated_pk = r.graduated_pk
+  LEFT JOIN company_alias ca ON ca.pk = gp.company_alias_pk
   JOIN graduated g ON g.pk = r.graduated_pk
   JOIN users u ON u.pk = g.user_pk
   WHERE r.pk = ?1;
@@ -234,6 +239,7 @@ export class CoffeeChatRequestRepository {
         graduatedProfile,
         eq(graduatedProfile.graduatedPk, coffeeChatRequest.graduatedPk),
       )
+      .leftJoin(companyAlias, isProfileCompany)
       .innerJoin(graduated, eq(graduated.pk, coffeeChatRequest.graduatedPk))
       .innerJoin(users, eq(users.pk, graduated.userPk))
       .where(eq(coffeeChatRequest.pk, pk));

@@ -76,6 +76,13 @@ export function detectFileMimeType(buffer: Buffer): string | undefined {
   if (buffer.length >= 5 && buffer.subarray(0, 5).equals(PDF_SIGNATURE)) {
     return "application/pdf";
   }
+  if (
+    buffer.length >= 12 &&
+    buffer.toString("latin1", 0, 4) === "RIFF" &&
+    buffer.toString("latin1", 8, 12) === "WEBP"
+  ) {
+    return "image/webp";
+  }
   if (buffer.length >= 12 && buffer.toString("latin1", 4, 8) === "ftyp") {
     return HEIF_BRANDS[buffer.toString("latin1", 8, 12)];
   }

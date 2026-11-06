@@ -21,6 +21,7 @@ import { GraduatedCardRepository } from "@src/database/repository/graduated-card
 import { CoffeeChatRequestRepository } from "@src/database/repository/coffee-chat-request.repository";
 import { InterestRepository } from "@src/database/repository/interest.repository";
 import { JwtSigningKeyRepository } from "@src/database/repository/jwt-signing-key.repository";
+import { CompanyRepository } from "@src/database/repository/company.repository";
 
 const repositories = [
   RefreshTokenRepository,
@@ -42,6 +43,7 @@ const repositories = [
   CoffeeChatRequestRepository,
   JwtSigningKeyRepository,
   InterestRepository,
+  CompanyRepository,
 ];
 
 @Module({

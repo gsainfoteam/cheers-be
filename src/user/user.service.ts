@@ -343,7 +343,7 @@ export class UserService {
   }
 
   private toGraduatedInfoDto(
-    { graduated, profile }: GraduatedWithProfile,
+    { graduated, profile, company }: GraduatedWithProfile,
     contact: ContactDto | null,
   ): GraduatedInfoDto {
     return {
@@ -351,7 +351,8 @@ export class UserService {
       profile: profile
         ? {
             nickname: profile.nickname,
-            company: profile.company,
+            company_id: company?.pk ?? null,
+            company: company?.name ?? profile.company,
             department: profile.department,
             job: profile.job,
             hashtags: profile.hashtags ?? [],

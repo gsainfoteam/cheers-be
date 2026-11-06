@@ -18,6 +18,7 @@ import {
 } from "@src/database/repository/graduated-card.repository";
 import { StudentRepository } from "@src/database/repository/student.repository";
 import { TxType } from "@src/global/types/tx.types";
+import { FileService } from "@src/file/file.service";
 import { NotificationService } from "@src/notification/notification.service";
 import { NotifyInput } from "@src/notification/notification.types";
 import { CheersStudentService } from "./cheers-student.service";
@@ -114,6 +115,15 @@ describe("CheersStudentService", () => {
       events.push("notify");
     }),
   };
+  const fileService = {
+    getPresignedUrls: jest.fn((keys: (string | null)[]) =>
+      Promise.resolve(
+        new Map(
+          keys.flatMap((key) => (key ? [[key, `https://s3/${key}`]] : [])),
+        ),
+      ),
+    ),
+  };
   const lastNotified = () => {
     const call = notificationService.notifyAsync.mock.lastCall;
     if (!call) throw new Error("notifyAsync was not called");
@@ -131,6 +141,7 @@ describe("CheersStudentService", () => {
       graduatedCardRepository as unknown as GraduatedCardRepository,
       coffeeChatRequestRepository as unknown as CoffeeChatRequestRepository,
       notificationService as unknown as NotificationService,
+      fileService as unknown as FileService,
     );
 
   beforeEach(() => {
@@ -160,6 +171,7 @@ describe("CheersStudentService", () => {
       graduatedPk,
       nickname: "철수",
       company: "인포테크",
+      companyLogoKey: null,
       job: "백엔드 개발자",
       hashtags: null,
       links: ["https://www.linkedin.com/in/chulsoo"],
@@ -196,6 +208,7 @@ describe("CheersStudentService", () => {
             graduated_id: graduatedPk,
             nickname: "철수",
             company: "인포테크",
+            company_logo_url: null,
             job: "백엔드 개발자",
             hashtags: [],
             links: ["https://www.linkedin.com/in/chulsoo"],
@@ -207,6 +220,27 @@ describe("CheersStudentService", () => {
         size: 20,
         total: 41,
       });
+    });
+
+    it("signs each company logo once and maps it to every card of the company", async () => {
+      const logo = "company-logo/a/logo.png";
+      graduatedCardRepository.findPage.mockResolvedValue({
+        rows: [
+          { ...card, companyLogoKey: logo },
+          { ...card, graduatedPk: "other", companyLogoKey: logo },
+        ],
+        total: 2,
+      });
+
+      const result = await createService().getGraduatedList(
+        query(GraduatedListQueryDto, {}),
+      );
+
+      expect(fileService.getPresignedUrls).toHaveBeenCalledWith([logo, logo]);
+      expect(result.items.map((item) => item.company_logo_url)).toEqual([
+        `https://s3/${logo}`,
+        `https://s3/${logo}`,
+      ]);
     });
 
     it("keeps the random seed within an interval and changes it after", async () => {

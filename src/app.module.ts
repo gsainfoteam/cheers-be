@@ -13,6 +13,7 @@ import { GraduatedModule } from "@src/graduated/graduated.module";
 import { UserModule } from "@src/user/user.module";
 import { StudentModule } from "@src/student/student.module";
 import { CheersModule } from "@src/cheers/cheers.module";
+import { CompanyModule } from "@src/company/company.module";
 import { HealthModule } from "@src/health/health.module";
 import { AdminInterestModule } from "@src/manager/interest/admin-interest.module";
 import { ManagerModule } from "@src/manager/manager.module";
@@ -21,6 +22,7 @@ import { ManagerConsentModule } from "@src/manager/consent/manager-consent.modul
 import { BusinessCardModule } from "@src/manager/business-card/business-card.module";
 import { SchoolDepartmentModule } from "@src/manager/department/school-department.module";
 import { DevUserModule } from "@src/manager/dev-user/dev-user.module";
+import { AdminCompanyModule } from "@src/manager/company/admin-company.module";
 
 @Module({
   imports: [
@@ -55,6 +57,7 @@ import { DevUserModule } from "@src/manager/dev-user/dev-user.module";
     StudentModule,
     GraduatedModule,
     CheersModule,
+    CompanyModule,
     HealthModule,
     ManagerModule,
     AdminInterestModule,
@@ -63,6 +66,7 @@ import { DevUserModule } from "@src/manager/dev-user/dev-user.module";
     BusinessCardModule,
     SchoolDepartmentModule,
     DevUserModule,
+    AdminCompanyModule,
   ],
   controllers: [],
   providers: [],

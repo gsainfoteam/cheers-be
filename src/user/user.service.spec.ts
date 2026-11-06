@@ -563,12 +563,14 @@ describe("UserService", () => {
         graduated: { pk: "graduated-1", verifiedAt: new Date() },
         profile: {
           nickname: "철수",
-          company: "인포테크",
+          // 저장 당시 입력값. 회사가 있으면 회사 이름이 나감
+          company: "인포테크 주식회사",
           department: "플랫폼개발팀",
           job: "백엔드 개발자",
           hashtags: null,
           links: ["https://www.linkedin.com/in/chulsoo"],
         },
+        company: { pk: 7, name: "인포테크" },
       });
 
       const info = await service.getInfo(ctx("graduated"));
@@ -577,6 +579,7 @@ describe("UserService", () => {
       expect(info.consent_required).toBe(true);
       expect(info.graduated?.profile).toEqual({
         nickname: "철수",
+        company_id: 7,
         company: "인포테크",
         department: "플랫폼개발팀",
         job: "백엔드 개발자",

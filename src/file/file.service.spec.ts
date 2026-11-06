@@ -127,4 +127,27 @@ describe("FileService", () => {
     });
     expect(options).toEqual({ expiresIn: 600 });
   });
+
+  it("signs each distinct key once and skips nulls", async () => {
+    (getSignedUrl as jest.Mock).mockClear();
+    (getSignedUrl as jest.Mock).mockImplementation(
+      (_client, command: GetObjectCommand) =>
+        Promise.resolve(`https://signed/${command.input.Key}`),
+    );
+
+    const urls = await service.getPresignedUrls([
+      "a.png",
+      null,
+      "a.png",
+      "b.png",
+    ]);
+
+    expect(getSignedUrl).toHaveBeenCalledTimes(2);
+    expect(urls).toEqual(
+      new Map([
+        ["a.png", "https://signed/a.png"],
+        ["b.png", "https://signed/b.png"],
+      ]),
+    );
+  });
 });

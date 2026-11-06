@@ -5,8 +5,11 @@ import { DatabaseService } from "@src/database/database.service";
 import { TxType } from "@src/global/types/tx.types";
 import { CheersDBError } from "@src/global/exceptions/cheers-db.error";
 import { GraduatedProfileRow } from "@src/database/repository/graduated-profile.repository";
+import { CompanyAliasRow } from "@src/database/repository/company.repository";
 import { graduated } from "@drizzle/schema/graduated";
 import { graduatedProfile } from "@drizzle/schema/graduated-profile";
+import { companyAlias } from "@drizzle/schema/company-alias";
+import { isProfileCompany } from "./company.sql";
 
 export type GraduatedRow = typeof graduated.$inferSelect;
 
@@ -14,6 +17,8 @@ export type GraduatedWithProfile = {
   graduated: GraduatedRow;
   // 추가 정보 입력 전이면 null
   profile: GraduatedProfileRow | null;
+  // 프로필의 회사. 추가 정보 입력 전이거나 이전 버전 pod가 회사 없이 저장했으면 null
+  company: CompanyAliasRow | null;
 };
 
 @Injectable()
@@ -62,12 +67,13 @@ export class GraduatedRepository {
     tx?: TxType,
   ): Promise<GraduatedWithProfile | null> {
     const result = await (tx ?? this.dbService.db)
-      .select({ graduated, profile: graduatedProfile })
+      .select({ graduated, profile: graduatedProfile, company: companyAlias })
       .from(graduated)
       .leftJoin(
         graduatedProfile,
         eq(graduatedProfile.graduatedPk, graduated.pk),
       )
+      .leftJoin(companyAlias, isProfileCompany)
       .where(eq(graduated.userPk, userPk));
 
     return result[0] ?? null;
