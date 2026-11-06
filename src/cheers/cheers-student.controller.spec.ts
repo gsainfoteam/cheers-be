@@ -8,18 +8,29 @@ import { CheersStudentController } from "./cheers-student.controller";
 const handlers = CheersStudentController.prototype;
 
 describe("CheersStudentController", () => {
-  it.each([
-    "getGraduatedList",
-    "createRequest",
-    "getSentList",
-    "getSentDetail",
-  ] as const)("lets only active students call %s", (name) => {
-    const handler = handlers[name];
+  it("lets active students and graduates call getGraduatedList", () => {
+    const handler = handlers.getGraduatedList;
 
     expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
       UserGuard,
       UserTypeGuard,
     ]);
-    expect(new Reflector().get(UserTypes, handler)).toEqual(["student"]);
+    expect(new Reflector().get(UserTypes, handler)).toEqual([
+      "student",
+      "graduated",
+    ]);
   });
+
+  it.each(["createRequest", "getSentList", "getSentDetail"] as const)(
+    "lets only active students call %s",
+    (name) => {
+      const handler = handlers[name];
+
+      expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
+        UserGuard,
+        UserTypeGuard,
+      ]);
+      expect(new Reflector().get(UserTypes, handler)).toEqual(["student"]);
+    },
+  );
 });
