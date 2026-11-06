@@ -1,0 +1,76 @@
+@startuml put-manager-company-pk-logo
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title PUT /api/manager/v1/company/{pk}/logo
+caption CRB-68 · 업로드한 로고를 확정하고 회사에 연결 (이전 로고 대체)
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "AdminCompanyController" as Controller
+participant "AdminCompanyService" as Service
+participant "FileService" as FileService
+participant "AdminCompanyRepository" as AdminCompanyRepository
+database PostgreSQL
+participant "S3"
+
+Client -> Guard: PUT /api/manager/v1/company/{pk}/logo\nAuthorization: Bearer <manager token>\n{ key }
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Pipe: 통과
+alt pk 가 양의 정수가 아님, key 빈 문자열
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+Pipe -> Controller: updateLogo(pk, req, manager)
+Controller -> Service: updateLogo(pk, key, manager.pk)
+
+Service -> FileService: confirmUpload(manager.pk, "company_logo", key)
+note right of FileService
+  트랜잭션 밖에서 먼저 (DB 잠금을 오래 잡지 않음) — flow/file-upload.puml
+  key 가 tmp/company-logo/<adminAccountPk>/ 아래가 아니면 400 Invalid file key
+  S3 에 없으면 400 File not found
+  파일 앞부분으로 형식 재확인, 다르면 tmp 삭제 후 400 Unsupported file type
+end note
+FileService -> S3: HeadObject / GetObject(Range) / CopyObject → company-logo/<uuid>.<ext> / DeleteObject(tmp)
+FileService --> Service: 확정 key
+alt confirmUpload 실패
+  FileService -[#red]-> Client: 400 Invalid file key / File not found / Unsupported file type
+end
+
+group transaction (DatabaseService.db.transaction)
+  Service -> AdminCompanyRepository: findByPkForUpdate(pk, tx)
+  AdminCompanyRepository -> PostgreSQL: SELECT company_alias WHERE pk = ? FOR UPDATE
+  note right: 병합 · 삭제 · 동시 로고 변경과 직렬화
+  PostgreSQL --> AdminCompanyRepository: row | 없음
+  alt 회사 없음 (병합 · 삭제됨)
+    Service -[#red]-> Client: 404 Company not found
+  end
+  note right of Service
+    확정한 새 파일은 지우지 않음 (커밋 직후 연결이 끊긴 경우 대비).
+    참조 없는 파일은 OrphanFileService 가 정리
+  end note
+  Service -> AdminCompanyRepository: updateLogo(pk, key, tx)
+  AdminCompanyRepository -> PostgreSQL: UPDATE company_alias SET logo_key = ?, updated_at = now()
+end
+note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
+
+opt 이전 로고가 있었음
+  Service -> FileService: deleteFileQuietly(previousKey)
+  FileService -> S3: DeleteObject
+  note right: 커밋 뒤에 지움. 실패하면 로그만
+end
+
+Service --> Controller: BaseResultDto.OK
+Controller --> Client: 200 { result: "OK" }
+note right of Client
+  OrphanFileService(flow/s3-orphan-cleanup.puml) 에 company-logo/ 디렉터리 추가:
+  company_alias.logo_key 가 참조하지 않는 파일 정리
+end note
+
+@enduml

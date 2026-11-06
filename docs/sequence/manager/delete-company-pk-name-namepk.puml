@@ -1,0 +1,57 @@
+@startuml delete-manager-company-pk-name-namepk
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title DELETE /api/manager/v1/company/{pk}/name/{namePk}
+caption CRB-68 · 회사의 표기(검색어) 삭제 (회사 이름 표기는 삭제 불가)
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ParseCompanyPkPipe" as Pipe
+participant "AdminCompanyController" as Controller
+participant "AdminCompanyService" as Service
+participant "AdminCompanyRepository" as AdminCompanyRepository
+participant "FileService" as FileService
+database PostgreSQL
+
+Client -> Guard: DELETE /api/manager/v1/company/{pk}/name/{namePk}\nAuthorization: Bearer <manager token>
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Pipe: 통과
+alt pk · namePk 가 1~2147483647 정수가 아님
+  Pipe -[#red]-> Client: 400 pk must be a positive integer.
+end
+Pipe -> Controller: removeName(pk, namePk)
+Controller -> Service: removeName(pk, namePk)
+
+group transaction (DatabaseService.db.transaction)
+  Service -> AdminCompanyRepository: findByPkForUpdate(pk, tx)
+  AdminCompanyRepository -> PostgreSQL: SELECT company_alias WHERE pk = ? FOR UPDATE
+  alt 회사 없음
+    Service -[#red]-> Client: 404 Company not found
+  end
+  Service -> AdminCompanyRepository: findName(pk, namePk, tx)
+  AdminCompanyRepository -> PostgreSQL: SELECT company_name WHERE pk = ? AND alias_pk = ?
+  alt 표기가 없거나 다른 회사의 표기
+    Service -[#red]-> Client: 404 Company name not found
+  else normalized_name 이 회사 이름의 정규화와 같음
+    Service -[#red]-> Client: 400 Cannot delete the company's own name
+  end
+  note right of Service: 회사 이름 표기를 지우면 회사 이름으로 검색되지 않음 (검색은 company_name 만 봄)
+  Service -> AdminCompanyRepository: deleteName(namePk, tx)
+  AdminCompanyRepository -> PostgreSQL: DELETE company_name WHERE pk = ?
+end
+note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
+note right of Service: 이 표기로 저장한 현업자는 그대로 이 회사 (프로필은 회사 pk 를 가리킴)
+
+Service -> AdminCompanyRepository: findDetail(pk)
+Service -> FileService: getPresignedUrls([logo_key])
+Service --> Controller: AdminCompanyDto
+Controller --> Client: 200 { company_id, name, logo_url | null, needs_review,\nnames, graduated_count, created_at }
+
+@enduml

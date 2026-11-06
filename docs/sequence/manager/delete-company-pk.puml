@@ -1,0 +1,63 @@
+@startuml delete-manager-company-pk
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title DELETE /api/manager/v1/company/{pk}
+caption CRB-68 · 회사 삭제 (고른 현업자가 없을 때만. 있으면 병합으로 처리)
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ParseCompanyPkPipe" as Pipe
+participant "AdminCompanyController" as Controller
+participant "AdminCompanyService" as Service
+participant "AdminCompanyRepository" as AdminCompanyRepository
+participant "FileService" as FileService
+database PostgreSQL
+participant "S3"
+
+Client -> Guard: DELETE /api/manager/v1/company/{pk}\nAuthorization: Bearer <manager token>
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Pipe: 통과
+alt pk 가 1~2147483647 정수가 아님
+  Pipe -[#red]-> Client: 400 pk must be a positive integer.
+end
+Pipe -> Controller: remove(pk)
+Controller -> Service: remove(pk)
+
+group transaction (DatabaseService.db.transaction)
+  Service -> AdminCompanyRepository: findByPkForUpdate(pk, tx)
+  AdminCompanyRepository -> PostgreSQL: SELECT company_alias WHERE pk = ? FOR UPDATE
+  note right
+    현업자 프로필 저장의 FOR KEY SHARE 와 직렬화.
+    삭제 중 이 회사를 고른 저장은 커밋 뒤 404 Company not found
+  end note
+  alt 회사 없음
+    Service -[#red]-> Client: 404 Company not found
+  end
+  Service -> AdminCompanyRepository: countProfiles(pk, tx)
+  AdminCompanyRepository -> PostgreSQL: SELECT count(*) FROM graduated_profile WHERE company_alias_pk = ?
+  alt 고른 현업자가 있음 (탈퇴 · 유예기간 포함)
+    Service -[#red]-> Client: 409 Company in use. Merge it into another company instead
+  end
+  Service -> AdminCompanyRepository: deleteAlias(pk, tx)
+  AdminCompanyRepository -> PostgreSQL: DELETE company_name WHERE alias_pk = ?\nDELETE company_alias WHERE pk = ?
+  note right: FK 는 NO ACTION. 표기를 먼저 지움
+end
+note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
+
+opt 로고가 있었음
+  Service -> FileService: deleteFileQuietly(logo_key)
+  FileService -> S3: DeleteObject
+  note right: 커밋 뒤에 지움. 실패하면 로그만 (OrphanFileService 가 나중에 정리)
+end
+
+Service --> Controller: (void)
+Controller --> Client: 200 { result: "OK" }
+
+@enduml

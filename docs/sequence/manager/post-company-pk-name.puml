@@ -1,0 +1,60 @@
+@startuml post-manager-company-pk-name
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title POST /api/manager/v1/company/{pk}/name
+caption CRB-68 · 회사에 표기(검색어) 추가
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "AdminCompanyController" as Controller
+participant "AdminCompanyService" as Service
+participant "AdminCompanyRepository" as AdminCompanyRepository
+participant "FileService" as FileService
+database PostgreSQL
+
+Client -> Guard: POST /api/manager/v1/company/{pk}/name\nAuthorization: Bearer <manager token>\n{ name }
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Pipe: 통과
+alt pk 가 1~2147483647 정수가 아님
+  Pipe -[#red]-> Client: 400 pk must be a positive integer.
+else name 이 trim 후 비었거나 128자 초과 · 보이지 않는 문자만
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+Pipe -> Controller: addName(pk, req)
+Controller -> Service: addName(pk, name)
+Service -> Service: normalized = normalizeCompanyName(name)
+
+group transaction (DatabaseService.db.transaction)
+  Service -> AdminCompanyRepository: findByPkForUpdate(pk, tx)
+  AdminCompanyRepository -> PostgreSQL: SELECT company_alias WHERE pk = ? FOR UPDATE
+  alt 회사 없음
+    Service -[#red]-> Client: 404 Company not found
+  end
+  Service -> AdminCompanyRepository: lockNames([normalized], tx)
+  AdminCompanyRepository -> PostgreSQL: SELECT pg_advisory_xact_lock(hashtext('company:' || normalized))
+  note right: 현업자의 직접 입력과 같은 잠금. 같은 표기로 새 회사가 동시에 생기지 않음
+  Service -> AdminCompanyRepository: findNamesByNormalized([normalized], tx)
+  AdminCompanyRepository -> PostgreSQL: SELECT company_name JOIN company_alias WHERE normalized_name = ?
+  alt 이미 등록된 표기 (이 회사 또는 다른 회사)
+    Service -[#red]-> Client: 409 Company name already registered: <name> (<회사 이름>)
+  end
+  note right of Service: 다른 회사의 표기면 그 회사를 이 회사로 병합하면 됨
+  Service -> AdminCompanyRepository: insertNames(pk, [{ name, normalizedName }], tx)
+  AdminCompanyRepository -> PostgreSQL: INSERT company_name (alias_pk, name, normalized_name)
+end
+note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
+
+Service -> AdminCompanyRepository: findDetail(pk)
+Service -> FileService: getPresignedUrls([logo_key])
+Service --> Controller: AdminCompanyDto
+Controller --> Client: 201 { company_id, name, logo_url | null, needs_review,\nnames, graduated_count, created_at }
+
+@enduml
