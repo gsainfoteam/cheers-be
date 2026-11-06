@@ -1,0 +1,60 @@
+@startuml post-manager-company
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title POST /api/manager/v1/company
+caption CRB-68 · 회사(alias) 미리 등록 + 가능한 이름(name) 여러 개
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "AdminCompanyController" as Controller
+participant "AdminCompanyService" as Service
+participant "AdminCompanyRepository" as AdminCompanyRepository
+database PostgreSQL
+
+Client -> Guard: POST /api/manager/v1/company\nAuthorization: Bearer <manager token>\n{ name, names? }
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Pipe: 통과
+alt body 검증 실패 (name · names 각 항목이 trim 후 비었거나 128자 초과, names 50개 초과)
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+note right of Pipe: 예: { name: "Microsoft", names: ["마이크로소프트", "마소", "MS", "(주) Microsoft"] }
+Pipe -> Controller: create(req)
+Controller -> Service: create(req)
+
+Service -> Service: 등록할 이름 = [name, ...names]\nnormalizeCompanyName 기준으로 중복 제거
+note right of Service: alias 이름도 company_name 에 넣어야 검색됨 (검색은 name 테이블만 봄)
+
+group transaction (DatabaseService.db.transaction)
+  Service -> AdminCompanyRepository: lockNames(normalizedNames, tx)
+  AdminCompanyRepository -> PostgreSQL: SELECT pg_advisory_xact_lock(hashtext('company:' || normalized))\n(정규화한 이름마다, 정렬 순서로)
+  note right
+    현업자의 직접 입력(POST .../graduated/info)과 같은 잠금.
+    정렬 순서로 잡아 교착 방지
+  end note
+  Service -> AdminCompanyRepository: findNamesByNormalized(normalizedNames, tx)
+  AdminCompanyRepository -> PostgreSQL: SELECT cn.name, ca.name FROM company_name cn JOIN company_alias ca\nWHERE cn.normalized_name IN (...)
+  PostgreSQL --> AdminCompanyRepository: rows
+  alt 이미 다른 회사에 등록된 이름이 있음
+    Service -[#red]-> Client: 409 Company name already registered: <name> (<alias name>)
+  end
+  note right of Service: 한 표기는 한 회사에만. 기존 회사에 붙이려면 name 추가 또는 병합
+
+  Service -> AdminCompanyRepository: insertAlias(name, needsReview = false, tx)
+  AdminCompanyRepository -> PostgreSQL: INSERT company_alias (name, needs_review = false) RETURNING
+  Service -> AdminCompanyRepository: insertNames(aliasPk, names, tx)
+  AdminCompanyRepository -> PostgreSQL: INSERT company_name (alias_pk, name, normalized_name) × n
+end
+note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
+
+Service --> Controller: AdminCompanyDto
+Controller --> Client: 201 { company_id, name, logo_url: null, needs_review: false,\nnames: [{ name_id, name }], graduated_count: 0, created_at }
+
+@enduml

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { CompanyRepository } from "@src/database/repository/company.repository";
 import { GraduatedRepository } from "@src/database/repository/graduated.repository";
 import { StudentProfileAttachmentRepository } from "@src/database/repository/student-profile-attachment.repository";
 import { SlackService } from "nestjs-slack";
@@ -50,6 +51,7 @@ export class OrphanFileService {
     private readonly slackService: SlackService,
     graduatedRepository: GraduatedRepository,
     studentProfileAttachmentRepository: StudentProfileAttachmentRepository,
+    companyRepository: CompanyRepository,
   ) {
     // 첫 배포 안전을 위해 명시적으로 켜야 지움. 꺼져 있으면 후보를 로그로만 남김
     this.deleteEnabled =
@@ -80,6 +82,8 @@ export class OrphanFileService {
         graduatedRepository.findExistingBusinessCardKeys(keys),
       [FileDirectory.ATTACHMENT]: (keys) =>
         studentProfileAttachmentRepository.findExistingFileKeys(keys),
+      [FileDirectory.COMPANY_LOGO]: (keys) =>
+        companyRepository.findExistingLogoKeys(keys),
     };
   }
 

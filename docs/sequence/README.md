@@ -35,6 +35,7 @@
 | [file/post-attachment-upload-url.puml](file/post-attachment-upload-url.puml)                                                         | `POST /api/v1/file/attachment/upload-url`                              |
 | [graduated/post-verify-business-card.puml](graduated/post-verify-business-card.puml)                                                 | `POST /api/v1/user/graduated/verify/business-card`                     |
 | [graduated/post-info.puml](graduated/post-info.puml)                                                                                 | `POST /api/v1/user/graduated/info`                                     |
+| [company/get-company.puml](company/get-company.puml)                                                                                 | `GET /api/v1/company`                                                  |
 | [cheers/get-cheers.puml](cheers/get-cheers.puml)                                                                                     | `GET /api/v1/cheers`                                                   |
 | [cheers/post-cheers-request.puml](cheers/post-cheers-request.puml)                                                                   | `POST /api/v1/cheers/request`                                          |
 | [cheers/get-cheers-sent.puml](cheers/get-cheers-sent.puml)                                                                           | `GET /api/v1/cheers/sent`                                              |
@@ -69,6 +70,16 @@
 | [manager/put-school-pk-email-domain.puml](manager/put-school-pk-email-domain.puml)                                                   | `PUT /api/manager/v1/school/{schoolPk}/email-domain`                   |
 | [manager/get-dev-user.puml](manager/get-dev-user.puml)                                                                               | `GET /api/manager/v1/dev/user`                                         |
 | [manager/delete-dev-user-pk.puml](manager/delete-dev-user-pk.puml)                                                                   | `DELETE /api/manager/v1/dev/user/{userPk}`                             |
+| [manager/get-company.puml](manager/get-company.puml)                                                                                 | `GET /api/manager/v1/company`                                          |
+| [manager/get-company-search.puml](manager/get-company-search.puml)                                                                   | `GET /api/manager/v1/company/search`                                   |
+| [manager/post-company.puml](manager/post-company.puml)                                                                               | `POST /api/manager/v1/company`                                         |
+| [manager/patch-company-pk.puml](manager/patch-company-pk.puml)                                                                       | `PATCH /api/manager/v1/company/{pk}`                                   |
+| [manager/delete-company-pk.puml](manager/delete-company-pk.puml)                                                                     | `DELETE /api/manager/v1/company/{pk}`                                  |
+| [manager/post-company-pk-name.puml](manager/post-company-pk-name.puml)                                                               | `POST /api/manager/v1/company/{pk}/name`                               |
+| [manager/delete-company-pk-name-namepk.puml](manager/delete-company-pk-name-namepk.puml)                                             | `DELETE /api/manager/v1/company/{pk}/name/{namePk}`                    |
+| [manager/post-company-pk-merge.puml](manager/post-company-pk-merge.puml)                                                             | `POST /api/manager/v1/company/{pk}/merge`                              |
+| [manager/post-company-logo-upload-url.puml](manager/post-company-logo-upload-url.puml)                                               | `POST /api/manager/v1/company/logo/upload-url`                         |
+| [manager/put-company-pk-logo.puml](manager/put-company-pk-logo.puml)                                                                 | `PUT /api/manager/v1/company/{pk}/logo`                                |
 
 ## 보기
 

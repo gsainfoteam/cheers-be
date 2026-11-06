@@ -99,6 +99,13 @@
       "when": 1793698790719,
       "tag": "0013_admin_access_dev_user_hard_delete",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793944495739,
+      "tag": "0014_company_alias",
+      "breakpoints": true
     }
   ]
 }

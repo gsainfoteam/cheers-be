@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title POST /api/v1/user/graduated/info
-caption CRB-32 · 현업자 추가 정보 저장 · 수정 (전체 교체, 닉네임 · 이름은 가입 후 변경 불가), 연락 설정, 가입 완료 시 토큰 재발급
+caption CRB-32 · 현업자 추가 정보 저장 · 수정 (전체 교체, 닉네임 · 이름은 가입 후 변경 불가), 연락 설정, 가입 완료 시 토큰 재발급\nCRB-68 · 회사는 검색 결과 선택(company_id) 또는 직접 입력(company_name) → company_alias pk 로 저장
 
 actor Client
 participant "SignupStepGuard\nUserTypeGuard" as Guard
@@ -21,9 +21,10 @@ participant "UserRepository" as UserRepository
 participant "GraduatedRepository" as GraduatedRepository
 participant "GraduatedProfileRepository" as ProfileRepository
 participant "CoffeeChatContactRepository" as ContactRepository
+participant "CompanyRepository" as CompanyRepository
 database PostgreSQL
 
-Client -> Guard: POST /api/v1/user/graduated/info\nAuthorization: Bearer <access token>\n{ name?, nickname?, company, department, job, hashtags?, links?, contact }
+Client -> Guard: POST /api/v1/user/graduated/info\nAuthorization: Bearer <access token>\n{ name?, nickname?, company_id? | company_name?, department, job, hashtags?, links?, contact }
 ref over Client, Guard
   SignupStepGuard → UserTypeGuard — flow/auth-guards.puml
   @SignupStep({ step: "profile", allowActive: true })
@@ -38,7 +39,8 @@ alt body 검증 실패
 end
 note right of Pipe
   name · nickname 은 앞뒤 공백 제거 후 검사
-  name 1~64자 / nickname ^[가-힣A-Za-z0-9_]{2,10}$ / company · department · job 1~128자
+  name 1~64자 / nickname ^[가-힣A-Za-z0-9_]{2,10}$ / department · job 1~128자
+  company_id 1~2147483647 정수 / company_name 앞뒤 공백 제거 후 1~128자 (둘 다 선택 항목)
   hashtags 최대 5개, 각 1~20자, "#" 불가, 중복 불가
   links 최대 5개, http(s) URL 2048자 이하
   contact: email_enabled · kakao_enabled boolean, email 형식,
@@ -47,7 +49,9 @@ end note
 Pipe -> Controller: saveInfo(req, user)
 Controller -> Service: saveInfo(userPk, req)
 
-alt email_enabled 인데 contact.email 없음
+alt company_id · company_name 이 둘 다 없거나 둘 다 있음
+  Service -[#red]-> Client: 400 Exactly one of company_id, company_name is required
+else email_enabled 인데 contact.email 없음
   Service -[#red]-> Client: 400 Contact email is required
 else kakao_enabled 인데 contact.phone 없음
   Service -[#red]-> Client: 400 Contact phone is required
@@ -84,9 +88,44 @@ group transaction (DatabaseService.db.transaction)
     Service -[#red]-> Client: 400 Nickname is required
   end
 
-  Service -> ProfileRepository: upsert({ graduatedPk, nickname, company, department, job,\nhashtags, links }, tx)
-  ProfileRepository -> PostgreSQL: INSERT graduated_profile ...\nON CONFLICT (graduated_pk) DO UPDATE SET company, department, job,\nhashtags, links, updated_at = now()
+  alt company_id (검색 결과에서 선택)
+    Service -> CompanyRepository: findByPkForKeyShare(company_id, tx)
+    CompanyRepository -> PostgreSQL: SELECT company_alias WHERE pk = ? FOR KEY SHARE
+    note right
+      어드민의 병합 · 삭제(FOR UPDATE)와 직렬화.
+      기다리는 사이 병합으로 지워졌으면 null
+    end note
+    CompanyRepository --> Service: alias | null
+    alt alias 없음 (잘못된 id, 검색 후 어드민이 병합 · 삭제)
+      Service -[#red]-> Client: 404 Company not found
+    end
+  else company_name (직접 입력)
+    Service -> Service: normalized = normalizeCompanyName(company_name)
+    Service -> PostgreSQL: SELECT pg_advisory_xact_lock(hashtext('company:' || normalized))
+    note right: 같은 새 이름을 동시에 입력해도 alias 가 하나만 생기도록 직렬화 (커밋 · 롤백 때 풀림)
+    Service -> CompanyRepository: findAliasByNormalizedName(normalized, tx)
+    CompanyRepository -> PostgreSQL: SELECT ca.* FROM company_name cn JOIN company_alias ca\nWHERE cn.normalized_name = ? FOR KEY SHARE OF ca
+    CompanyRepository --> Service: alias | null
+    opt 등록되지 않은 이름 (alias 없음)
+      Service -> CompanyRepository: createPending(company_name, normalized, tx)
+      CompanyRepository -> PostgreSQL: INSERT company_alias (name = 입력값(앞뒤 공백 제거), needs_review = true)\nINSERT company_name (alias_pk, name, normalized_name)
+      note right
+        어드민 검토 대기열에 들어감 (needs_review = true).
+        다른 사용자 검색에도 바로 노출.
+        alias.name UNIQUE 충돌 = 표기만 다른 같은 이름은 normalized 로 이미 걸러짐
+      end note
+      CompanyRepository --> Service: alias
+    end
+    note right of Service
+      이미 등록된 표기면 검색 결과를 고르지 않았어도 그 alias 로 연결
+      (예: "마이크로소프트" 입력 → Microsoft)
+    end note
+  end
+
+  Service -> ProfileRepository: upsert({ graduatedPk, nickname, company: alias.name, companyAliasPk,\ndepartment, job, hashtags, links }, tx)
+  ProfileRepository -> PostgreSQL: INSERT graduated_profile ...\nON CONFLICT (graduated_pk) DO UPDATE SET company, company_alias_pk, department, job,\nhashtags, links, updated_at = now()
   note right
+    company 는 alias 이름 복사본 (배포 중 이전 버전 pod가 읽음, 다음 릴리스에서 컬럼 삭제).
     nickname 은 첫 저장(INSERT)에만 들어가고 이후 갱신하지 않음
     (가입 후 변경 불가, 이후 보낸 nickname 은 무시).
     hashtags · links 를 안 보내면 빈 배열로 교체 (전체 교체)

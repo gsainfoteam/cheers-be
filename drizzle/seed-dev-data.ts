@@ -8,6 +8,8 @@ import { join } from "node:path";
 import { adminAccessLog } from "./schema/admin-access-log";
 import { coffeeChatContact } from "./schema/coffee-chat-contact";
 import { coffeeChatRequest } from "./schema/coffee-chat-request";
+import { companyAlias } from "./schema/company-alias";
+import { companyName } from "./schema/company-name";
 import { consent } from "./schema/consent";
 import { department } from "./schema/department";
 import { graduated } from "./schema/graduated";
@@ -74,6 +76,13 @@ const COMPANIES = [
   "더미파이낸스",
   "샘플모빌리티",
 ];
+// 회사마다 함께 등록할 다른 표기 (어드민 검색 · 병합 확인용). 이름이 없는 회사는 회사 이름 표기만
+const COMPANY_OTHER_NAMES: Record<string, string[]> = {
+  가상전자: ["Gasang Electronics", "가상"],
+  예시소프트: ["Example Soft", "(주)예시소프트"],
+};
+// 현업자가 직접 입력해 생긴 회사처럼 어드민 검토 대기열에 둘 회사
+const COMPANIES_NEEDING_REVIEW = new Set(["샘플모빌리티"]);
 const COMPANY_DEPARTMENTS = ["연구개발본부", "플랫폼개발팀", "전략기획팀"];
 const JOBS = [
   "백엔드 개발자",
@@ -116,6 +125,8 @@ type ReferenceData = {
   departmentPks: number[];
   interests: string[];
   consents: { type: string; version: string }[];
+  // COMPANIES 이름 → company_alias.pk
+  companyPks: Map<string, number>;
 };
 
 type ContactRow = typeof coffeeChatContact.$inferInsert;
@@ -201,6 +212,7 @@ async function loadReferenceData(tx: Tx): Promise<ReferenceData> {
 
   return {
     emailDomain: domain.domain,
+    companyPks: await ensureDevCompanies(tx),
     departmentPks: departments.map((d) => d.pk),
     interests: interests.map((i) => i.name),
     consents,
@@ -541,6 +553,7 @@ function buildDevRows(ref: ReferenceData, now: Date) {
       graduatedPk: pk,
       nickname: `[dev] 현업자${pad(index + 1)}`,
       company: pick(COMPANIES, index),
+      companyAliasPk: ref.companyPks.get(pick(COMPANIES, index)),
       department: pick(COMPANY_DEPARTMENTS, index),
       job: pick(JOBS, index),
       hashtags:
@@ -830,6 +843,42 @@ function buildDevRows(ref: ReferenceData, now: Date) {
   });
 
   return { rows, businessCardKeys };
+}
+
+// 개발용 회사. 회사는 다른(실제) 현업자도 고를 수 있어 지우지 않고, 없을 때만 만듦 (다시 실행해도 그대로)
+// 정규화는 src/company/company.utils.ts normalizeCompanyName 과 같은 규칙 (staging pod에는 alias가 없어 import하지 않음)
+async function ensureDevCompanies(tx: Tx): Promise<Map<string, number>> {
+  const normalize = (name: string) =>
+    name.normalize("NFC").trim().replace(/\s+/g, " ").toLowerCase();
+  const pks = new Map<string, number>();
+
+  for (const name of COMPANIES) {
+    const [existing] = await tx
+      .select({ aliasPk: companyName.aliasPk })
+      .from(companyName)
+      .where(eq(companyName.normalizedName, normalize(name)));
+    if (existing) {
+      pks.set(name, existing.aliasPk);
+      continue;
+    }
+
+    const [alias] = await tx
+      .insert(companyAlias)
+      .values({ name, needsReview: COMPANIES_NEEDING_REVIEW.has(name) })
+      .returning();
+    await tx
+      .insert(companyName)
+      .values(
+        [name, ...(COMPANY_OTHER_NAMES[name] ?? [])].map((n) => ({
+          aliasPk: alias.pk,
+          name: n,
+          normalizedName: normalize(n),
+        })),
+      )
+      .onConflictDoNothing();
+    pks.set(name, alias.pk);
+  }
+  return pks;
 }
 
 // 한 트랜잭션에서 지우고 다시 넣음. 중간에 실패하면 이전 데이터가 그대로 남음

@@ -1,11 +1,16 @@
 import {
   BadRequestException,
   ForbiddenException,
+  NotFoundException,
   UnauthorizedException,
 } from "@nestjs/common";
 import { AuthService } from "@src/auth/auth.service";
 import { DatabaseService } from "@src/database/database.service";
 import { CoffeeChatContactRepository } from "@src/database/repository/coffee-chat-contact.repository";
+import {
+  CompanyAliasRow,
+  CompanyRepository,
+} from "@src/database/repository/company.repository";
 import { GraduatedProfileRepository } from "@src/database/repository/graduated-profile.repository";
 import {
   GraduatedRepository,
@@ -24,6 +29,7 @@ import { GraduatedService } from "./graduated.service";
 
 const USER_PK = "8f1d2c3b-0000-4000-8000-000000000001";
 const GRADUATED_PK = "8f1d2c3b-0000-4000-8000-000000000002";
+const COMPANY_PK = 7;
 const TEMP_KEY = `tmp/business-card/${USER_PK}/new.jpg`;
 const NEW_KEY = `business-card/${USER_PK}/new.jpg`;
 const OLD_KEY = `business-card/${USER_PK}/old.jpg`;
@@ -58,6 +64,7 @@ const profileRow = (
   graduatedPk: GRADUATED_PK,
   nickname: "철수",
   company: "인포테크",
+  companyAliasPk: COMPANY_PK,
   department: "플랫폼개발팀",
   job: "백엔드 개발자",
   createdAt: new Date(),
@@ -71,7 +78,7 @@ const infoRequest = (
   overrides: Partial<GraduatedInfoRequestDto> = {},
 ): GraduatedInfoRequestDto => ({
   nickname: "철수",
-  company: "인포테크",
+  company_id: COMPANY_PK,
   department: "플랫폼개발팀",
   job: "백엔드 개발자",
   hashtags: ["백엔드"],
@@ -82,6 +89,18 @@ const infoRequest = (
     email: "chulsoo@example.com",
     phone: null,
   },
+  ...overrides,
+});
+
+const companyRow = (
+  overrides: Partial<CompanyAliasRow> = {},
+): CompanyAliasRow => ({
+  pk: COMPANY_PK,
+  name: "인포테크",
+  logoKey: null,
+  needsReview: false,
+  createdAt: new Date(),
+  updatedAt: new Date(),
   ...overrides,
 });
 
@@ -109,6 +128,12 @@ describe("GraduatedService", () => {
   };
   const graduatedProfileRepository = { upsert: jest.fn() };
   const coffeeChatContactRepository = { upsert: jest.fn() };
+  const companyRepository = {
+    findByPkForKeyShare: jest.fn(),
+    lockName: jest.fn(),
+    findByNormalizedNameForKeyShare: jest.fn(),
+    createPending: jest.fn(),
+  };
   const service = new GraduatedService(
     dbService as unknown as DatabaseService,
     authService as unknown as AuthService,
@@ -117,6 +142,7 @@ describe("GraduatedService", () => {
     graduatedRepository as unknown as GraduatedRepository,
     graduatedProfileRepository as unknown as GraduatedProfileRepository,
     coffeeChatContactRepository as unknown as CoffeeChatContactRepository,
+    companyRepository as unknown as CompanyRepository,
   );
 
   beforeEach(() => {
@@ -128,7 +154,10 @@ describe("GraduatedService", () => {
     graduatedRepository.findByUserPkWithProfile.mockResolvedValue({
       graduated: graduatedRow({ verifiedAt: new Date() }),
       profile: null,
+      company: null,
     });
+    companyRepository.findByPkForKeyShare.mockResolvedValue(companyRow());
+    companyRepository.findByNormalizedNameForKeyShare.mockResolvedValue(null);
     authService.issueTokens.mockResolvedValue({
       accessToken: "access",
       refreshToken: "refresh",
@@ -220,6 +249,7 @@ describe("GraduatedService", () => {
           graduatedPk: GRADUATED_PK,
           nickname: "철수",
           company: "인포테크",
+          companyAliasPk: COMPANY_PK,
           department: "플랫폼개발팀",
           job: "백엔드 개발자",
           hashtags: ["백엔드"],
@@ -391,6 +421,88 @@ describe("GraduatedService", () => {
         ForbiddenException,
       );
       expect(graduatedProfileRepository.upsert).not.toHaveBeenCalled();
+    });
+
+    describe("company", () => {
+      it("links the company picked from the search results", async () => {
+        await service.saveInfo(USER_PK, infoRequest());
+
+        expect(companyRepository.findByPkForKeyShare).toHaveBeenCalledWith(
+          COMPANY_PK,
+          tx,
+        );
+        expect(companyRepository.lockName).not.toHaveBeenCalled();
+      });
+
+      it("throws 404 when the picked company was merged or deleted", async () => {
+        companyRepository.findByPkForKeyShare.mockResolvedValue(null);
+
+        await expect(service.saveInfo(USER_PK, infoRequest())).rejects.toThrow(
+          NotFoundException,
+        );
+        expect(graduatedProfileRepository.upsert).not.toHaveBeenCalled();
+      });
+
+      it("links a typed name to the company that already has it", async () => {
+        companyRepository.findByNormalizedNameForKeyShare.mockResolvedValue(
+          companyRow({ pk: 3, name: "Microsoft" }),
+        );
+
+        await service.saveInfo(
+          USER_PK,
+          infoRequest({
+            company_id: undefined,
+            company_name: " 마이크로소프트 ",
+          }),
+        );
+
+        expect(companyRepository.lockName).toHaveBeenCalledWith(
+          "마이크로소프트",
+          tx,
+        );
+        expect(companyRepository.createPending).not.toHaveBeenCalled();
+        expect(graduatedProfileRepository.upsert).toHaveBeenCalledWith(
+          expect.objectContaining({ company: "Microsoft", companyAliasPk: 3 }),
+          tx,
+        );
+      });
+
+      it("registers an unknown typed name as a company to review", async () => {
+        companyRepository.createPending.mockResolvedValue(
+          companyRow({ pk: 9, name: "New   Co", needsReview: true }),
+        );
+
+        await service.saveInfo(
+          USER_PK,
+          infoRequest({ company_id: undefined, company_name: "New   Co" }),
+        );
+
+        expect(
+          companyRepository.findByNormalizedNameForKeyShare,
+        ).toHaveBeenCalledWith("new co", tx);
+        expect(companyRepository.createPending).toHaveBeenCalledWith(
+          "New   Co",
+          "new co",
+          tx,
+        );
+        expect(graduatedProfileRepository.upsert).toHaveBeenCalledWith(
+          expect.objectContaining({ company: "New   Co", companyAliasPk: 9 }),
+          tx,
+        );
+      });
+
+      it.each([
+        ["both", { company_id: COMPANY_PK, company_name: "인포테크" }],
+        ["neither", { company_id: undefined }],
+      ])(
+        "throws 400 when %s of company_id and company_name is sent",
+        async (_, overrides) => {
+          await expect(
+            service.saveInfo(USER_PK, infoRequest(overrides)),
+          ).rejects.toThrow(BadRequestException);
+          expect(dbService.db.transaction).not.toHaveBeenCalled();
+        },
+      );
     });
   });
 });

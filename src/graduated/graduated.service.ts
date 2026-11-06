@@ -2,11 +2,20 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from "@nestjs/common";
 import { AuthService } from "@src/auth/auth.service";
 import { DatabaseService } from "@src/database/database.service";
+import {
+  normalizeCompanyName,
+  toCompanyDisplayName,
+} from "@src/company/company.utils";
 import { CoffeeChatContactRepository } from "@src/database/repository/coffee-chat-contact.repository";
+import {
+  CompanyAliasRow,
+  CompanyRepository,
+} from "@src/database/repository/company.repository";
 import { GraduatedProfileRepository } from "@src/database/repository/graduated-profile.repository";
 import { GraduatedRepository } from "@src/database/repository/graduated.repository";
 import { UserRepository } from "@src/database/repository/user.repository";
@@ -17,6 +26,7 @@ import {
   assertContactValues,
   toContactRow,
 } from "@src/user/dto/contact-request.dto";
+import { TxType } from "@src/global/types/tx.types";
 import { SignupCompleteResponseDto } from "@src/user/dto/signup-complete.dto";
 import { GraduatedInfoRequestDto } from "./dto/graduated-info.dto";
 
@@ -30,6 +40,7 @@ export class GraduatedService {
     private readonly graduatedRepository: GraduatedRepository,
     private readonly graduatedProfileRepository: GraduatedProfileRepository,
     private readonly coffeeChatContactRepository: CoffeeChatContactRepository,
+    private readonly companyRepository: CompanyRepository,
   ) {}
 
   // 명함 등록 = 즉시 인증. 다시 등록하면 이전 명함을 대체
@@ -76,6 +87,11 @@ export class GraduatedService {
   ): Promise<SignupCompleteResponseDto> {
     // 현업자는 "희망하지 않음"(둘 다 false) 가능
     assertContactValues(req.contact);
+    if ((req.company_id === undefined) === (req.company_name === undefined)) {
+      throw new BadRequestException(
+        "Exactly one of company_id, company_name is required",
+      );
+    }
 
     const tokens = await this.dbService.db.transaction(async (tx) => {
       // 같은 유저의 동시 저장 · 로그인(유형 변경)과 직렬화하고, 가입 완료 여부를 잠근 행 기준으로 판단
@@ -100,11 +116,14 @@ export class GraduatedService {
         throw new BadRequestException("Nickname is required");
       }
 
+      const company = await this.resolveCompany(req, tx);
       await this.graduatedProfileRepository.upsert(
         {
           graduatedPk: found.graduated.pk,
           nickname,
-          company: req.company,
+          // 배포 중 이전 버전 pod가 읽는 복사본 (다음 릴리스에서 컬럼 삭제)
+          company: company.name,
+          companyAliasPk: company.pk,
           department: req.department,
           job: req.job,
           hashtags: req.hashtags ?? [],
@@ -132,5 +151,37 @@ export class GraduatedService {
       access_token: tokens.accessToken,
       refresh_token: tokens.refreshToken,
     };
+  }
+
+  // 프로필이 가리킬 회사. 검색 결과에서 골랐으면 그 회사, 직접 입력했으면 같은 표기의 회사 또는 새 회사(어드민 검토 대기)
+  private async resolveCompany(
+    req: GraduatedInfoRequestDto,
+    tx: TxType,
+  ): Promise<CompanyAliasRow> {
+    if (req.company_id !== undefined) {
+      // 어드민의 병합 · 삭제와 직렬화. 검색 뒤 병합되어 사라졌으면 다시 검색해야 함
+      const alias = await this.companyRepository.findByPkForKeyShare(
+        req.company_id,
+        tx,
+      );
+      if (!alias) {
+        throw new NotFoundException("Company not found");
+      }
+      return alias;
+    }
+
+    const name = toCompanyDisplayName(req.company_name!);
+    const normalized = normalizeCompanyName(name);
+    await this.companyRepository.lockName(normalized, tx);
+    // 등록된 표기면 검색 결과를 고르지 않았어도 그 회사로 (예: "마이크로소프트" → Microsoft)
+    const existing =
+      await this.companyRepository.findByNormalizedNameForKeyShare(
+        normalized,
+        tx,
+      );
+    return (
+      existing ??
+      (await this.companyRepository.createPending(name, normalized, tx))
+    );
   }
 }

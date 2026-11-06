@@ -15,11 +15,16 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 import { DatabaseService } from "@src/database/database.service";
 import { isActiveAccountAs } from "@src/database/repository/user.sql";
+import {
+  isProfileCompany,
+  profileCompanyName,
+} from "@src/database/repository/company.sql";
 import { CoffeeChatRequestStatus } from "@src/cheers/cheers.utils";
 import { coffeeChatRequest } from "@drizzle/schema/coffee-chat-request";
 import { department } from "@drizzle/schema/department";
 import { graduated } from "@drizzle/schema/graduated";
 import { graduatedProfile } from "@drizzle/schema/graduated-profile";
+import { companyAlias } from "@drizzle/schema/company-alias";
 import { student } from "@drizzle/schema/student";
 import { studentProfile } from "@drizzle/schema/student-profile";
 import { users } from "@drizzle/schema/users";
@@ -88,7 +93,7 @@ const requestColumns = {
   graduated: {
     pk: coffeeChatRequest.graduatedPk,
     nickname: graduatedProfile.nickname,
-    company: graduatedProfile.company,
+    company: profileCompanyName,
     job: graduatedProfile.job,
     active: sql<boolean>`${isActiveAccountAs("graduated_user")}`,
   },
@@ -154,29 +159,32 @@ export class AdminCoffeeChatRequestRepository {
       .innerJoin(
         graduatedProfile,
         eq(graduatedProfile.graduatedPk, coffeeChatRequest.graduatedPk),
-      );
+      )
+      .leftJoin(companyAlias, isProfileCompany);
   }
 
   /*
-  SELECT r.pk, r.message, r.created_at, r.graduated_viewed_at, r.contact_shared_at, r.student_viewed_at,
-    r.student_pk, su.name, d.name, (su.is_deleted = false AND su.withdraw_requested_at IS NULL),
-    r.graduated_pk, gp.nickname, gp.company, gp.job, (gu.is_deleted = false AND gu.withdraw_requested_at IS NULL)
-  FROM coffee_chat_request r
-  JOIN student s ON s.pk = r.student_pk
-  JOIN users su ON su.pk = s.user_pk
-  JOIN student_profile sp ON sp.pk = r.student_profile_pk
-  JOIN department d ON d.pk = sp.department_pk
-  JOIN graduated g ON g.pk = r.graduated_pk
-  JOIN users gu ON gu.pk = g.user_pk
-  JOIN graduated_profile gp ON gp.graduated_pk = r.graduated_pk
-  WHERE <filter>
-  ORDER BY r.created_at DESC, r.pk DESC LIMIT ?1 OFFSET ?2;
-  SELECT count(*) FROM coffee_chat_request r
-  JOIN student s ON s.pk = r.student_pk
-  JOIN users su ON su.pk = s.user_pk
-  JOIN graduated_profile gp ON gp.graduated_pk = r.graduated_pk
-  WHERE <filter>;
-   */
+    SELECT r.pk, r.message, r.created_at, r.graduated_viewed_at, r.contact_shared_at, r.student_viewed_at,
+      r.student_pk, su.name, d.name, (su.is_deleted = false AND su.withdraw_requested_at IS NULL),
+      r.graduated_pk, gp.nickname, COALESCE(ca.name, gp.company), gp.job, (gu.is_deleted = false AND gu.withdraw_requested_at IS NULL)
+    FROM coffee_chat_request r
+    JOIN student s ON s.pk = r.student_pk
+    JOIN users su ON su.pk = s.user_pk
+    JOIN student_profile sp ON sp.pk = r.student_profile_pk
+    JOIN department d ON d.pk = sp.department_pk
+    JOIN graduated g ON g.pk = r.graduated_pk
+    JOIN users gu ON gu.pk = g.user_pk
+    JOIN graduated_profile gp ON gp.graduated_pk = r.graduated_pk
+    LEFT JOIN company_alias ca ON ca.pk = gp.company_alias_pk
+    WHERE <filter>
+    ORDER BY r.created_at DESC, r.pk DESC LIMIT ?1 OFFSET ?2;
+
+    SELECT count(*) FROM coffee_chat_request r
+    JOIN student s ON s.pk = r.student_pk
+    JOIN users su ON su.pk = s.user_pk
+    JOIN graduated_profile gp ON gp.graduated_pk = r.graduated_pk
+    WHERE <filter>;
+     */
   async findPage(
     filter: AdminCoffeeChatRequestFilter,
     offset: number,
@@ -206,8 +214,8 @@ export class AdminCoffeeChatRequestRepository {
   }
 
   /*
-  findPage와 같은 SELECT, WHERE r.pk = ?1;
-   */
+    findPage와 같은 SELECT, WHERE r.pk = ?1;
+     */
   async findByPk(pk: string): Promise<AdminCoffeeChatRequestRow | null> {
     const result = await this.selectRequests().where(
       eq(coffeeChatRequest.pk, pk),

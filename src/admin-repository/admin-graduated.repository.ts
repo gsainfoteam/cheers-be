@@ -5,6 +5,11 @@ import { TxType } from "@src/global/types/tx.types";
 import { graduated } from "@drizzle/schema/graduated";
 import { graduatedProfile } from "@drizzle/schema/graduated-profile";
 import { users } from "@drizzle/schema/users";
+import { companyAlias } from "@drizzle/schema/company-alias";
+import {
+  isProfileCompany,
+  profileCompanyName,
+} from "@src/database/repository/company.sql";
 
 export type AdminGraduatedRow = {
   graduatedPk: string;
@@ -32,11 +37,12 @@ export class AdminGraduatedRepository {
   constructor(private readonly dbService: DatabaseService) {}
 
   /*
-  SELECT g.pk, u.name, gp.nickname, gp.company, gp.job, g.business_card_key IS NOT NULL,
+  SELECT g.pk, u.name, gp.nickname, COALESCE(ca.name, gp.company), gp.job, g.business_card_key IS NOT NULL,
     g.verified_at, u.status, u.withdraw_requested_at
   FROM graduated g
   JOIN users u ON u.pk = g.user_pk
   LEFT JOIN graduated_profile gp ON gp.graduated_pk = g.pk
+  LEFT JOIN company_alias ca ON ca.pk = gp.company_alias_pk
   WHERE u.is_deleted = false
   ORDER BY g.verified_at DESC NULLS LAST, g.pk LIMIT ?1 OFFSET ?2;
   SELECT count(*) FROM graduated g JOIN users u ON u.pk = g.user_pk WHERE u.is_deleted = false;
@@ -49,7 +55,7 @@ export class AdminGraduatedRepository {
           graduatedPk: graduated.pk,
           name: users.name,
           nickname: graduatedProfile.nickname,
-          company: graduatedProfile.company,
+          company: profileCompanyName,
           job: graduatedProfile.job,
           hasBusinessCard: sql<boolean>`${graduated.businessCardKey} IS NOT NULL`,
           verifiedAt: graduated.verifiedAt,
@@ -62,6 +68,7 @@ export class AdminGraduatedRepository {
           graduatedProfile,
           eq(graduatedProfile.graduatedPk, graduated.pk),
         )
+        .leftJoin(companyAlias, isProfileCompany)
         .where(isManageable)
         // 같은 값이 있어도 페이지 사이 순서가 흔들리지 않게 pk를 마지막 기준으로
         .orderBy(sql`${desc(graduated.verifiedAt)} NULLS LAST`, graduated.pk)

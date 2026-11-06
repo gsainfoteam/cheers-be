@@ -28,7 +28,7 @@ import { CheersCardDto, GraduatedListQueryDto } from "./dto/graduated-list.dto";
 import { PageResponseDto, PaginationQueryDto } from "./dto/pagination.dto";
 import { SentRequestDetailDto, SentRequestDto } from "./dto/sent-request.dto";
 
-// API 명세 "커피챗 · 재학생" 섹션. 가입을 마친 재학생만 (현업자 → 403).
+// API 명세 "커피챗 · 재학생" 섹션. 가입을 마친 재학생만 (현업자 → 403). 현업자 목록은 현업자도 조회 가능.
 // 현업자 쪽(/api/v1/cheers/received)은 CheersGraduatedController
 @ApiTags("커피챗 · 재학생")
 @ApiAuth()
@@ -43,7 +43,7 @@ export class CheersStudentController {
   @ApiPageResponse(CheersCardDto)
   @ApiErrors({
     400: "query 형식 오류",
-    403: "가입을 마치지 않음, 재학생이 아님",
+    403: "가입을 마치지 않음",
   })
   async getGraduatedList(
     @Query() query: GraduatedListQueryDto,

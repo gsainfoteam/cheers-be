@@ -172,7 +172,8 @@ export async function uploadAttachment(
 export const graduatedInfoBody = (overrides: Record<string, unknown> = {}) => ({
   name: "박현업",
   nickname: `현업${randomUUID().slice(0, 6)}`,
-  company: "인포테크",
+  // 검색 결과에서 고르지 않고 직접 입력 (없으면 회사가 새로 등록됨)
+  company_name: "인포테크",
   department: "플랫폼개발팀",
   job: "백엔드 개발자",
   hashtags: ["백엔드"],

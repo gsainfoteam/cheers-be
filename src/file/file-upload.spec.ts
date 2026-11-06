@@ -335,6 +335,11 @@ describe("detectFileMimeType", () => {
     ["heic", ftyp("heic"), "image/heic"],
     ["heix", ftyp("heix"), "image/heic"],
     ["mif1", ftyp("mif1"), "image/heif"],
+    [
+      "webp",
+      Buffer.from("RIFF\x24\x00\x00\x00WEBPVP8 ", "latin1"),
+      "image/webp",
+    ],
   ])("detects %s", (_, buffer, expected) => {
     expect(detectFileMimeType(buffer)).toBe(expected);
   });
@@ -343,6 +348,10 @@ describe("detectFileMimeType", () => {
     ["html", html],
     ["svg", svg],
     ["mp4 (ftyp but not HEIF)", ftyp("isom")],
+    [
+      "wav (RIFF but not WEBP)",
+      Buffer.from("RIFF\x24\x00\x00\x00WAVEfmt ", "latin1"),
+    ],
     ["too short", Buffer.from([0xff, 0xd8])],
     ["empty", Buffer.alloc(0)],
   ])("returns undefined for %s", (_, buffer) => {

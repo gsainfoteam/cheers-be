@@ -1,5 +1,6 @@
 import { Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { CompanyRepository } from "@src/database/repository/company.repository";
 import { GraduatedRepository } from "@src/database/repository/graduated.repository";
 import { StudentProfileAttachmentRepository } from "@src/database/repository/student-profile-attachment.repository";
 import { SlackService } from "nestjs-slack";
@@ -13,6 +14,7 @@ const RECENT = new Date(NOW.getTime() - 23 * HOUR_MS);
 // 참조 중인 파일. 참조가 하나도 없으면 설정 오류로 보고 중단하므로 삭제 테스트에 함께 둠
 const KEEP_CARD = "business-card/u/keep.jpg";
 const KEEP_ATTACHMENT = "attachment/u/keep.pdf";
+const KEEP_LOGO = "company-logo/a/keep.png";
 
 const file = (key: string, lastModified: Date | undefined = OLD) => ({
   key,
@@ -26,6 +28,7 @@ describe("OrphanFileService", () => {
   const slackService = { sendText: jest.fn() };
   const graduatedRepository = { findExistingBusinessCardKeys: jest.fn() };
   const attachmentRepository = { findExistingFileKeys: jest.fn() };
+  const companyRepository = { findExistingLogoKeys: jest.fn() };
   // prefix별 페이지. 없으면 빈 목록
   let pages: Record<string, { files: unknown[]; nextToken?: string }[]>;
   let logSpy: jest.SpyInstance;
@@ -37,6 +40,7 @@ describe("OrphanFileService", () => {
       slackService as unknown as SlackService,
       graduatedRepository as unknown as GraduatedRepository,
       attachmentRepository as unknown as StudentProfileAttachmentRepository,
+      companyRepository as unknown as CompanyRepository,
     );
   const enabled = { S3_ORPHAN_DELETE_ENABLED: "true" };
 
@@ -60,6 +64,9 @@ describe("OrphanFileService", () => {
     attachmentRepository.findExistingFileKeys.mockImplementation(
       (keys: string[]) =>
         Promise.resolve(keys.filter((k) => k === KEEP_ATTACHMENT)),
+    );
+    companyRepository.findExistingLogoKeys.mockImplementation(
+      (keys: string[]) => Promise.resolve(keys.filter((k) => k === KEEP_LOGO)),
     );
     fileService.deleteFile.mockResolvedValue(undefined);
     slackService.sendText.mockResolvedValue(undefined);
@@ -132,17 +139,21 @@ describe("OrphanFileService", () => {
     pages["attachment/"] = [
       { files: [file(KEEP_ATTACHMENT), file("attachment/u/x.pdf")] },
     ];
+    pages["company-logo/"] = [
+      { files: [file(KEEP_LOGO), file("company-logo/a/x.png")] },
+    ];
 
     const result = await createService(enabled).cleanup(NOW);
 
     expect(fileService.deleteFile.mock.calls.map(([key]) => key)).toEqual([
       "business-card/u/x.jpg",
       "attachment/u/x.pdf",
+      "company-logo/a/x.png",
     ]);
     expect(result).toEqual({
-      scanned: 4,
-      orphans: 2,
-      deleted: 2,
+      scanned: 6,
+      orphans: 3,
+      deleted: 3,
       failed: 0,
       stopped: false,
     });
@@ -151,6 +162,7 @@ describe("OrphanFileService", () => {
   it("asks each table only about the keys of its own prefix", async () => {
     pages["business-card/"] = [{ files: [file("business-card/u/a.jpg")] }];
     pages["attachment/"] = [{ files: [file("attachment/u/a.pdf")] }];
+    pages["company-logo/"] = [{ files: [file("company-logo/a/a.png")] }];
 
     await createService().cleanup(NOW);
 
@@ -159,6 +171,9 @@ describe("OrphanFileService", () => {
     ).toHaveBeenCalledWith(["business-card/u/a.jpg"]);
     expect(attachmentRepository.findExistingFileKeys).toHaveBeenCalledWith([
       "attachment/u/a.pdf",
+    ]);
+    expect(companyRepository.findExistingLogoKeys).toHaveBeenCalledWith([
+      "company-logo/a/a.png",
     ]);
   });
 
@@ -191,6 +206,7 @@ describe("OrphanFileService", () => {
     expect(fileService.listFiles.mock.calls.map(([prefix]) => prefix)).toEqual([
       "business-card/",
       "attachment/",
+      "company-logo/",
     ]);
   });
 

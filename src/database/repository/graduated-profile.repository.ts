@@ -10,6 +10,7 @@ export type GraduatedProfileInput = Pick<
   | "graduatedPk"
   | "nickname"
   | "company"
+  | "companyAliasPk"
   | "department"
   | "job"
   | "hashtags"
@@ -20,10 +21,10 @@ export type GraduatedProfileInput = Pick<
 @Injectable()
 export class GraduatedProfileRepository {
   /*
-  INSERT INTO graduated_profile (graduated_pk, nickname, company, department, job, hashtags, links)
-  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+  INSERT INTO graduated_profile (graduated_pk, nickname, company, company_alias_pk, department, job, hashtags, links)
+  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
   ON CONFLICT (graduated_pk) DO UPDATE SET
-    company = EXCLUDED.company, department = EXCLUDED.department, job = EXCLUDED.job,
+    company = EXCLUDED.company, company_alias_pk = EXCLUDED.company_alias_pk, department = EXCLUDED.department, job = EXCLUDED.job,
     hashtags = EXCLUDED.hashtags, links = EXCLUDED.links, updated_at = now();
    */
   // 추가 정보 저장 · 수정 (전체 교체). nickname은 가입 후 변경 불가라 첫 INSERT에만 들어감
@@ -35,6 +36,7 @@ export class GraduatedProfileRepository {
         target: graduatedProfile.graduatedPk,
         set: {
           company: profile.company,
+          companyAliasPk: profile.companyAliasPk,
           department: profile.department,
           job: profile.job,
           hashtags: profile.hashtags,

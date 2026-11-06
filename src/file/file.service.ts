@@ -240,6 +240,22 @@ export class FileService {
     });
   }
 
+  /**
+   * signs read URLs for a list that repeats keys (e.g. the same company logo on many cards)
+   * signing is local, so this makes no S3 calls
+   * @param keys (string | null)[] null entries are skipped
+   * @returns Map<string, string> key → presigned URL, each distinct key signed once
+   */
+  async getPresignedUrls(
+    keys: (string | null)[],
+  ): Promise<Map<string, string>> {
+    const distinct = [...new Set(keys.filter((key) => key !== null))];
+    const urls = await Promise.all(
+      distinct.map((key) => this.getPresignedUrl(key)),
+    );
+    return new Map(distinct.map((key, i) => [key, urls[i]]));
+  }
+
   // 내용 판별용으로 앞부분만 읽음 (Range GET)
   private async readFileSignature(key: string): Promise<Buffer> {
     const command = new GetObjectCommand({

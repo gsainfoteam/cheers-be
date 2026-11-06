@@ -48,8 +48,8 @@ else claimType = student
   StudentRepository --> Service: { student, latest: { profile, department, attachments } | null }
 else claimType = graduated
   Service -> GraduatedRepository: findByUserPkWithProfile(userPk)
-  GraduatedRepository -> PostgreSQL: SELECT graduated LEFT JOIN graduated_profile
-  GraduatedRepository --> Service: { graduated, profile | null }
+  GraduatedRepository -> PostgreSQL: SELECT graduated LEFT JOIN graduated_profile\nLEFT JOIN company_alias ON pk = company_alias_pk
+  GraduatedRepository --> Service: { graduated, profile | null, company | null }
 else
   Service -> AuthService: touchLastActive(userPk)
   AuthService -> UserRepository: updateLastActiveAt(userPk)

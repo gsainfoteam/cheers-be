@@ -27,7 +27,7 @@ FK는 모두 `ON DELETE NO ACTION`입니다. 부모 행을 지우기 전에 백�
 | [public.coffee_chat_request](public.coffee_chat_request.md) | 12 | 커피챗 요청. 같은 현업자에게 중복 요청 가능. 진행 단계(현업자 확인 → 연락처 공유 → 재학생 확인)는 처음 했을 때 시각만 기록 | BASE TABLE |
 | [public.consent](public.consent.md) | 5 | 약관 버전 기준 데이터. 새 버전은 행을 수정하지 말고 어드민에서 새로 등록 (POST /api/manager/v1/consent) | BASE TABLE |
 | [public.department](public.department.md) | 4 | 학과 기준 데이터. 어드민에서 추가 · 수정. 학과명이 바뀌면 같은 행의 name만 수정 (버전 관리 안 함). 학생 프로필이 참조하므로 지우지 않고 비활성화함 | BASE TABLE |
-| [public.graduated_profile](public.graduated_profile.md) | 9 | 현업자 추가 정보. 알림 수단 · 공유할 연락처는 coffee_chat_contact | BASE TABLE |
+| [public.graduated_profile](public.graduated_profile.md) | 10 | 현업자 추가 정보. 알림 수단 · 공유할 연락처는 coffee_chat_contact | BASE TABLE |
 | [public.graduated](public.graduated.md) | 6 | 현업자 | BASE TABLE |
 | [public.notification_log](public.notification_log.md) | 9 | 이메일 · 카카오 알림톡 전송 로그 (channel로 구분). insert만 함, 재시도도 새 행 | BASE TABLE |
 | [public.refresh_token](public.refresh_token.md) | 4 | 리프레시 토큰 | BASE TABLE |
@@ -45,6 +45,44 @@ FK는 모두 `ON DELETE NO ACTION`입니다. 부모 행을 지우기 전에 백�
 | [public.admin_account](public.admin_account.md) | 5 | 어드민 페이지에 로그인할 수 있는 이메일 목록. 앱 유저(users)와 관계없음 | BASE TABLE |
 | [public.admin_access_log](public.admin_access_log.md) | 5 | 어드민의 개인정보 열람 기록. insert만 함. 탈퇴 삭제(purge)를 막지 않도록 다른 테이블로 FK를 걸지 않음 | BASE TABLE |
 | [public.school_email_domain](public.school_email_domain.md) | 3 | 학교 이메일 인증 시 허용 도메인. 재학생의 학교를 정하는 기준이라 한 도메인은 한 학교에만 속함. 변경은 superadmin만 할 수 있음 | BASE TABLE |
+| [public.company_alias](public.company_alias.md) | 6 | 회사 (공식 이름). 현업자 목록 등 화면에는 이 이름과 로고가 나가며, 사람마다 다른 표기는 company_name에 묶임 | BASE TABLE |
+| [public.company_name](public.company_name.md) | 5 | 회사 이름 표기. 회사 검색은 이 테이블만 봄 (회사 이름도 여기에 들어 있음). 한 표기는 한 회사에만 속함 | BASE TABLE |
+
+## Stored procedures and functions
+
+| Name | ReturnType | Arguments | Type |
+| ---- | ------- | ------- | ---- |
+| public.set_limit | float4 | real | FUNCTION |
+| public.show_limit | float4 |  | FUNCTION |
+| public.show_trgm | _text | text | FUNCTION |
+| public.similarity | float4 | text, text | FUNCTION |
+| public.similarity_op | bool | text, text | FUNCTION |
+| public.word_similarity | float4 | text, text | FUNCTION |
+| public.word_similarity_op | bool | text, text | FUNCTION |
+| public.word_similarity_commutator_op | bool | text, text | FUNCTION |
+| public.similarity_dist | float4 | text, text | FUNCTION |
+| public.word_similarity_dist_op | float4 | text, text | FUNCTION |
+| public.word_similarity_dist_commutator_op | float4 | text, text | FUNCTION |
+| public.gtrgm_in | gtrgm | cstring | FUNCTION |
+| public.gtrgm_out | cstring | gtrgm | FUNCTION |
+| public.gtrgm_consistent | bool | internal, text, smallint, oid, internal | FUNCTION |
+| public.gtrgm_distance | float8 | internal, text, smallint, oid, internal | FUNCTION |
+| public.gtrgm_compress | internal | internal | FUNCTION |
+| public.gtrgm_decompress | internal | internal | FUNCTION |
+| public.gtrgm_penalty | internal | internal, internal, internal | FUNCTION |
+| public.gtrgm_picksplit | internal | internal, internal | FUNCTION |
+| public.gtrgm_union | gtrgm | internal, internal | FUNCTION |
+| public.gtrgm_same | internal | gtrgm, gtrgm, internal | FUNCTION |
+| public.gin_extract_value_trgm | internal | text, internal | FUNCTION |
+| public.gin_extract_query_trgm | internal | text, internal, smallint, internal, internal, internal, internal | FUNCTION |
+| public.gin_trgm_consistent | bool | internal, smallint, text, integer, internal, internal, internal, internal | FUNCTION |
+| public.gin_trgm_triconsistent | char | internal, smallint, text, integer, internal, internal, internal | FUNCTION |
+| public.strict_word_similarity | float4 | text, text | FUNCTION |
+| public.strict_word_similarity_op | bool | text, text | FUNCTION |
+| public.strict_word_similarity_commutator_op | bool | text, text | FUNCTION |
+| public.strict_word_similarity_dist_op | float4 | text, text | FUNCTION |
+| public.strict_word_similarity_dist_commutator_op | float4 | text, text | FUNCTION |
+| public.gtrgm_options | void | internal | FUNCTION |
 
 ## Enums
 
@@ -72,6 +110,7 @@ erDiagram
 "public.coffee_chat_request" }o--|| "public.student" : ""
 "public.department" }o--|| "public.school" : ""
 "public.graduated_profile" |o--|| "public.graduated" : ""
+"public.graduated_profile" }o--o| "public.company_alias" : ""
 "public.graduated" |o--|| "public.users" : ""
 "public.notification_log" }o--|| "public.coffee_chat_request" : ""
 "public.refresh_token" }o--|| "public.users" : ""
@@ -85,6 +124,7 @@ erDiagram
 "public.user_oauth_account" }o--|| "public.users" : ""
 "public.student_email_send_log" }o--|| "public.users" : ""
 "public.school_email_domain" }o--|| "public.school" : ""
+"public.company_name" }o--|| "public.company_alias" : ""
 
 "public.coffee_chat_contact" {
   uuid user_pk FK
@@ -132,6 +172,7 @@ erDiagram
   timestamp_with_time_zone updated_at
   text__ hashtags
   text__ links
+  integer company_alias_pk FK
 }
 "public.graduated" {
   uuid *pk
@@ -261,6 +302,21 @@ erDiagram
   integer *pk
   integer school_pk FK
   varchar_128_ domain
+}
+"public.company_alias" {
+  integer *pk
+  varchar_128_ name
+  text logo_key
+  boolean needs_review
+  timestamp_with_time_zone created_at
+  timestamp_with_time_zone updated_at
+}
+"public.company_name" {
+  integer *pk
+  integer alias_pk FK
+  varchar_128_ name
+  varchar_128_ normalized_name
+  timestamp_with_time_zone created_at
 }
 ```
 

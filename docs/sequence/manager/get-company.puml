@@ -1,0 +1,55 @@
+@startuml get-manager-company
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/manager/v1/company
+caption CRB-68 · 회사(alias) 목록. 검토가 필요한 회사(needs_review)가 맨 위
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "AdminCompanyController" as Controller
+participant "AdminCompanyService" as Service
+participant "AdminCompanyRepository" as AdminCompanyRepository
+participant "FileService" as FileService
+database PostgreSQL
+
+Client -> Guard: GET /api/manager/v1/company?q=&page=&size=\nAuthorization: Bearer <manager token>
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Pipe: 통과
+alt query 검증 실패 (q 128자 초과, page < 1, size < 1 또는 > 100)
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+note right of Pipe: 기본값 page = 1, size = 20. q 없으면 전체 (병합 대상 고르기에서 씀)
+Pipe -> Controller: list(query)
+Controller -> Service: list(query)
+
+par 동시에 조회 — 같은 조건
+  Service -> AdminCompanyRepository: findPage({ q, offset, limit })
+  AdminCompanyRepository -> PostgreSQL: SELECT ca.*, names(json_agg: pk, name),\n(SELECT count(*) FROM graduated_profile WHERE company_alias_pk = ca.pk) AS graduated_count\nFROM company_alias ca\nWHERE (q 가 있으면 EXISTS company_name LIKE '%q%')\nORDER BY ca.needs_review DESC, ca.created_at DESC, ca.pk DESC\nLIMIT size OFFSET offset
+  note right
+    q 검색은 사용자 검색과 같은 정규화 · company_name 기준.
+    graduated_count: 탈퇴 유예 등 상태와 관계없이 이 회사를 가리키는 프로필 수
+    (병합 · 삭제 판단용)
+  end note
+  AdminCompanyRepository --> Service: rows
+else
+  Service -> AdminCompanyRepository: (count)
+  AdminCompanyRepository -> PostgreSQL: SELECT count(*) (같은 WHERE)
+  AdminCompanyRepository --> Service: total
+end
+
+Service -> FileService: getPresignedUrls(logo_keys)
+note right: key마다 한 번, 서버에서 서명만 계산 (S3 호출 없음)
+note right of Service: 트랜잭션 없음 (조회만)
+
+Service --> Controller: { items, page, size, total }
+Controller --> Client: 200 { items: [{ company_id, name, logo_url | null, needs_review,\nnames: [{ name_id, name }], graduated_count, created_at }], page, size, total }
+
+@enduml

@@ -4,7 +4,7 @@ import { GraduatedInfoRequestDto } from "./graduated-info.dto";
 
 const body = (overrides: Record<string, unknown> = {}) => ({
   nickname: "철수",
-  company: "인포테크",
+  company_id: 7,
   department: "플랫폼개발팀",
   job: "백엔드 개발자",
   hashtags: ["백엔드"],
@@ -39,6 +39,15 @@ describe("GraduatedInfoRequestDto", () => {
     expect(errors).toHaveLength(0);
   });
 
+  it("accepts a typed company name instead of company_id and trims it", async () => {
+    const { dto, errors } = await errorsOf(
+      body({ company_id: undefined, company_name: " 마이크로소프트 " }),
+    );
+
+    expect(errors).toHaveLength(0);
+    expect(dto.company_name).toBe("마이크로소프트");
+  });
+
   it("trims the name and nickname", async () => {
     const { dto, errors } = await errorsOf(
       body({ name: "  김철수 ", nickname: " chul_수1 " }),
@@ -62,7 +71,14 @@ describe("GraduatedInfoRequestDto", () => {
     ["an 11-char nickname", { nickname: "가".repeat(11) }],
     ["a nickname with a space inside", { nickname: "철 수" }],
     ["a nickname with a symbol", { nickname: "철수!" }],
-    ["an empty company", { company: "" }],
+    ["a blank company_name", { company_id: undefined, company_name: "   " }],
+    [
+      "a company_name over 128 chars",
+      { company_id: undefined, company_name: "가".repeat(129) },
+    ],
+    ["a company_id of 0", { company_id: 0 }],
+    ["a company_id out of the integer range", { company_id: 2147483648 }],
+    ["a company_id as a string", { company_id: "7" }],
     [
       "a non-mobile phone number",
       {

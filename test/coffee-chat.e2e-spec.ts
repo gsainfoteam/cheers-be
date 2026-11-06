@@ -144,11 +144,21 @@ describe("시나리오 2: 현업자 가입 → 재학생 목록 조회 → 커�
     });
   });
 
-  it("현업자는 재학생 API를 호출할 수 없음", async () => {
+  it("현업자는 목록만 볼 수 있고 요청 · 보낸 요청 API는 호출할 수 없음", async () => {
     const graduatedSession = await signupGraduated(ctx);
 
-    await http(ctx)
+    const page = await http(ctx)
       .get("/api/v1/cheers")
+      .set("Authorization", bearer(graduatedSession))
+      .expect(200);
+    expect(page.body.total).toBe(1);
+    await http(ctx)
+      .post("/api/v1/cheers/request")
+      .set("Authorization", bearer(graduatedSession))
+      .send({ graduated_id: page.body.items[0].graduated_id, message: "질문" })
+      .expect(403);
+    await http(ctx)
+      .get("/api/v1/cheers/sent")
       .set("Authorization", bearer(graduatedSession))
       .expect(403);
   });

@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title GET /api/v1/cheers
-caption CRB-37 · 현업자 정보 카드 목록 (정렬: 최근 가입 · 최근 접속 · 랜덤)
+caption CRB-37 · 현업자 정보 카드 목록 (정렬: 최근 가입 · 최근 접속 · 랜덤)\nCRB-68 · 회사는 company_alias 이름 + 로고 presigned GET URL
 
 actor Client
 participant "UserGuard\n+ UserTypeGuard" as Guard
@@ -17,14 +17,15 @@ participant "ValidationPipe" as Pipe
 participant "CheersStudentController" as Controller
 participant "CheersStudentService" as Service
 participant "GraduatedCardRepository" as GraduatedCardRepository
+participant "FileService" as FileService
 database PostgreSQL
 
 Client -> Guard: GET /api/v1/cheers?sort=&page=&size=\nAuthorization: Bearer <access token>
 ref over Client, Guard
   UserGuard, UserTypeGuard — flow/auth-guards.puml
-  @UserTypes(["student"]). 가입을 마친(active) 재학생만
+  @UserTypes(["student", "graduated"]). 가입을 마친(active) 재학생 · 현업자
   401 Missing access token / Token expired / Invalid token
-  403 Signup is not completed / User type not allowed (현업자)
+  403 Signup is not completed
 end ref
 Guard -> Pipe: 통과
 alt query 검증 실패 (sort가 recent_joined · recent_active · random 이 아님,\npage < 1, size < 1 또는 > 50, 정수가 아님)
@@ -45,7 +46,7 @@ end note
 
 par 동시에 조회 — 같은 조건
   Service -> GraduatedCardRepository: findPage({ sort, offset, limit: size, seed })
-  GraduatedCardRepository -> PostgreSQL: SELECT g.pk, gp.nickname, gp.company, gp.job,\ngp.hashtags, gp.links, u.last_active_at,\nCOALESCE(c.kakao_enabled OR c.email_enabled, false) AS can_request\nFROM graduated g JOIN users u JOIN graduated_profile gp\nLEFT JOIN coffee_chat_contact c\nWHERE u.type = 'graduated' AND u.status = 'active'\nAND g.verified_at IS NOT NULL AND isActiveAccount\nORDER BY <sort>, g.pk LIMIT size OFFSET offset
+  GraduatedCardRepository -> PostgreSQL: SELECT g.pk, gp.nickname, COALESCE(ca.name, gp.company) AS company, ca.logo_key, gp.job,\ngp.hashtags, gp.links, u.last_active_at,\nCOALESCE(c.kakao_enabled OR c.email_enabled, false) AS can_request\nFROM graduated g JOIN users u JOIN graduated_profile gp\nLEFT JOIN company_alias ca ON ca.pk = gp.company_alias_pk\nLEFT JOIN coffee_chat_contact c\nWHERE u.type = 'graduated' AND u.status = 'active'\nAND g.verified_at IS NOT NULL AND isActiveAccount\nORDER BY <sort>, g.pk LIMIT size OFFSET offset
   note right
     isActiveAccount (user.sql.ts) = is_deleted = false
     AND withdraw_requested_at IS NULL → 탈퇴 · 탈퇴 유예기간 중인 현업자 제외
@@ -53,7 +54,8 @@ par 동시에 조회 — 같은 조건
     정렬: recent_joined = gp.created_at DESC
     recent_active = u.last_active_at DESC
     random = md5(g.pk || seed)
-    이름 · 부서 · 연락처는 select하지 않음
+    이름 · 부서 · 연락처는 select하지 않음.
+    company: 이전 버전 pod가 회사 없이 저장한 프로필(company_alias_pk NULL)은 저장 당시 입력값
   end note
   GraduatedCardRepository --> Service: rows
 else
@@ -63,7 +65,12 @@ else
 end
 note right of Service: 트랜잭션 없음 (조회만)
 
-Service -> Service: hashtags · links가 null이면 [],\nlast_active_at ISO 8601
+Service -> FileService: getPresignedUrls(rows.logo_key)
+note right
+  서버에서 서명만 계산 (S3 호출 없음).
+  같은 회사 현업자가 여러 명이어도 key당 한 번
+end note
+Service -> Service: hashtags · links가 null이면 [],\nlast_active_at ISO 8601,\ncompany_logo_url = 서명 URL | null (로고 없음)
 Service --> Controller: { items, page, size, total }
 Controller --> Client: 200 { items: CheersCardDto[], page, size, total }
 

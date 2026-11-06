@@ -18,6 +18,7 @@ import {
 import { StudentRepository } from "@src/database/repository/student.repository";
 import { buildCoffeeChatRequestedMail } from "@src/mail/templates/coffee-chat-requested.template";
 import { NotificationService } from "@src/notification/notification.service";
+import { FileService } from "@src/file/file.service";
 import { NotifyInput } from "@src/notification/notification.types";
 import {
   DEFAULT_RANDOM_SEED_MINUTES,
@@ -53,6 +54,7 @@ export class CheersStudentService {
     private readonly graduatedCardRepository: GraduatedCardRepository,
     private readonly coffeeChatRequestRepository: CoffeeChatRequestRepository,
     private readonly notificationService: NotificationService,
+    private readonly fileService: FileService,
   ) {
     this.webBaseUrl = resolveWebBaseUrl(configService, this.logger);
 
@@ -77,12 +79,19 @@ export class CheersStudentService {
       // 같은 구간 안에서는 페이지를 넘겨도 random 순서가 유지됨
       seed: randomSeed(new Date(), this.randomSeedMinutes),
     });
+    // 같은 회사 현업자가 여러 명이어도 로고 key당 한 번만 서명
+    const logoUrls = await this.fileService.getPresignedUrls(
+      rows.map((row) => row.companyLogoKey),
+    );
 
     return {
       items: rows.map((row) => ({
         graduated_id: row.graduatedPk,
         nickname: row.nickname,
         company: row.company,
+        company_logo_url: row.companyLogoKey
+          ? (logoUrls.get(row.companyLogoKey) ?? null)
+          : null,
         job: row.job,
         hashtags: row.hashtags ?? [],
         links: row.links ?? [],

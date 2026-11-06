@@ -16,6 +16,8 @@ export class CheersCardDto {
   graduated_id: string;
   nickname: string;
   company: string;
+  /** 회사 로고 presigned GET URL. 로고가 없으면 null */
+  company_logo_url: string | null;
   job: string;
   hashtags: string[];
   links: string[];

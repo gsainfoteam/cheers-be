@@ -9,13 +9,14 @@ autonumber
 hide footbox
 
 title 스케줄러: S3 고아 파일 정리
-caption CRB-41 · src/file/orphan-file.scheduler.ts · 매주 일요일 04:30 (Asia/Seoul, 탈퇴 스케줄러 04:00 뒤)
+caption CRB-41 · src/file/orphan-file.scheduler.ts · 매주 일요일 04:30 (Asia/Seoul, 탈퇴 스케줄러 04:00 뒤)\nCRB-68 · company-logo/ 추가
 
 participant "OrphanFileScheduler" as Scheduler
 participant "OrphanFileService" as Service
 participant "FileService" as FileService
 participant "GraduatedRepository" as GraduatedRepository
 participant "StudentProfileAttachmentRepository" as AttachmentRepository
+participant "CompanyRepository" as CompanyRepository
 database PostgreSQL
 participant "S3"
 participant "Slack"
@@ -23,13 +24,13 @@ participant "Slack"
 Scheduler -> Service: cleanup()
 Service -> Service: cutoff = now - 24시간\ndeleteEnabled = S3_ORPHAN_DELETE_ENABLED === "true" (기본 false: 로그만)\nmaxDeletes = S3_ORPHAN_MAX_DELETES (기본 1000)\nmaxRatio = S3_ORPHAN_MAX_RATIO (기본 0.5)
 note right of Service
-  허용한 prefix만 처리: business-card/ · attachment/.
+  허용한 prefix만 처리: business-card/ · attachment/ · company-logo/.
   Record<FileDirectory, 참조 조회 함수>라 새 디렉터리를 추가하면 조회 함수 없이는 컴파일되지 않음.
   tmp/는 건드리지 않음 (버킷 lifecycle 1일). ListObjects의 Prefix는 앞에서부터 일치하므로
   attachment/는 tmp/attachment/를 포함하지 않음
 end note
 
-loop prefix마다 (business-card/, attachment/)
+loop prefix마다 (business-card/, attachment/, company-logo/)
   loop IsTruncated인 동안 (ContinuationToken)
     Service -> FileService: listFiles(prefix, token)
     FileService -> S3: ListObjectsV2 (최대 1000개)
@@ -59,6 +60,13 @@ loop prefix마다 (business-card/, attachment/)
           모든 프로필 버전의 첨부를 봄: 이전 버전도 커피챗 요청이 참조하므로 살아 있는 참조.
           탈퇴 만료 처리는 첨부 행을 지우고, 명함은 key를 NULL로 바꾸므로 그 뒤에는 고아로 잡힘.
           어드민 명함 인증 취소도 key를 NULL로 바꾸고 파일은 여기에 맡김 (CRB-44)
+        end note
+      else prefix = company-logo/
+        Service -> CompanyRepository: findExistingLogoKeys(keys)
+        CompanyRepository -> PostgreSQL: SELECT logo_key FROM company_alias\nWHERE logo_key IN (keys)
+        note right
+          로고 교체 · 회사 병합 · 삭제는 커밋 뒤 이전 로고를 지우고, 그 삭제가 실패했거나
+          확정 뒤 DB 저장에 실패한 파일이 여기서 정리됨
         end note
       end
       alt DB 조회 실패

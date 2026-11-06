@@ -1,0 +1,81 @@
+@startuml post-manager-company-pk-merge
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title POST /api/manager/v1/company/{pk}/merge
+caption CRB-68 · 회사 병합: {pk}(원본)의 이름 · 현업자를 target 으로 옮기고 원본 삭제
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "AdminCompanyController" as Controller
+participant "AdminCompanyService" as Service
+participant "AdminCompanyRepository" as AdminCompanyRepository
+participant "FileService" as FileService
+database PostgreSQL
+participant "S3"
+
+Client -> Guard: POST /api/manager/v1/company/{pk}/merge\nAuthorization: Bearer <manager token>\n{ target_id }
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Pipe: 통과
+alt pk · target_id 가 양의 정수가 아님
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+Pipe -> Controller: merge(pk, req)
+Controller -> Service: merge(sourcePk, targetPk)
+alt sourcePk = targetPk
+  Service -[#red]-> Client: 400 Cannot merge a company into itself
+end
+note right of Service
+  예: 사용자가 직접 입력해 생긴 "마이크로소프트"(needs_review) 를
+  어드민이 등록한 "Microsoft" 로 병합
+end note
+
+group transaction (DatabaseService.db.transaction)
+  Service -> AdminCompanyRepository: findByPksForUpdate([source, target], tx)
+  AdminCompanyRepository -> PostgreSQL: SELECT company_alias WHERE pk IN (?, ?)\nORDER BY pk FOR UPDATE
+  note right
+    pk 순서로 잠가 교착 방지.
+    사용자 프로필 저장의 FOR KEY SHARE 와 직렬화
+    → 병합 중 원본을 고른 저장은 커밋 뒤 404 Company not found
+  end note
+  PostgreSQL --> AdminCompanyRepository: rows
+  alt 둘 중 하나라도 없음
+    Service -[#red]-> Client: 404 Company not found
+  end
+
+  Service -> AdminCompanyRepository: moveNames(source, target, tx)
+  AdminCompanyRepository -> PostgreSQL: UPDATE company_name SET alias_pk = target WHERE alias_pk = source
+  note right: 원본 이름("마이크로소프트" 등)도 target 의 name 으로 남음 → 이후 입력 · 검색은 Microsoft
+  Service -> AdminCompanyRepository: moveProfiles(source, target, tx)
+  AdminCompanyRepository -> PostgreSQL: UPDATE graduated_profile SET company_alias_pk = target\nWHERE company_alias_pk = source
+
+  opt target 에 로고가 없고 원본에 로고가 있음
+    Service -> AdminCompanyRepository: updateLogo(target, source.logo_key, tx)
+    AdminCompanyRepository -> PostgreSQL: UPDATE company_alias SET logo_key = ?, updated_at = now()
+    note right: 원본 로고를 넘겨받음 (지울 파일 없음)
+  end
+
+  Service -> AdminCompanyRepository: delete(source, tx)
+  AdminCompanyRepository -> PostgreSQL: DELETE company_alias WHERE pk = source
+  note right: FK 는 NO ACTION. 자식(name · profile)을 먼저 옮겼으므로 통과
+end
+note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
+
+opt 원본 로고를 넘겨받지 않음 (target 에 이미 로고가 있음)
+  Service -> FileService: deleteFileQuietly(source.logo_key)
+  FileService -> S3: DeleteObject
+  note right: 커밋 뒤에 지움. 실패하면 로그만 (OrphanFileService 가 나중에 정리)
+end
+
+Service --> Controller: AdminCompanyDto (target)
+Controller --> Client: 200 { company_id, name, logo_url | null, needs_review,\nnames, graduated_count, created_at }
+note right of Client: target 의 needs_review 는 그대로 둠
+
+@enduml
