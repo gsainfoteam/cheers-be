@@ -13,8 +13,6 @@ const input: SendMailInput = {
   text: "text",
 };
 
-const flushPromises = () => new Promise((resolve) => setImmediate(resolve));
-
 describe("MailService", () => {
   const sendMail = jest.fn();
   const sendText = jest.fn();
@@ -45,6 +43,7 @@ describe("MailService", () => {
 
     expect(createTransport).toHaveBeenCalledWith({
       service: "gmail",
+      pool: true,
       auth: { user: "cheers@gmail.com", pass: "app-password" },
       connectionTimeout: 10_000,
       greetingTimeout: 10_000,
@@ -128,26 +127,28 @@ describe("MailService", () => {
     );
   });
 
-  it("sendAsync returns immediately and notifies slack on failure", async () => {
+  it("sendAndAlert returns the failure and notifies slack", async () => {
     sendMail.mockRejectedValue(new Error("SMTP error"));
     const service = createService(credentials);
 
-    expect(service.sendAsync(input)).toBeUndefined();
-    await flushPromises();
-
+    await expect(service.sendAndAlert(input)).resolves.toEqual({
+      success: false,
+      error: "SMTP error",
+    });
     expect(sendText).toHaveBeenCalledWith(
       expect.stringContaining("SMTP error"),
       { channel: "bug" },
     );
   });
 
-  it("sendAsync does not notify slack on success", async () => {
+  it("sendAndAlert does not notify slack on success", async () => {
     sendMail.mockResolvedValue({ messageId: "<id@gmail.com>" });
     const service = createService(credentials);
 
-    service.sendAsync(input);
-    await flushPromises();
-
+    await expect(service.sendAndAlert(input)).resolves.toEqual({
+      success: true,
+      messageId: "<id@gmail.com>",
+    });
     expect(sendText).not.toHaveBeenCalled();
   });
 });

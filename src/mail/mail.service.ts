@@ -45,9 +45,11 @@ export class MailService {
       return;
     }
 
-    // nodemailer 기본값(연결 2분, 유휴 소켓 10분)은 인증번호 발송에 너무 길어서 명시
+    // nodemailer 기본값(연결 2분, 유휴 소켓 10분)은 인증번호 발송에 너무 길어서 명시.
+    // 인증번호 메일은 응답 전에 기다리므로 연결을 재사용해 매번 TLS · 로그인을 하지 않게 함 (CRB-75)
     this.transporter = createTransport({
       service: "gmail",
+      pool: true,
       auth: { user, pass },
       connectionTimeout: 10_000,
       greetingTimeout: 10_000,
@@ -82,19 +84,19 @@ export class MailService {
   }
 
   /**
-   * 발송 결과를 기다리지 않고 바로 반환합니다. 실패 시 로그와 Slack 알림을 남깁니다.
+   * 메일을 발송하고 결과를 반환합니다. 실패하면 로그와 Slack 알림을 남깁니다. throw하지 않습니다.
    */
-  sendAsync(input: SendMailInput): void {
-    void this.send(input).then((result) => {
-      if (result.success) return;
+  async sendAndAlert(input: SendMailInput): Promise<MailResult> {
+    const result = await this.send(input);
+    if (result.success) return result;
 
-      const message = `Failed to send mail to ${input.to} (subject: ${input.subject}): ${result.error}`;
-      this.logger.error(message);
-      this.slackService
-        .sendText(`*[MAIL ERROR]*\n${message}`, { channel: "bug" })
-        .catch((err) => {
-          this.logger.error("Failed to send Slack notification", err);
-        });
-    });
+    const message = `Failed to send mail to ${input.to} (subject: ${input.subject}): ${result.error}`;
+    this.logger.error(message);
+    this.slackService
+      .sendText(`*[MAIL ERROR]*\n${message}`, { channel: "bug" })
+      .catch((err) => {
+        this.logger.error("Failed to send Slack notification", err);
+      });
+    return result;
   }
 }

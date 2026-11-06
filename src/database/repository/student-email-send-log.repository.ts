@@ -94,6 +94,25 @@ export class StudentEmailSendLogRepository {
   }
 
   /*
+  DELETE FROM student_email_send_log WHERE user_pk = ?1 AND created_at = ?2;
+   */
+  // 인증 메일 발송 실패: 방금 남긴 전송 기록만 지워 전송 상한에 세지 않음 (CRB-75)
+  async deleteByUserPkAndCreatedAt(
+    userPk: string,
+    createdAt: Date,
+    tx: TxType,
+  ): Promise<void> {
+    await tx
+      .delete(studentEmailSendLog)
+      .where(
+        and(
+          eq(studentEmailSendLog.userPk, userPk),
+          eq(studentEmailSendLog.createdAt, createdAt),
+        ),
+      );
+  }
+
+  /*
   DELETE FROM student_email_send_log WHERE created_at < ?1;
    */
   // 보존 기간이 지난 기록 정리 (스케줄러). 상한 계산은 최근 24시간만 보고, 행에 이메일 원문이 있어 오래 두지 않음.

@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { eq, lt, sql } from "drizzle-orm";
+import { and, eq, lt, sql } from "drizzle-orm";
 import { TxType } from "@src/global/types/tx.types";
 import { CheersDBError } from "@src/global/exceptions/cheers-db.error";
 import { studentEmailVerification } from "@drizzle/schema/student-email-verification";
@@ -81,6 +81,25 @@ export class StudentEmailVerificationRepository {
     await tx
       .delete(studentEmailVerification)
       .where(eq(studentEmailVerification.studentPk, studentPk));
+  }
+
+  /*
+  DELETE FROM student_email_verification WHERE student_pk = ?1 AND created_at = ?2;
+   */
+  // 인증 메일 발송 실패: 방금 만든 요청만 지움. 그사이 다른 전송이 덮어썼으면 그대로 둠 (CRB-75)
+  async deleteByStudentPkAndCreatedAt(
+    studentPk: string,
+    createdAt: Date,
+    tx: TxType,
+  ): Promise<void> {
+    await tx
+      .delete(studentEmailVerification)
+      .where(
+        and(
+          eq(studentEmailVerification.studentPk, studentPk),
+          eq(studentEmailVerification.createdAt, createdAt),
+        ),
+      );
   }
 
   /*

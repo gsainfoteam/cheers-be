@@ -6,8 +6,10 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
+  Logger,
   NotFoundException,
 } from "@nestjs/common";
+import { SlackService } from "nestjs-slack";
 import { createHmac, randomInt, timingSafeEqual } from "node:crypto";
 import { JwtKeyService } from "@src/auth/jwt-key.service";
 import { DatabaseService } from "@src/database/database.service";
@@ -49,6 +51,8 @@ type VerifyResult =
 // 재학생 학교 이메일 인증 (가입 단계 verify)
 @Injectable()
 export class StudentVerificationService {
+  private readonly logger = new Logger(StudentVerificationService.name);
+
   constructor(
     private readonly jwtKeyService: JwtKeyService,
     private readonly dbService: DatabaseService,
@@ -57,6 +61,7 @@ export class StudentVerificationService {
     private readonly studentRepository: StudentRepository,
     private readonly studentEmailVerificationRepository: StudentEmailVerificationRepository,
     private readonly studentEmailSendLogRepository: StudentEmailSendLogRepository,
+    private readonly slackService: SlackService,
   ) {}
 
   // 재전송도 같은 API. 이전 코드는 덮어써서 무효
@@ -72,7 +77,7 @@ export class StudentVerificationService {
     const createdAt = new Date();
     const expiresAt = new Date(createdAt.getTime() + VERIFICATION_CODE_TTL_MS);
 
-    await this.dbService.db.transaction(async (tx) => {
+    const studentPk = await this.dbService.db.transaction(async (tx) => {
       const student = await this.lockStudent(userPk, tx);
 
       const current =
@@ -118,12 +123,17 @@ export class StudentVerificationService {
         { userPk, email, createdAt },
         tx,
       );
+      return student.pk;
     });
 
-    // 커밋 뒤에 보냄. 실패는 MailService가 로그 + Slack으로 처리하고, 사용자는 재전송
-    this.mailService.sendAsync(
+    // 커밋 뒤에 보내고 결과를 기다림 (학생 행 잠금을 메일 발송 동안 잡지 않음). 실패는 MailService가 로그 + Slack
+    const result = await this.mailService.sendAndAlert(
       buildVerificationCodeMail(email, code, VERIFICATION_CODE_TTL_MINUTES),
     );
+    if (!result.success) {
+      await this.discardSend(userPk, studentPk, createdAt);
+      throw verificationMailSendFailed();
+    }
 
     return {
       expires_at: expiresAt,
@@ -285,6 +295,37 @@ export class StudentVerificationService {
     return createHmac("sha256", codeHashKey).update(code).digest("hex");
   }
 
+  // 발송에 실패한 전송을 없던 일로 함: 전송 상한 · 재전송 대기 시간에 세지 않고 바로 다시 보낼 수 있게 함.
+  // created_at으로 방금 만든 행만 지움. 이전 코드는 upsert 때 이미 덮어써져 되살릴 수 없음
+  private async discardSend(
+    userPk: string,
+    studentPk: string,
+    createdAt: Date,
+  ): Promise<void> {
+    try {
+      await this.dbService.db.transaction(async (tx) => {
+        await this.studentEmailSendLogRepository.deleteByUserPkAndCreatedAt(
+          userPk,
+          createdAt,
+          tx,
+        );
+        await this.studentEmailVerificationRepository.deleteByStudentPkAndCreatedAt(
+          studentPk,
+          createdAt,
+          tx,
+        );
+      });
+    } catch (error) {
+      const message = `Failed to discard verification send after mail failure (user: ${userPk}): ${error instanceof Error ? error.message : String(error)}`;
+      this.logger.error(message);
+      this.slackService
+        .sendText(`*[MAIL ERROR]*\n${message}`, { channel: "bug" })
+        .catch((err) => {
+          this.logger.error("Failed to send Slack notification", err);
+        });
+    }
+  }
+
   private async lockStudent(userPk: string, tx: TxType): Promise<StudentRow> {
     const student = await this.studentRepository.findByUserPkForUpdate(
       userPk,
@@ -306,6 +347,16 @@ const emailAlreadyRegistered = (cause?: unknown) =>
       error_code: "EMAIL_ALREADY_REGISTERED",
     },
     { cause },
+  );
+
+// 메일 발송 실패. 프론트는 error_code로 "잠시 후 다시 시도" 안내를 띄움 (CRB-75)
+const verificationMailSendFailed = () =>
+  new HttpException(
+    {
+      message: "Failed to send verification mail",
+      error_code: "VERIFICATION_MAIL_SEND_FAILED",
+    },
+    HttpStatus.BAD_GATEWAY,
   );
 
 const tooManyRequests = (message: string, retryAvailableAt: Date) =>
