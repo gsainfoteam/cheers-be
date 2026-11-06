@@ -2,7 +2,7 @@
 
 ## Description
 
-이메일 · 카카오 알림톡 전송 로그 (channel로 구분). insert만 함, 재시도도 새 행
+이메일 · 카카오 알림톡 전송 로그 (channel로 구분). 시도마다 새 행. 실패한 행에 next_retry_at이 있으면 재시도 스케줄러가 처리하고 비움 (CRB-75)
 
 ## Columns
 
@@ -17,6 +17,8 @@
 | provider_message_id | varchar(128) |  | true |  |  |  |
 | recipient | varchar(255) |  | false |  |  | 이메일 주소 또는 전화번호 |
 | error | text |  | true |  |  |  |
+| attempt | smallint | 1 | false |  |  | 몇 번째 발송 시도인지 (1 = 처음 발송, 최대 4) |
+| next_retry_at | timestamp with time zone |  | true |  |  | 이 실패를 다시 보낼 시각. null이면 재시도 대상이 아님 (성공 · 마지막 시도 · 이미 재시도함) |
 
 ## Constraints
 
@@ -31,6 +33,7 @@
 | ---- | ---------- |
 | notification_log_pkey | CREATE UNIQUE INDEX notification_log_pkey ON public.notification_log USING btree (pk) |
 | notification_log_coffee_chat_request_pk_index | CREATE INDEX notification_log_coffee_chat_request_pk_index ON public.notification_log USING btree (coffee_chat_request_pk) |
+| notification_log_next_retry_at_idx | CREATE INDEX notification_log_next_retry_at_idx ON public.notification_log USING btree (next_retry_at) WHERE (next_retry_at IS NOT NULL) |
 
 ## Relations
 
@@ -49,6 +52,8 @@ erDiagram
   varchar_128_ provider_message_id
   varchar_255_ recipient
   text error
+  smallint attempt
+  timestamp_with_time_zone next_retry_at
 }
 "public.coffee_chat_request" {
   uuid *pk
