@@ -31,6 +31,8 @@ const logRow = (overrides: object = {}) => ({
   providerMessageId: "mid",
   recipient: "01012345678",
   error: "-99 invalid receiver 01012345678",
+  attempt: 2,
+  nextRetryAt: new Date(NOW.getTime() + 5 * 60 * 1000),
   ...overrides,
 });
 
@@ -141,6 +143,8 @@ describe("ManagerCoffeeChatService", () => {
           channel: "kakao_alimtalk",
           status: "failed",
           error: "-99 invalid receiver 010****5678",
+          attempt: 2,
+          next_retry_at: new Date(NOW.getTime() + 5 * 60 * 1000),
           created_at: NOW,
         },
       ]);
@@ -158,6 +162,8 @@ describe("ManagerCoffeeChatService", () => {
             status: "sent",
             recipient: "someone@example.com",
             error: null,
+            attempt: 1,
+            nextRetryAt: null,
           }),
         ],
         total: 2,
@@ -185,8 +191,14 @@ describe("ManagerCoffeeChatService", () => {
       expect(res.items[0]).toMatchObject({
         coffee_chat_request_pk: "request",
         error: "-99 invalid receiver 010****5678",
+        attempt: 2,
+        next_retry_at: new Date(NOW.getTime() + 5 * 60 * 1000),
       });
-      expect(res.items[1].error).toBeNull();
+      expect(res.items[1]).toMatchObject({
+        error: null,
+        attempt: 1,
+        next_retry_at: null,
+      });
       expect(JSON.stringify(res)).not.toContain("01012345678");
       expect(JSON.stringify(res)).not.toContain("someone@example.com");
       expect(res.items[0]).not.toHaveProperty("recipient");

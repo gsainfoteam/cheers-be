@@ -154,6 +154,10 @@ export class NotificationLogDto {
 
   /** 실패 사유. 이메일 · 전화번호는 가려서 내려줌 */
   error: string | null;
+  /** 몇 번째 발송 시도인지 (1 = 처음 발송, 최대 4) */
+  attempt: number;
+  /** 실패한 발송을 다시 보낼 예정 시각. 재시도 대상이 아니면 null (성공 · 마지막 시도 · 이미 재시도함) */
+  next_retry_at: Date | null;
   created_at: Date;
 }
 

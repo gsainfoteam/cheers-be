@@ -379,6 +379,8 @@ describe("어드민 커피챗 요청 관리", () => {
           channel: "kakao_alimtalk",
           status: "failed",
           error: "-99 invalid receiver 010****5432",
+          attempt: 1,
+          next_retry_at: null,
           created_at: expect.any(String),
         },
       ]);
@@ -425,6 +427,8 @@ describe("어드민 커피챗 요청 관리", () => {
         recipient: CONTACT_PHONE,
         createdAt: new Date("2026-10-03T00:00:00Z"),
         error: "-99 invalid receiver 010-9876-5432",
+        attempt: 2,
+        nextRetryAt: new Date("2026-10-03T00:05:00Z"),
       });
 
       const list = async (query: Record<string, string | number> = {}) =>
@@ -446,6 +450,9 @@ describe("어드민 커피챗 요청 관리", () => {
         channel: "kakao_alimtalk",
         status: "failed",
         error: "-99 invalid receiver 010****5432",
+        // 재시도 (CRB-75)
+        attempt: 2,
+        next_retry_at: "2026-10-03T00:05:00.000Z",
         created_at: "2026-10-03T00:00:00.000Z",
       });
       expect(all.items[1].error).toBe("550 rejected <GR***@EXAMPLE.COM>");
