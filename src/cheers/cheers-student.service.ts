@@ -2,7 +2,6 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
-  Logger,
   NotFoundException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
@@ -11,26 +10,17 @@ import {
   CoffeeChatRequestRepository,
   SentRequestRow,
 } from "@src/database/repository/coffee-chat-request.repository";
-import {
-  GraduatedCardRepository,
-  GraduatedRequestTarget,
-} from "@src/database/repository/graduated-card.repository";
+import { GraduatedCardRepository } from "@src/database/repository/graduated-card.repository";
 import { StudentRepository } from "@src/database/repository/student.repository";
-import { buildCoffeeChatRequestedMail } from "@src/mail/templates/coffee-chat-requested.template";
 import { NotificationService } from "@src/notification/notification.service";
 import { FileService } from "@src/file/file.service";
-import { NotifyInput } from "@src/notification/notification.types";
+import { CheersNotificationBuilder } from "./cheers-notification.builder";
 import {
   DEFAULT_RANDOM_SEED_MINUTES,
   GRADUATED_FALLBACK_NAME,
   WITHDRAWN_ACCOUNT_NAME,
 } from "./cheers.constants";
-import {
-  randomSeed,
-  resolveWebBaseUrl,
-  toOffset,
-  toRequestStatus,
-} from "./cheers.utils";
+import { randomSeed, toOffset, toRequestStatus } from "./cheers.utils";
 import {
   CreateRequestDto,
   CreateRequestResponseDto,
@@ -42,9 +32,6 @@ import { SentRequestDetailDto, SentRequestDto } from "./dto/sent-request.dto";
 // API 명세 "커피챗 · 재학생" 섹션. 받은 요청 · 연락처 공유(현업자)는 CheersGraduatedService
 @Injectable()
 export class CheersStudentService {
-  private readonly logger = new Logger(CheersStudentService.name);
-  // 알림 메일의 요청 상세 링크 (끝의 / 제거). 로컬에서 비어 있으면 링크 없이 발송
-  private readonly webBaseUrl: string | null;
   private readonly randomSeedMinutes: number;
 
   constructor(
@@ -54,10 +41,9 @@ export class CheersStudentService {
     private readonly graduatedCardRepository: GraduatedCardRepository,
     private readonly coffeeChatRequestRepository: CoffeeChatRequestRepository,
     private readonly notificationService: NotificationService,
+    private readonly notificationBuilder: CheersNotificationBuilder,
     private readonly fileService: FileService,
   ) {
-    this.webBaseUrl = resolveWebBaseUrl(configService, this.logger);
-
     // 빈 값은 미설정으로 봄
     const raw = configService.get<string>("CHEERS_RANDOM_SEED_MINUTES")?.trim();
     const minutes = raw ? Number(raw) : DEFAULT_RANDOM_SEED_MINUTES;
@@ -151,7 +137,7 @@ export class CheersStudentService {
 
     // notification_log가 coffee_chat_request를 참조하므로 커밋 뒤에 호출
     this.notificationService.notifyAsync(
-      this.buildRequestedNotification(request.pk, target),
+      this.notificationBuilder.requested(request.pk, target),
     );
 
     return { id: request.pk, created_at: request.createdAt.toISOString() };
@@ -226,34 +212,6 @@ export class CheersStudentService {
       message: row.message ?? "",
       status: toRequestStatus(row),
       created_at: row.createdAt.toISOString(),
-    };
-  }
-
-  // 현업자가 연락 설정에서 켠 채널만 담음
-  private buildRequestedNotification(
-    coffeeChatRequestPk: string,
-    target: GraduatedRequestTarget,
-  ): NotifyInput<"coffee_chat_requested"> {
-    const contact = target.contact;
-    const name = target.name ?? GRADUATED_FALLBACK_NAME;
-    const link = this.webBaseUrl
-      ? `${this.webBaseUrl}/cheers/received/${coffeeChatRequestPk}`
-      : null;
-
-    return {
-      coffeeChatRequestPk,
-      event: "coffee_chat_requested",
-      email:
-        contact?.emailEnabled && contact.email
-          ? buildCoffeeChatRequestedMail(contact.email, name, link)
-          : undefined,
-      alimtalk:
-        contact?.kakaoEnabled && contact.phone
-          ? {
-              to: contact.phone,
-              variables: { recipientName: name, coffeeChatRequestPk },
-            }
-          : undefined,
     };
   }
 }

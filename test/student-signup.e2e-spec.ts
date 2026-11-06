@@ -1,3 +1,6 @@
+import { eq } from "drizzle-orm";
+import { studentEmailSendLog } from "@drizzle/schema/student-email-send-log";
+import { studentEmailVerification } from "@drizzle/schema/student-email-verification";
 import { users } from "@drizzle/schema/users";
 import { createE2eApp, E2eContext } from "./support/app";
 import {
@@ -111,6 +114,48 @@ describe("시나리오 1: 재학생 가입", () => {
       .send({ email })
       .expect(409);
     expect(res.body.error_code).toBe("EMAIL_ALREADY_REGISTERED");
+  });
+
+  it("인증 메일 발송에 실패하면 502이고, 실패한 발송은 기록되지 않아 바로 다시 보낼 수 있음 (CRB-75)", async () => {
+    const email = "e2e-mail-fail@gm.gist.ac.kr";
+    const session = await login(ctx, "student");
+    await agreeConsents(ctx, session);
+    const userPk = (await getInfo(ctx, session)).id as string;
+
+    ctx.mail.verificationResult = { success: false, error: "SMTP error" };
+    const res = await http(ctx)
+      .post("/api/v1/user/student/verify/send-code")
+      .set("Authorization", bearer(session))
+      .send({ email })
+      .expect(502);
+    expect(res.body).toMatchObject({
+      message: "Failed to send verification mail",
+      error_code: "VERIFICATION_MAIL_SEND_FAILED",
+    });
+    // 인증 요청 · 전송 기록을 지워서 60초 쿨다운 · 24시간 상한에 걸리지 않음
+    expect(await ctx.db.select().from(studentEmailVerification)).toHaveLength(
+      0,
+    );
+    expect(
+      await ctx.db
+        .select()
+        .from(studentEmailSendLog)
+        .where(eq(studentEmailSendLog.userPk, userPk)),
+    ).toHaveLength(0);
+
+    ctx.mail.verificationResult = { success: true, messageId: "e2e-mail" };
+    await sendCode(ctx, session, email);
+    await http(ctx)
+      .post("/api/v1/user/student/verify/code")
+      .set("Authorization", bearer(session))
+      .send({ code: ctx.mail.latestVerificationCode(email) })
+      .expect(201);
+    expect(
+      await ctx.db
+        .select()
+        .from(studentEmailSendLog)
+        .where(eq(studentEmailSendLog.userPk, userPk)),
+    ).toHaveLength(1);
   });
 
   it("OAuth 검증에 실패하면 401이고 유저가 만들어지지 않음", async () => {

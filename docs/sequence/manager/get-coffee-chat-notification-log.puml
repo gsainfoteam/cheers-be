@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title GET /api/manager/v1/coffee-chat/notification-log
-caption CRB-45 · 커피챗 알림 발송 결과 목록 (읽기 전용). 수신자는 응답하지 않음
+caption CRB-45 · CRB-75 · 커피챗 알림 발송 결과 목록 (읽기 전용). 수신자는 응답하지 않음
 
 actor Client
 participant "ManagerGuard" as Guard
@@ -42,9 +42,10 @@ LogRepository --> Service: { rows, total }
 note right of Service
   recipient는 응답에 넣지 않음.
   error는 이메일 · 전화번호를 가려서 응답 (maskPersonalInfo).
-  탈퇴 처리 후에도 notification_log는 원문 그대로 남아 있음
+  탈퇴 처리 후에도 notification_log는 원문 그대로 남아 있음.
+  attempt: 몇 번째 발송 시도인지 (1~4), next_retry_at: 재시도 예정 시각 (CRB-75)
 end note
 Service --> Controller: PageResponseDto<NotificationLogItemDto>
-Controller --> Client: 200 { items: [{ pk, coffee_chat_request_pk, event, channel, status, error, created_at }], page, size, total }
+Controller --> Client: 200 { items: [{ pk, coffee_chat_request_pk, event, channel, status, error, attempt, next_retry_at, created_at }], page, size, total }
 
 @enduml

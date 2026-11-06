@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title POST /api/v1/user/student/verify/send-code
-caption CRB-31 · CRB-48 · CRB-53 · gist 이메일로 6자리 인증코드 전송 (재전송도 같은 API, 이전 코드 무효). 최근 24시간 전송 상한 적용
+caption CRB-31 · CRB-48 · CRB-53 · CRB-75 · gist 이메일로 6자리 인증코드 전송 (재전송도 같은 API, 이전 코드 무효). 최근 24시간 전송 상한 적용. 발송 실패 시 되돌리고 502
 
 actor Client
 participant "SignupStepGuard\nUserTypeGuard" as Guard
@@ -23,6 +23,7 @@ participant "StudentEmailVerificationRepository" as VerificationRepository
 participant "StudentEmailSendLogRepository" as SendLogRepository
 database PostgreSQL
 participant "SMTP"
+participant "Slack"
 
 Client -> Guard: POST /api/v1/user/student/verify/send-code\nAuthorization: Bearer <access token>\n{ email }
 ref over Client, Guard
@@ -133,13 +134,36 @@ group transaction (DatabaseService.db.transaction)
 end
 note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
 
-Service ->> MailService: sendAsync(buildVerificationCodeMail(email, code, 5))
+Service -> MailService: sendAndAlert(buildVerificationCodeMail(email, code, 5))
 note right of MailService
-  커밋 뒤에 호출, 응답을 기다리지 않음.
-  실패하면 MailService가 로그 + Slack 알림
-  (사용자는 60초 뒤 재전송)
+  CRB-75: 커밋 뒤에 호출하고 결과를 기다림 (학생 행 잠금은 이미 풀림).
+  최대 SMTP 연결 10초 + greeting 10초 + socket 30초
 end note
-MailService ->> SMTP: sendMail
+MailService -> SMTP: sendMail
+SMTP --> MailService: 결과
+alt 로컬 (자격증명 없음 → skipped)
+  note over MailService: 로그만 남기고 성공으로 봄
+end
+MailService --> Service: MailResult
+
+alt 발송 실패 (success = false)
+  MailService ->> Slack: [MAIL ERROR]
+  group transaction (보상 처리)
+    Service -> SendLogRepository: deleteByUserPkAndCreatedAt(userPk, created_at, tx)
+    SendLogRepository -> PostgreSQL: DELETE student_email_send_log\nWHERE user_pk = ? AND created_at = ?
+    Service -> VerificationRepository: deleteByStudentPkAndCreatedAt(studentPk, created_at, tx)
+    VerificationRepository -> PostgreSQL: DELETE student_email_verification\nWHERE student_pk = ? AND created_at = ?
+  end
+  note right of Service
+    방금 넣은 행만 지움 (created_at으로 확인. 그사이 다른 전송이 덮어썼으면 그대로 둠).
+    실패한 발송은 24시간 전송 상한 · 60초 쿨다운에 세지 않음 → 바로 다시 보낼 수 있음.
+    이전 코드는 upsert 때 이미 덮어써져 무효
+  end note
+  opt 보상 실패
+    Service ->> Slack: [MAIL ERROR] 보상 실패
+  end
+  Service -[#red]-> Client: 502 Failed to send verification mail\n{ statusCode, message, error_code = VERIFICATION_MAIL_SEND_FAILED }
+end
 
 Service --> Controller: { expiresAt, resendAvailableAt = created_at + 60초 }
 Controller --> Client: 201 { expires_at, resend_available_at }

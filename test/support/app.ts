@@ -36,16 +36,20 @@ class FakeGoogleVerifier implements OAuthVerifier {
 // 인증번호는 메일로만 나가므로 받은 메일을 모아서 꺼내 씀
 export class FakeMailService {
   readonly sent: SendMailInput[] = [];
-  // notification_log 기록을 확인할 때만 바꿈 (skipped면 기록하지 않음). reset에서 되돌림
+  // 커피챗 알림 메일 결과. notification_log 기록을 확인할 때만 바꿈 (skipped면 기록하지 않음). reset에서 되돌림
   sendResult: MailResult = MAIL_SKIPPED;
+  // 인증번호 메일 결과. 커피챗 알림 실패를 시험할 때도 가입은 되도록 따로 둠. reset에서 되돌림
+  verificationResult: MailResult = MAIL_SKIPPED;
 
   async send(input: SendMailInput): Promise<MailResult> {
     this.sent.push(input);
     return this.sendResult;
   }
 
-  sendAsync(input: SendMailInput): void {
+  // 인증번호 메일 (CRB-75: 결과를 기다림). 실패 시 Slack은 mail.service.spec.ts에서 확인
+  async sendAndAlert(input: SendMailInput): Promise<MailResult> {
     this.sent.push(input);
+    return this.verificationResult;
   }
 
   latestVerificationCode(to: string): string {
@@ -163,6 +167,7 @@ export async function createE2eApp(): Promise<E2eContext> {
       s3.reset();
       mail.sent.length = 0;
       mail.sendResult = MAIL_SKIPPED;
+      mail.verificationResult = MAIL_SKIPPED;
       alimtalk.sent.length = 0;
       alimtalk.sendResult = ALIMTALK_SKIPPED;
       slack.messages.length = 0;

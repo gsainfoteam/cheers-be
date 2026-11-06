@@ -8,6 +8,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { createHmac } from "node:crypto";
+import { SlackService } from "nestjs-slack";
 import { JwtKeyService } from "@src/auth/jwt-key.service";
 import { DatabaseService } from "@src/database/database.service";
 import { SchoolRepository } from "@src/database/repository/school.repository";
@@ -87,8 +88,9 @@ describe("StudentVerificationService", () => {
     },
   };
   const mailService = {
-    sendAsync: jest.fn(() => order.push("sendAsync")),
+    sendAndAlert: jest.fn(),
   };
+  const slackService = { sendText: jest.fn() };
   const schoolRepository = {
     findByEmailDomain: jest.fn(),
     findByEmailDomainForShare: jest.fn(),
@@ -103,12 +105,14 @@ describe("StudentVerificationService", () => {
     upsert: jest.fn(),
     incrementAttemptCount: jest.fn(),
     deleteByStudentPk: jest.fn(),
+    deleteByStudentPkAndCreatedAt: jest.fn(),
   };
   const sendLogRepository = {
     findRecentByUserPk: jest.fn(),
     findRecentByEmail: jest.fn(),
     insert: jest.fn(),
     incrementFailedAttemptCount: jest.fn(),
+    deleteByUserPkAndCreatedAt: jest.fn(),
   };
   const jwtKeyService = { privateKey: "test-jwt-key" };
   const service = new StudentVerificationService(
@@ -119,6 +123,7 @@ describe("StudentVerificationService", () => {
     studentRepository as unknown as StudentRepository,
     verificationRepository as unknown as StudentEmailVerificationRepository,
     sendLogRepository as unknown as StudentEmailSendLogRepository,
+    slackService as unknown as SlackService,
   );
 
   const expectTooManyRequests = async (
@@ -135,7 +140,7 @@ describe("StudentVerificationService", () => {
     });
     expect(verificationRepository.upsert).not.toHaveBeenCalled();
     expect(sendLogRepository.insert).not.toHaveBeenCalled();
-    expect(mailService.sendAsync).not.toHaveBeenCalled();
+    expect(mailService.sendAndAlert).not.toHaveBeenCalled();
   };
 
   beforeEach(() => {
@@ -155,6 +160,11 @@ describe("StudentVerificationService", () => {
     verificationRepository.findByStudentPk.mockResolvedValue(null);
     sendLogRepository.findRecentByUserPk.mockResolvedValue([]);
     sendLogRepository.findRecentByEmail.mockResolvedValue([]);
+    mailService.sendAndAlert.mockImplementation(() => {
+      order.push("sendAndAlert");
+      return Promise.resolve({ success: true, messageId: "<id>" });
+    });
+    slackService.sendText.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -190,19 +200,78 @@ describe("StudentVerificationService", () => {
         expiresAt: new Date("2026-10-25T12:05:00.000Z"),
         createdAt: now,
       });
-      const [[mail]] = mailService.sendAsync.mock.calls as unknown as [
+      const [[mail]] = mailService.sendAndAlert.mock.calls as unknown as [
         [{ to: string; text: string }],
       ];
       const mailedCode = /인증번호: (\d{6})/.exec(mail.text)?.[1];
       expect(mail.to).toBe(email);
       expect(mailedCode).toBeDefined();
       expect(row.code).toBe(hash(mailedCode!));
-      expect(order).toEqual(["commit", "sendAsync"]);
+      expect(order).toEqual(["commit", "sendAndAlert"]);
       // 틀린 횟수를 찾아 쌓을 수 있도록 인증 요청과 같은 시각으로 기록
       expect(sendLogRepository.insert).toHaveBeenCalledWith(
         { userPk, email, createdAt: now },
         tx,
       );
+    });
+
+    describe("when the mail fails (CRB-75)", () => {
+      beforeEach(() => {
+        mailService.sendAndAlert.mockImplementation(() => {
+          order.push("sendAndAlert");
+          return Promise.resolve({ success: false, error: "SMTP error" });
+        });
+      });
+
+      const expectBadGateway = async () => {
+        const error = (await service
+          .sendCode(userPk, email)
+          .catch((e) => e)) as HttpException;
+        expect(error.getStatus()).toBe(HttpStatus.BAD_GATEWAY);
+        expect(error.getResponse()).toEqual({
+          message: "Failed to send verification mail",
+          error_code: "VERIFICATION_MAIL_SEND_FAILED",
+        });
+      };
+
+      it("deletes the request and the send log just created, then returns 502", async () => {
+        await expectBadGateway();
+
+        // 발송 트랜잭션 커밋 → 메일 → 되돌리는 트랜잭션 커밋
+        expect(order).toEqual(["commit", "sendAndAlert", "commit"]);
+        expect(
+          sendLogRepository.deleteByUserPkAndCreatedAt,
+        ).toHaveBeenCalledWith(userPk, now, tx);
+        expect(
+          verificationRepository.deleteByStudentPkAndCreatedAt,
+        ).toHaveBeenCalledWith(student.pk, now, tx);
+        expect(slackService.sendText).not.toHaveBeenCalled();
+      });
+
+      it("still returns 502 and alerts slack when the cleanup fails", async () => {
+        sendLogRepository.deleteByUserPkAndCreatedAt.mockRejectedValue(
+          new Error("db down"),
+        );
+
+        await expectBadGateway();
+
+        expect(slackService.sendText).toHaveBeenCalledWith(
+          expect.stringContaining("db down"),
+          { channel: "bug" },
+        );
+      });
+    });
+
+    it("treats a skipped mail (no credentials) as sent", async () => {
+      mailService.sendAndAlert.mockResolvedValue({
+        success: true,
+        skipped: true,
+      });
+
+      await expect(service.sendCode(userPk, email)).resolves.toBeDefined();
+      expect(
+        sendLogRepository.deleteByUserPkAndCreatedAt,
+      ).not.toHaveBeenCalled();
     });
 
     it("returns 400 for a domain that is not a registered school", async () => {
@@ -212,7 +281,7 @@ describe("StudentVerificationService", () => {
         service.sendCode(userPk, "gildong@gist.ac.kr"),
       ).rejects.toThrow(new BadRequestException("Email domain not allowed"));
       expect(dbService.db.transaction).not.toHaveBeenCalled();
-      expect(mailService.sendAsync).not.toHaveBeenCalled();
+      expect(mailService.sendAndAlert).not.toHaveBeenCalled();
     });
 
     it("returns 429 within 60 seconds of the last send, even after attempts ran out", async () => {
@@ -230,7 +299,7 @@ describe("StudentVerificationService", () => {
         retry_available_at: new Date(now.getTime() + 1_000),
       });
       expect(verificationRepository.upsert).not.toHaveBeenCalled();
-      expect(mailService.sendAsync).not.toHaveBeenCalled();
+      expect(mailService.sendAndAlert).not.toHaveBeenCalled();
     });
 
     it("resends once the cooldown has passed", async () => {
@@ -241,7 +310,7 @@ describe("StudentVerificationService", () => {
       await service.sendCode(userPk, email);
 
       expect(verificationRepository.upsert).toHaveBeenCalled();
-      expect(mailService.sendAsync).toHaveBeenCalled();
+      expect(mailService.sendAndAlert).toHaveBeenCalled();
     });
 
     it("returns 403 when the user switched to graduated after the guard", async () => {
@@ -266,7 +335,7 @@ describe("StudentVerificationService", () => {
       });
       expect(verificationRepository.upsert).not.toHaveBeenCalled();
       expect(sendLogRepository.insert).not.toHaveBeenCalled();
-      expect(mailService.sendAsync).not.toHaveBeenCalled();
+      expect(mailService.sendAndAlert).not.toHaveBeenCalled();
     });
 
     describe("daily limits", () => {
@@ -295,7 +364,7 @@ describe("StudentVerificationService", () => {
 
         await service.sendCode(userPk, email);
 
-        expect(mailService.sendAsync).toHaveBeenCalled();
+        expect(mailService.sendAndAlert).toHaveBeenCalled();
       });
 
       it("returns 429 on the 6th send of a user, retrying when the oldest send leaves the window", async () => {
@@ -326,7 +395,7 @@ describe("StudentVerificationService", () => {
 
         await service.sendCode(userPk, email);
 
-        expect(mailService.sendAsync).toHaveBeenCalled();
+        expect(mailService.sendAndAlert).toHaveBeenCalled();
       });
 
       it("keeps failures across resends, retrying when enough of them leave the window", async () => {

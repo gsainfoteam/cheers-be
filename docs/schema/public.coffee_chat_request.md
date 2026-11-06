@@ -72,6 +72,8 @@ erDiagram
   varchar_128_ provider_message_id
   varchar_255_ recipient
   text error
+  smallint attempt
+  timestamp_with_time_zone next_retry_at
 }
 "public.graduated" {
   uuid *pk

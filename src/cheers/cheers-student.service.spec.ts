@@ -21,6 +21,7 @@ import { TxType } from "@src/global/types/tx.types";
 import { FileService } from "@src/file/file.service";
 import { NotificationService } from "@src/notification/notification.service";
 import { NotifyInput } from "@src/notification/notification.types";
+import { CheersNotificationBuilder } from "./cheers-notification.builder";
 import { CheersStudentService } from "./cheers-student.service";
 import { GraduatedListQueryDto } from "./dto/graduated-list.dto";
 import { PaginationQueryDto } from "./dto/pagination.dto";
@@ -130,19 +131,22 @@ describe("CheersStudentService", () => {
     return call[0];
   };
 
-  const createService = (env: Record<string, string | undefined> = {}) =>
-    new CheersStudentService(
-      {
-        get: (key: string) =>
-          ({ WEB_BASE_URL: "https://cheers.example.com/", ...env })[key],
-      } as unknown as ConfigService,
+  const createService = (env: Record<string, string | undefined> = {}) => {
+    const configService = {
+      get: (key: string) =>
+        ({ WEB_BASE_URL: "https://cheers.example.com/", ...env })[key],
+    } as unknown as ConfigService;
+    return new CheersStudentService(
+      configService,
       dbService as unknown as DatabaseService,
       studentRepository as unknown as StudentRepository,
       graduatedCardRepository as unknown as GraduatedCardRepository,
       coffeeChatRequestRepository as unknown as CoffeeChatRequestRepository,
       notificationService as unknown as NotificationService,
+      new CheersNotificationBuilder(configService),
       fileService as unknown as FileService,
     );
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();

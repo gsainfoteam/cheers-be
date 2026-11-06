@@ -133,6 +133,8 @@ export class ManagerCoffeeChatService {
       channel: row.channel,
       status: row.status,
       error: row.error && maskPersonalInfo(row.error, row.recipient),
+      attempt: row.attempt,
+      next_retry_at: row.nextRetryAt,
       created_at: row.createdAt,
     };
   }

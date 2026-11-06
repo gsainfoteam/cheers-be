@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
+import { asc, eq } from "drizzle-orm";
+import { coffeeChatContact } from "@drizzle/schema/coffee-chat-contact";
 import { notificationLog } from "@drizzle/schema/notification-log";
+import { CheersNotificationRetryService } from "@src/cheers/cheers-notification-retry.service";
 import { createE2eApp, E2eContext } from "./support/app";
 import {
   bearer,
@@ -126,11 +129,12 @@ describe("시나리오 2: 현업자 가입 → 재학생 목록 조회 → 커�
       expect(ctx.slack.messages).toHaveLength(0);
     });
 
-    it("발송에 실패하면 failed로 남고 수신자를 가려서 알림을 보냄", async () => {
+    it("발송에 실패하면 failed로 남고 1분 뒤 재시도 대상이 됨. 처음 실패는 Slack으로 알리지 않음 (CRB-75)", async () => {
       ctx.mail.sendResult = {
         success: false,
         error: `SMTP error for ${GRADUATED_CONTACT_EMAIL}`,
       };
+      const before = Date.now();
 
       const { requestId, rows } = await requestAndWaitForLog();
 
@@ -138,10 +142,12 @@ describe("시나리오 2: 현업자 가입 → 재학생 목록 조회 → 커�
       expect(rows[0]).toMatchObject({
         coffeeChatRequestPk: requestId,
         status: "failed",
+        attempt: 1,
       });
-      expect(ctx.slack.messages).toHaveLength(1);
-      expect(ctx.slack.messages[0]).toContain("NOTIFICATION ERROR");
-      expect(ctx.slack.messages[0]).not.toContain(GRADUATED_CONTACT_EMAIL);
+      const retryAt = rows[0].nextRetryAt!.getTime();
+      expect(retryAt).toBeGreaterThanOrEqual(before + 60_000);
+      expect(retryAt).toBeLessThanOrEqual(Date.now() + 60_000);
+      expect(ctx.slack.messages).toHaveLength(0);
     });
 
     describe("알림톡 (가짜 알리고)", () => {
@@ -210,7 +216,7 @@ describe("시나리오 2: 현업자 가입 → 재학생 목록 조회 → 커�
         expect(ctx.slack.messages).toHaveLength(0);
       });
 
-      it("알림톡이 실패해도 메일은 sent이고, 실패 알림에는 번호를 가림", async () => {
+      it("알림톡이 실패해도 메일은 sent이고, 알림톡만 재시도 대상이 됨", async () => {
         ctx.mail.sendResult = { success: true, messageId: "mail-id" };
         ctx.alimtalk.sendResult = {
           success: false,
@@ -220,12 +226,117 @@ describe("시나리오 2: 현업자 가입 → 재학생 목록 조회 → 커�
         const { rows } = await requestWithKakao(2);
 
         expect(byChannel(rows)).toMatchObject({
-          email: { status: "sent" },
-          kakao_alimtalk: { status: "failed" },
+          email: { status: "sent", nextRetryAt: null },
+          kakao_alimtalk: { status: "failed", attempt: 1 },
         });
-        await waitUntil(() => ctx.slack.messages.length === 1);
-        expect(ctx.slack.messages[0]).toContain("NOTIFICATION ERROR");
-        expect(ctx.slack.messages[0]).not.toContain(PHONE);
+        expect(byChannel(rows).kakao_alimtalk.nextRetryAt).not.toBeNull();
+        expect(ctx.slack.messages).toHaveLength(0);
+      });
+
+      describe("재시도 스케줄러 (CRB-75)", () => {
+        const MINUTE_MS = 60 * 1000;
+        // 스케줄러 대신 서비스를 직접 호출. 재시도 시각이 지나도록 now를 앞으로 당김
+        const retryAfter = (ms: number) =>
+          ctx.app
+            .get(CheersNotificationRetryService)
+            .retryDue(new Date(Date.now() + ms));
+        const kakaoLogs = () =>
+          ctx.db
+            .select()
+            .from(notificationLog)
+            .where(eq(notificationLog.channel, "kakao_alimtalk"))
+            .orderBy(asc(notificationLog.attempt));
+
+        beforeEach(() => {
+          ctx.mail.sendResult = { success: true, messageId: "mail-id" };
+          ctx.alimtalk.sendResult = { success: false, error: "-99 failed" };
+        });
+
+        it("시각이 되기 전에는 보내지 않고, 다시 보내 성공하면 새 행을 남기고 재시도를 끝냄", async () => {
+          const { requestId } = await requestWithKakao(2);
+
+          await expect(retryAfter(0)).resolves.toMatchObject({ sent: 0 });
+          expect(ctx.alimtalk.sent).toHaveLength(1);
+
+          ctx.alimtalk.sendResult = { success: true, messageId: "aligo-2" };
+          await expect(retryAfter(2 * MINUTE_MS)).resolves.toEqual({
+            sent: 1,
+            failed: 0,
+            gaveUp: 0,
+            dropped: 0,
+          });
+
+          // 실패한 채널(알림톡)만 다시 보냄
+          expect(
+            ctx.mail.sent.filter((m) => m.to === GRADUATED_CONTACT_EMAIL),
+          ).toHaveLength(1);
+          expect(ctx.alimtalk.sent).toHaveLength(2);
+          expect(ctx.alimtalk.sent[1]).toEqual(ctx.alimtalk.sent[0]);
+          expect(await kakaoLogs()).toMatchObject([
+            { status: "failed", attempt: 1, nextRetryAt: null },
+            {
+              coffeeChatRequestPk: requestId,
+              status: "sent",
+              attempt: 2,
+              nextRetryAt: null,
+              providerMessageId: "aligo-2",
+            },
+          ]);
+          // 다시 돌려도 보낼 것이 없음
+          await expect(retryAfter(60 * MINUTE_MS)).resolves.toMatchObject({
+            sent: 0,
+            failed: 0,
+          });
+        });
+
+        it("1분 · 5분 · 30분 뒤 3번 재시도하고, 모두 실패하면 Slack으로 알리고 그만둠", async () => {
+          await requestWithKakao(2);
+
+          await expect(retryAfter(2 * MINUTE_MS)).resolves.toMatchObject({
+            failed: 1,
+          });
+          // 2번째 실패의 다음 시도는 5분 뒤
+          await expect(retryAfter(4 * MINUTE_MS)).resolves.toMatchObject({
+            failed: 0,
+          });
+          await expect(retryAfter(6 * MINUTE_MS)).resolves.toMatchObject({
+            failed: 1,
+          });
+          await expect(retryAfter(31 * MINUTE_MS)).resolves.toMatchObject({
+            gaveUp: 1,
+          });
+
+          const logs = await kakaoLogs();
+          expect(logs.map((log) => [log.attempt, log.status])).toEqual([
+            [1, "failed"],
+            [2, "failed"],
+            [3, "failed"],
+            [4, "failed"],
+          ]);
+          expect(logs.every((log) => log.nextRetryAt === null)).toBe(true);
+          expect(ctx.alimtalk.sent).toHaveLength(4);
+          expect(ctx.slack.messages).toHaveLength(1);
+          expect(ctx.slack.messages[0]).toContain("NOTIFICATION GAVE UP");
+          expect(ctx.slack.messages[0]).not.toContain(PHONE);
+
+          await expect(retryAfter(120 * MINUTE_MS)).resolves.toMatchObject({
+            failed: 0,
+            gaveUp: 0,
+          });
+        });
+
+        it("받는 사람이 그 채널을 끄면 보내지 않고 재시도를 그만둠", async () => {
+          await requestWithKakao(2);
+          await ctx.db.update(coffeeChatContact).set({ kakaoEnabled: false });
+
+          await expect(retryAfter(2 * MINUTE_MS)).resolves.toMatchObject({
+            dropped: 1,
+          });
+          expect(ctx.alimtalk.sent).toHaveLength(1);
+          expect(await kakaoLogs()).toMatchObject([
+            { attempt: 1, nextRetryAt: null },
+          ]);
+        });
       });
 
       it("키가 없을 때처럼 skipped면 호출은 하지만 기록을 남기지 않음", async () => {

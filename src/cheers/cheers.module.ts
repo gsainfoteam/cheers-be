@@ -6,6 +6,9 @@ import { FileModule } from "@src/file/file.module";
 import { NotificationModule } from "@src/notification/notification.module";
 import { CheersGraduatedController } from "./cheers-graduated.controller";
 import { CheersGraduatedService } from "./cheers-graduated.service";
+import { CheersNotificationRetryScheduler } from "./cheers-notification-retry.scheduler";
+import { CheersNotificationRetryService } from "./cheers-notification-retry.service";
+import { CheersNotificationBuilder } from "./cheers-notification.builder";
 import { CheersStudentController } from "./cheers-student.controller";
 import { CheersStudentService } from "./cheers-student.service";
 
@@ -19,6 +22,12 @@ import { CheersStudentService } from "./cheers-student.service";
     NotificationModule,
   ],
   controllers: [CheersStudentController, CheersGraduatedController],
-  providers: [CheersStudentService, CheersGraduatedService],
+  providers: [
+    CheersStudentService,
+    CheersGraduatedService,
+    CheersNotificationBuilder,
+    CheersNotificationRetryService,
+    CheersNotificationRetryScheduler,
+  ],
 })
 export class CheersModule {}

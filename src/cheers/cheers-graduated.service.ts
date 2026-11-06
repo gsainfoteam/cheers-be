@@ -3,28 +3,21 @@ import {
   ForbiddenException,
   GoneException,
   Injectable,
-  Logger,
   NotFoundException,
 } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import { DatabaseService } from "@src/database/database.service";
 import { CoffeeChatContactRepository } from "@src/database/repository/coffee-chat-contact.repository";
-import {
-  CoffeeChatRequestRepository,
-  ReceivedRequestForShareRow,
-} from "@src/database/repository/coffee-chat-request.repository";
+import { CoffeeChatRequestRepository } from "@src/database/repository/coffee-chat-request.repository";
 import { GraduatedRepository } from "@src/database/repository/graduated.repository";
 import { UserRepository } from "@src/database/repository/user.repository";
 import { FileService } from "@src/file/file.service";
-import { buildContactSharedMail } from "@src/mail/templates/contact-shared.template";
 import { NotificationService } from "@src/notification/notification.service";
-import { NotifyInput } from "@src/notification/notification.types";
+import { CheersNotificationBuilder } from "./cheers-notification.builder";
 import {
-  GRADUATED_FALLBACK_NAME,
   STUDENT_FALLBACK_NAME,
   WITHDRAWN_STUDENT_REQUEST_LABEL,
 } from "./cheers.constants";
-import { resolveWebBaseUrl, toOffset, toRequestStatus } from "./cheers.utils";
+import { toOffset, toRequestStatus } from "./cheers.utils";
 import { PageResponseDto, PaginationQueryDto } from "./dto/pagination.dto";
 import {
   ReceivedRequestDetailDto,
@@ -35,11 +28,7 @@ import {
 // API 명세 "커피챗 · 현업자" 섹션
 @Injectable()
 export class CheersGraduatedService {
-  private readonly logger = new Logger(CheersGraduatedService.name);
-  private readonly webBaseUrl: string | null;
-
   constructor(
-    configService: ConfigService,
     private readonly dbService: DatabaseService,
     private readonly coffeeChatRequestRepository: CoffeeChatRequestRepository,
     private readonly coffeeChatContactRepository: CoffeeChatContactRepository,
@@ -47,9 +36,8 @@ export class CheersGraduatedService {
     private readonly graduatedRepository: GraduatedRepository,
     private readonly fileService: FileService,
     private readonly notificationService: NotificationService,
-  ) {
-    this.webBaseUrl = resolveWebBaseUrl(configService, this.logger);
-  }
+    private readonly notificationBuilder: CheersNotificationBuilder,
+  ) {}
 
   async getReceivedList(
     userPk: string,
@@ -197,9 +185,10 @@ export class CheersGraduatedService {
             shared_email: sharedEmail,
             shared_phone: sharedPhone,
           },
-          notification: this.buildSharedNotification(
-            row,
-            me?.name ?? GRADUATED_FALLBACK_NAME,
+          notification: this.notificationBuilder.contactShared(
+            row.pk,
+            { name: row.studentName, contact: row.studentContact },
+            me?.name ?? null,
           ),
         };
       },
@@ -219,39 +208,5 @@ export class CheersGraduatedService {
     if (!graduated?.verifiedAt) {
       throw new ForbiddenException("Business card verification is required");
     }
-  }
-
-  // 재학생이 연락 설정에서 켠 채널만 담음
-  private buildSharedNotification(
-    row: ReceivedRequestForShareRow,
-    graduatedName: string,
-  ): NotifyInput<"contact_shared"> {
-    const contact = row.studentContact;
-    const recipientName = row.studentName ?? STUDENT_FALLBACK_NAME;
-    const coffeeChatRequestPk = row.pk;
-    const link = this.webBaseUrl
-      ? `${this.webBaseUrl}/cheers/sent/${coffeeChatRequestPk}`
-      : null;
-
-    return {
-      coffeeChatRequestPk,
-      event: "contact_shared",
-      email:
-        contact?.emailEnabled && contact.email
-          ? buildContactSharedMail(
-              contact.email,
-              recipientName,
-              graduatedName,
-              link,
-            )
-          : undefined,
-      alimtalk:
-        contact?.kakaoEnabled && contact.phone
-          ? {
-              to: contact.phone,
-              variables: { recipientName, graduatedName, coffeeChatRequestPk },
-            }
-          : undefined,
-    };
   }
 }

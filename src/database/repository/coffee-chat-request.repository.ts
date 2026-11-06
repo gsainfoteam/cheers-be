@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { and, count, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { randomUUID } from "node:crypto";
 import { DatabaseService } from "@src/database/database.service";
 import { TxType } from "@src/global/types/tx.types";
@@ -85,6 +86,16 @@ export type ReceivedRequestForShareRow = Pick<
   CoffeeChatRequestRow,
   "pk" | "contactSharedAt" | "sharedEmail" | "sharedPhone"
 > & {
+  studentName: string | null;
+  studentActive: boolean;
+  studentContact: StudentContact | null;
+};
+
+// 알림 재시도: 양쪽 회원의 이름 · 활성 여부 · 현재 연락 설정 (받는 사람은 이벤트로 정함)
+export type NotificationTargetRow = Pick<CoffeeChatRequestRow, "pk"> & {
+  graduatedName: string | null;
+  graduatedActive: boolean;
+  graduatedContact: StudentContact | null;
   studentName: string | null;
   studentActive: boolean;
   studentContact: StudentContact | null;
@@ -451,5 +462,58 @@ export class CoffeeChatRequestRepository {
     }
 
     return result[0].contactSharedAt;
+  }
+
+  /*
+  SELECT r.pk,
+    gu.name, (gu.is_deleted = false AND gu.withdraw_requested_at IS NULL), gc.kakao_enabled, gc.email_enabled, gc.phone, gc.email,
+    su.name, (su.is_deleted = false AND su.withdraw_requested_at IS NULL), sc.kakao_enabled, sc.email_enabled, sc.phone, sc.email
+  FROM coffee_chat_request r
+  JOIN graduated g ON g.pk = r.graduated_pk JOIN users gu ON gu.pk = g.user_pk
+  LEFT JOIN coffee_chat_contact gc ON gc.user_pk = gu.pk
+  JOIN student s ON s.pk = r.student_pk JOIN users su ON su.pk = s.user_pk
+  LEFT JOIN coffee_chat_contact sc ON sc.user_pk = su.pk
+  WHERE r.pk = ?1;
+   */
+  // 알림 재시도 (CRB-75): 받는 사람의 지금 연락 설정으로 알림을 다시 만듦
+  async findNotificationTarget(
+    pk: string,
+    tx: TxType,
+  ): Promise<NotificationTargetRow | null> {
+    const graduatedUser = alias(users, "graduated_user");
+    const studentUser = alias(users, "student_user");
+    const graduatedContact = alias(coffeeChatContact, "graduated_contact");
+    const studentContact = alias(coffeeChatContact, "student_contact");
+    const contactColumns = (
+      contact: typeof graduatedContact | typeof studentContact,
+    ) => ({
+      kakaoEnabled: contact.kakaoEnabled,
+      emailEnabled: contact.emailEnabled,
+      phone: contact.phone,
+      email: contact.email,
+    });
+    const isActive = (user: typeof graduatedUser | typeof studentUser) =>
+      sql<boolean>`(${user.isDeleted} = false AND ${user.withdrawRequestedAt} IS NULL)`;
+
+    const result = await tx
+      .select({
+        pk: coffeeChatRequest.pk,
+        graduatedName: graduatedUser.name,
+        graduatedActive: isActive(graduatedUser),
+        graduatedContact: contactColumns(graduatedContact),
+        studentName: studentUser.name,
+        studentActive: isActive(studentUser),
+        studentContact: contactColumns(studentContact),
+      })
+      .from(coffeeChatRequest)
+      .innerJoin(graduated, eq(graduated.pk, coffeeChatRequest.graduatedPk))
+      .innerJoin(graduatedUser, eq(graduatedUser.pk, graduated.userPk))
+      .leftJoin(graduatedContact, eq(graduatedContact.userPk, graduatedUser.pk))
+      .innerJoin(student, eq(student.pk, coffeeChatRequest.studentPk))
+      .innerJoin(studentUser, eq(studentUser.pk, student.userPk))
+      .leftJoin(studentContact, eq(studentContact.userPk, studentUser.pk))
+      .where(eq(coffeeChatRequest.pk, pk));
+
+    return result[0] ?? null;
   }
 }
