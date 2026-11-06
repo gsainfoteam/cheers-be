@@ -563,8 +563,7 @@ describe("UserService", () => {
         graduated: { pk: "graduated-1", verifiedAt: new Date() },
         profile: {
           nickname: "철수",
-          // 저장 당시 입력값. 회사가 있으면 회사 이름이 나감
-          company: "인포테크 주식회사",
+          companyAliasPk: 7,
           department: "플랫폼개발팀",
           job: "백엔드 개발자",
           hashtags: null,

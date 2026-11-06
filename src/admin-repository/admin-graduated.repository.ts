@@ -6,10 +6,7 @@ import { graduated } from "@drizzle/schema/graduated";
 import { graduatedProfile } from "@drizzle/schema/graduated-profile";
 import { users } from "@drizzle/schema/users";
 import { companyAlias } from "@drizzle/schema/company-alias";
-import {
-  isProfileCompany,
-  profileCompanyName,
-} from "@src/database/repository/company.sql";
+import { isProfileCompany } from "@src/database/repository/company.sql";
 
 export type AdminGraduatedRow = {
   graduatedPk: string;
@@ -37,7 +34,7 @@ export class AdminGraduatedRepository {
   constructor(private readonly dbService: DatabaseService) {}
 
   /*
-  SELECT g.pk, u.name, gp.nickname, COALESCE(ca.name, gp.company), gp.job, g.business_card_key IS NOT NULL,
+  SELECT g.pk, u.name, gp.nickname, ca.name, gp.job, g.business_card_key IS NOT NULL,
     g.verified_at, u.status, u.withdraw_requested_at
   FROM graduated g
   JOIN users u ON u.pk = g.user_pk
@@ -55,7 +52,7 @@ export class AdminGraduatedRepository {
           graduatedPk: graduated.pk,
           name: users.name,
           nickname: graduatedProfile.nickname,
-          company: profileCompanyName,
+          company: companyAlias.name,
           job: graduatedProfile.job,
           hasBusinessCard: sql<boolean>`${graduated.businessCardKey} IS NOT NULL`,
           verifiedAt: graduated.verifiedAt,

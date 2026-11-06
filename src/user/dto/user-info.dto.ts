@@ -43,8 +43,8 @@ export class StudentInfoDto {
 
 export class GraduatedProfileDto {
   nickname: string;
-  /** 회사 검색 결과의 company_id. 회사 정보가 없는 예전 프로필이면 null (다시 저장하면 채워짐) */
-  company_id: number | null;
+  /** 회사 검색 결과의 company_id */
+  company_id: number;
   company: string;
   department: string;
   job: string;

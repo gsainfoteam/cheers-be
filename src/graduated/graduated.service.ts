@@ -121,8 +121,6 @@ export class GraduatedService {
         {
           graduatedPk: found.graduated.pk,
           nickname,
-          // 배포 중 이전 버전 pod가 읽는 복사본 (다음 릴리스에서 컬럼 삭제)
-          company: company.name,
           companyAliasPk: company.pk,
           department: req.department,
           job: req.job,

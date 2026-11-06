@@ -63,7 +63,6 @@ const profileRow = (
 ): GraduatedProfileRow => ({
   graduatedPk: GRADUATED_PK,
   nickname: "철수",
-  company: "인포테크",
   companyAliasPk: COMPANY_PK,
   department: "플랫폼개발팀",
   job: "백엔드 개발자",
@@ -248,7 +247,6 @@ describe("GraduatedService", () => {
         {
           graduatedPk: GRADUATED_PK,
           nickname: "철수",
-          company: "인포테크",
           companyAliasPk: COMPANY_PK,
           department: "플랫폼개발팀",
           job: "백엔드 개발자",
@@ -462,7 +460,7 @@ describe("GraduatedService", () => {
         );
         expect(companyRepository.createPending).not.toHaveBeenCalled();
         expect(graduatedProfileRepository.upsert).toHaveBeenCalledWith(
-          expect.objectContaining({ company: "Microsoft", companyAliasPk: 3 }),
+          expect.objectContaining({ companyAliasPk: 3 }),
           tx,
         );
       });
@@ -486,7 +484,7 @@ describe("GraduatedService", () => {
           tx,
         );
         expect(graduatedProfileRepository.upsert).toHaveBeenCalledWith(
-          expect.objectContaining({ company: "New   Co", companyAliasPk: 9 }),
+          expect.objectContaining({ companyAliasPk: 9 }),
           tx,
         );
       });

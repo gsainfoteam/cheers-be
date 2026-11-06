@@ -552,7 +552,6 @@ function buildDevRows(ref: ReferenceData, now: Date) {
     rows.graduatedProfiles.push({
       graduatedPk: pk,
       nickname: `[dev] 현업자${pad(index + 1)}`,
-      company: pick(COMPANIES, index),
       companyAliasPk: ref.companyPks.get(pick(COMPANIES, index)),
       department: pick(COMPANY_DEPARTMENTS, index),
       job: pick(JOBS, index),

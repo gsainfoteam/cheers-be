@@ -15,10 +15,7 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 import { DatabaseService } from "@src/database/database.service";
 import { isActiveAccountAs } from "@src/database/repository/user.sql";
-import {
-  isProfileCompany,
-  profileCompanyName,
-} from "@src/database/repository/company.sql";
+import { isProfileCompany } from "@src/database/repository/company.sql";
 import { CoffeeChatRequestStatus } from "@src/cheers/cheers.utils";
 import { coffeeChatRequest } from "@drizzle/schema/coffee-chat-request";
 import { department } from "@drizzle/schema/department";
@@ -93,7 +90,7 @@ const requestColumns = {
   graduated: {
     pk: coffeeChatRequest.graduatedPk,
     nickname: graduatedProfile.nickname,
-    company: profileCompanyName,
+    company: companyAlias.name,
     job: graduatedProfile.job,
     active: sql<boolean>`${isActiveAccountAs("graduated_user")}`,
   },
@@ -160,13 +157,13 @@ export class AdminCoffeeChatRequestRepository {
         graduatedProfile,
         eq(graduatedProfile.graduatedPk, coffeeChatRequest.graduatedPk),
       )
-      .leftJoin(companyAlias, isProfileCompany);
+      .innerJoin(companyAlias, isProfileCompany);
   }
 
   /*
     SELECT r.pk, r.message, r.created_at, r.graduated_viewed_at, r.contact_shared_at, r.student_viewed_at,
       r.student_pk, su.name, d.name, (su.is_deleted = false AND su.withdraw_requested_at IS NULL),
-      r.graduated_pk, gp.nickname, COALESCE(ca.name, gp.company), gp.job, (gu.is_deleted = false AND gu.withdraw_requested_at IS NULL)
+      r.graduated_pk, gp.nickname, ca.name, gp.job, (gu.is_deleted = false AND gu.withdraw_requested_at IS NULL)
     FROM coffee_chat_request r
     JOIN student s ON s.pk = r.student_pk
     JOIN users su ON su.pk = s.user_pk
@@ -175,7 +172,7 @@ export class AdminCoffeeChatRequestRepository {
     JOIN graduated g ON g.pk = r.graduated_pk
     JOIN users gu ON gu.pk = g.user_pk
     JOIN graduated_profile gp ON gp.graduated_pk = r.graduated_pk
-    LEFT JOIN company_alias ca ON ca.pk = gp.company_alias_pk
+    JOIN company_alias ca ON ca.pk = gp.company_alias_pk
     WHERE <filter>
     ORDER BY r.created_at DESC, r.pk DESC LIMIT ?1 OFFSET ?2;
 
