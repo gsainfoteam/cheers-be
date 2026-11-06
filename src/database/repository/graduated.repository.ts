@@ -17,7 +17,7 @@ export type GraduatedWithProfile = {
   graduated: GraduatedRow;
   // 추가 정보 입력 전이면 null
   profile: GraduatedProfileRow | null;
-  // 프로필의 회사. 추가 정보 입력 전이거나 이전 버전 pod가 회사 없이 저장했으면 null
+  // 프로필의 회사. 추가 정보 입력 전이면 null
   company: CompanyAliasRow | null;
 };
 

@@ -10,14 +10,13 @@
 | ---- | ---- | ------- | -------- | -------- | ------- | ------- |
 | graduated_pk | uuid |  | false |  | [public.graduated](public.graduated.md) |  |
 | nickname | varchar(32) |  | false |  |  | 가입 후 수정 불가 |
-| company | varchar(128) |  | false |  |  | 저장 시점의 회사 이름 (company_alias.name 복사본). 배포 중 이전 버전 pod가 읽고 쓰므로 남겨 둠, 다음 릴리스에서 삭제 |
 | department | varchar(128) |  | false |  |  | 회사 부서 (비공개) |
 | job | varchar(128) |  | false |  |  | 직무 |
 | created_at | timestamp with time zone | now() | false |  |  |  |
 | updated_at | timestamp with time zone | now() | false |  |  |  |
 | hashtags | text[] |  | true |  |  | 마이페이지에서 선택 입력 |
 | links | text[] |  | true |  |  | 마이페이지에서 선택 입력 |
-| company_alias_pk | integer |  | true |  | [public.company_alias](public.company_alias.md) | 회사. 이전 버전 pod가 저장한 행은 null일 수 있음 (다음 릴리스에서 채우고 NOT NULL) |
+| company_alias_pk | integer |  | false |  | [public.company_alias](public.company_alias.md) | 회사. 화면에는 company_alias.name 을 씀 |
 
 ## Constraints
 
@@ -40,12 +39,11 @@
 erDiagram
 
 "public.graduated_profile" |o--|| "public.graduated" : ""
-"public.graduated_profile" }o--o| "public.company_alias" : ""
+"public.graduated_profile" }o--|| "public.company_alias" : ""
 
 "public.graduated_profile" {
   uuid graduated_pk FK
   varchar_32_ nickname
-  varchar_128_ company
   varchar_128_ department
   varchar_128_ job
   timestamp_with_time_zone created_at

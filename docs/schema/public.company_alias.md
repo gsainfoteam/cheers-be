@@ -34,7 +34,7 @@
 ```mermaid
 erDiagram
 
-"public.graduated_profile" }o--o| "public.company_alias" : ""
+"public.graduated_profile" }o--|| "public.company_alias" : ""
 "public.company_name" }o--|| "public.company_alias" : ""
 
 "public.company_alias" {
@@ -48,7 +48,6 @@ erDiagram
 "public.graduated_profile" {
   uuid graduated_pk FK
   varchar_32_ nickname
-  varchar_128_ company
   varchar_128_ department
   varchar_128_ job
   timestamp_with_time_zone created_at

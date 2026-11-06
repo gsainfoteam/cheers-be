@@ -15,8 +15,7 @@ import { graduated } from "./graduated";
 CREATE TABLE "graduated_profile" (
     "graduated_pk" uuid                     NOT NULL REFERENCES "graduated" ("pk"),
     "nickname"     varchar(32)              NOT NULL,
-    "company"      varchar(128)             NOT NULL,
-    "company_alias_pk" integer              NULL REFERENCES "company_alias" ("pk"),
+    "company_alias_pk" integer              NOT NULL REFERENCES "company_alias" ("pk"),
     "department"   varchar(128)             NOT NULL,
     "job"          varchar(128)             NOT NULL,
     "created_at"   timestamp with time zone NOT NULL DEFAULT NOW(),
@@ -36,13 +35,10 @@ export const graduatedProfile = pgTable(
       .references(() => graduated.pk),
     // 가입 후 수정 불가
     nickname: varchar("nickname", { length: 32 }).notNull(),
-    // 저장 시점의 회사 이름 (company_alias.name 복사본). 배포 중 이전 버전 pod가 읽고 쓰므로 남겨 둠
-    // 다음 릴리스에서 지움. 화면에는 company_alias.name 을 씀
-    company: varchar("company", { length: 128 }).notNull(),
-    // 회사. 이전 버전 pod가 저장한 행은 null일 수 있음 (다음 릴리스에서 채우고 NOT NULL)
-    companyAliasPk: integer("company_alias_pk").references(
-      () => companyAlias.pk,
-    ),
+    // 회사. 화면에는 company_alias.name 을 씀
+    companyAliasPk: integer("company_alias_pk")
+      .notNull()
+      .references(() => companyAlias.pk),
     // 회사 부서 (비공개)
     department: varchar("department", { length: 128 }).notNull(),
     // 직무

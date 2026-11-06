@@ -8,7 +8,7 @@ import { graduatedProfile } from "@drizzle/schema/graduated-profile";
 import { users } from "@drizzle/schema/users";
 import { coffeeChatContact } from "@drizzle/schema/coffee-chat-contact";
 import { companyAlias } from "@drizzle/schema/company-alias";
-import { isProfileCompany, profileCompanyName } from "./company.sql";
+import { isProfileCompany } from "./company.sql";
 import { isActiveAccount } from "./user.sql";
 
 export type GraduatedCardSort = "recent_joined" | "recent_active" | "random";
@@ -54,13 +54,13 @@ export class GraduatedCardRepository {
   constructor(private readonly dbService: DatabaseService) {}
 
   /*
-  SELECT g.pk, gp.nickname, COALESCE(ca.name, gp.company) AS company, ca.logo_key,
+  SELECT g.pk, gp.nickname, ca.name AS company, ca.logo_key,
     gp.job, gp.hashtags, gp.links, u.last_active_at,
     COALESCE(c.kakao_enabled OR c.email_enabled, false) AS can_request
   FROM graduated g
   JOIN users u ON u.pk = g.user_pk
   JOIN graduated_profile gp ON gp.graduated_pk = g.pk
-  LEFT JOIN company_alias ca ON ca.pk = gp.company_alias_pk
+  JOIN company_alias ca ON ca.pk = gp.company_alias_pk
   LEFT JOIN coffee_chat_contact c ON c.user_pk = g.user_pk
   WHERE u.type = 'graduated' AND u.status = 'active' AND g.verified_at IS NOT NULL
     AND u.is_deleted = false AND u.withdraw_requested_at IS NULL
@@ -81,7 +81,7 @@ export class GraduatedCardRepository {
         .select({
           graduatedPk: graduated.pk,
           nickname: graduatedProfile.nickname,
-          company: profileCompanyName,
+          company: companyAlias.name,
           companyLogoKey: companyAlias.logoKey,
           job: graduatedProfile.job,
           hashtags: graduatedProfile.hashtags,
@@ -95,7 +95,7 @@ export class GraduatedCardRepository {
           graduatedProfile,
           eq(graduatedProfile.graduatedPk, graduated.pk),
         )
-        .leftJoin(companyAlias, isProfileCompany)
+        .innerJoin(companyAlias, isProfileCompany)
         .leftJoin(coffeeChatContact, eq(coffeeChatContact.userPk, users.pk))
         .where(isVisibleGraduated)
         .orderBy(...this.orderBy(input.sort, input.seed))

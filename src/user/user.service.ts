@@ -348,18 +348,20 @@ export class UserService {
   ): GraduatedInfoDto {
     return {
       verified: graduated.verifiedAt !== null,
-      profile: profile
-        ? {
-            nickname: profile.nickname,
-            company_id: company?.pk ?? null,
-            company: company?.name ?? profile.company,
-            department: profile.department,
-            job: profile.job,
-            hashtags: profile.hashtags ?? [],
-            links: profile.links ?? [],
-            contact,
-          }
-        : null,
+      // 프로필이 있으면 회사도 있음 (company_alias_pk NOT NULL)
+      profile:
+        profile && company
+          ? {
+              nickname: profile.nickname,
+              company_id: company.pk,
+              company: company.name,
+              department: profile.department,
+              job: profile.job,
+              hashtags: profile.hashtags ?? [],
+              links: profile.links ?? [],
+              contact,
+            }
+          : null,
     };
   }
 
