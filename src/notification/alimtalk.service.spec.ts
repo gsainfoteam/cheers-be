@@ -75,15 +75,16 @@ describe("AlimtalkService", () => {
       sender: "0212345678",
       receiver_1: "01012345678",
       recvname_1: "홍길동",
-      subject_1: "연락처 공유 도착",
+      subject_1: "☕️ 연락처 공유 안내",
+      emtitle_1: "☕️ 연락처 공유 안내",
       message_1:
-        "Cheers\n\n☕ 선배가 연락처를 공유했어요\n연락처를 확인하고 커피챗 일정을 잡아볼까요?",
+        "회원님의 커피챗 요청에 대해 선배가 연락처를 공유했어요\n연락처를 확인하고 커피챗 일정을 잡아볼까요?",
       failover: "N",
     });
     expect(JSON.parse(button)).toEqual({
       button: [
         {
-          name: "연락처 확인하기",
+          name: "Cheers에서 확인하기",
           linkType: "WL",
           linkTypeName: "웹링크",
           linkMo: "https://cheers.example.com/cheers/sent",
@@ -107,11 +108,12 @@ describe("AlimtalkService", () => {
     const params = sentParams();
     expect(params.tpl_code).toBe("TPL-REQUESTED");
     expect(params.subject_1).toBe("커피챗 요청 도착");
+    expect(params.emtitle_1).toBe("커피챗 요청 도착");
     expect(params.message_1).toBe(
       "Cheers\n\n☕ 새로운 커피챗 요청이 도착했어요\n요청자로부터 온 메시지를 확인하고 커피챗 가능 여부를 알려주세요",
     );
     const { button } = JSON.parse(params.button_1);
-    expect(button[0].name).toBe("커피챗 요청 확인하기");
+    expect(button[0].name).toBe("Cheers에서 확인하기");
     expect(button[0].linkMo).toBe("https://cheers.example.com/cheers/received");
     expect(button[0].linkPc).toBe("https://cheers.example.com/cheers/received");
   });
@@ -226,6 +228,19 @@ describe("AlimtalkService", () => {
 
   it("skips sending when WEB_BASE_URL is not set", async () => {
     const service = createService({ ...config, WEB_BASE_URL: undefined });
+
+    await expect(service.send(input)).resolves.toEqual({
+      success: true,
+      skipped: true,
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("skips sending when WEB_BASE_URL is not https", async () => {
+    const service = createService({
+      ...config,
+      WEB_BASE_URL: "http://cheers.example.com",
+    });
 
     await expect(service.send(input)).resolves.toEqual({
       success: true,

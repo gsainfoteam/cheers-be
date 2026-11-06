@@ -7,27 +7,30 @@ import { maskRecipient } from "./notification.utils";
 const ALIGO_SEND_URL = "https://kakaoapi.aligo.in/akv10/alimtalk/send/";
 
 interface AlimtalkTemplate {
-  subject: string;
+  // 강조표기형 타이틀 (emtitle_1). 관리용 제목(subject_1)에도 같은 값을 씀
+  title: string;
   message: string;
   buttonName: string;
   // WEB_BASE_URL 뒤에 붙는 버튼 링크 경로
   path: string;
 }
 
-// message와 버튼은 알리고에 등록한 템플릿과 글자 하나까지 같아야 함 (다르면 전송되지 않음)
+// title, message, 버튼은 알리고에 등록한 템플릿과 글자 하나까지 같아야 함 (다르면 전송되지 않음)
+// 버튼 링크는 템플릿에 https://#{cheers_url}로 등록되어 있어서 WEB_BASE_URL은 https://로 시작해야 함
 const TEMPLATES: Record<NotificationEvent, AlimtalkTemplate> = {
   coffee_chat_requested: {
-    subject: "커피챗 요청 도착",
+    title: "커피챗 요청 도착",
     message:
       "Cheers\n\n☕ 새로운 커피챗 요청이 도착했어요\n요청자로부터 온 메시지를 확인하고 커피챗 가능 여부를 알려주세요",
-    buttonName: "커피챗 요청 확인하기",
+    buttonName: "Cheers에서 확인하기",
     path: "/cheers/received",
   },
   contact_shared: {
-    subject: "연락처 공유 도착",
+    title: "☕️ 연락처 공유 안내",
     message:
-      "Cheers\n\n☕ 선배가 연락처를 공유했어요\n연락처를 확인하고 커피챗 일정을 잡아볼까요?",
-    buttonName: "연락처 확인하기",
+      "회원님의 커피챗 요청에 대해 선배가 연락처를 공유했어요\n" +
+      "연락처를 확인하고 커피챗 일정을 잡아볼까요?",
+    buttonName: "Cheers에서 확인하기",
     path: "/cheers/sent",
   },
 };
@@ -98,6 +101,15 @@ export class AlimtalkService {
       return;
     }
 
+    if (!webBaseUrl.startsWith("https://")) {
+      // 버튼 링크가 템플릿의 https://#{cheers_url}과 맞지 않아 전송되지 않음
+      this.logger.warn(
+        "WEB_BASE_URL must start with https:// for alimtalk buttons. Alimtalk will be logged instead of sent.",
+      );
+      this.config = null;
+      return;
+    }
+
     this.config = {
       apiKey,
       userId,
@@ -139,7 +151,8 @@ export class AlimtalkService {
           sender: this.config.sender,
           receiver_1: input.to,
           recvname_1: input.variables.recipientName,
-          subject_1: template.subject,
+          subject_1: template.title,
+          emtitle_1: template.title,
           message_1: template.message,
           button_1: JSON.stringify({
             button: [
