@@ -122,10 +122,9 @@ group transaction (DatabaseService.db.transaction)
     end note
   end
 
-  Service -> ProfileRepository: upsert({ graduatedPk, nickname, company: alias.name, companyAliasPk,\ndepartment, job, hashtags, links }, tx)
-  ProfileRepository -> PostgreSQL: INSERT graduated_profile ...\nON CONFLICT (graduated_pk) DO UPDATE SET company, company_alias_pk, department, job,\nhashtags, links, updated_at = now()
+  Service -> ProfileRepository: upsert({ graduatedPk, nickname, companyAliasPk,\ndepartment, job, hashtags, links }, tx)
+  ProfileRepository -> PostgreSQL: INSERT graduated_profile ...\nON CONFLICT (graduated_pk) DO UPDATE SET company_alias_pk, department, job,\nhashtags, links, updated_at = now()
   note right
-    company 는 alias 이름 복사본 (배포 중 이전 버전 pod가 읽음, 다음 릴리스에서 컬럼 삭제).
     nickname 은 첫 저장(INSERT)에만 들어가고 이후 갱신하지 않음
     (가입 후 변경 불가, 이후 보낸 nickname 은 무시).
     hashtags · links 를 안 보내면 빈 배열로 교체 (전체 교체)

@@ -36,7 +36,7 @@ Controller -> Service: getSentList(userPk, query)
 
 par 동시에 조회 — 같은 조건
   Service -> CoffeeChatRequestRepository: findSentPage(userPk, offset, limit)
-  CoffeeChatRequestRepository -> PostgreSQL: SELECT r.pk, r.message, r.created_at,\nr.graduated_viewed_at, r.contact_shared_at,\ngp.graduated_pk, gp.nickname, COALESCE(ca.name, gp.company) AS company, gp.job,\nisActiveAccount AS graduated_active\nFROM coffee_chat_request r\nJOIN student s ON s.pk = r.student_pk AND s.user_pk = ?\nJOIN graduated_profile gp\nON gp.graduated_pk = r.graduated_pk\nLEFT JOIN company_alias ca ON ca.pk = gp.company_alias_pk\nJOIN graduated g ON g.pk = r.graduated_pk JOIN users u ON u.pk = g.user_pk\nORDER BY r.created_at DESC, r.pk DESC LIMIT OFFSET
+  CoffeeChatRequestRepository -> PostgreSQL: SELECT r.pk, r.message, r.created_at,\nr.graduated_viewed_at, r.contact_shared_at,\ngp.graduated_pk, gp.nickname, ca.name AS company, gp.job,\nisActiveAccount AS graduated_active\nFROM coffee_chat_request r\nJOIN student s ON s.pk = r.student_pk AND s.user_pk = ?\nJOIN graduated_profile gp\nON gp.graduated_pk = r.graduated_pk\nJOIN company_alias ca ON ca.pk = gp.company_alias_pk\nJOIN graduated g ON g.pk = r.graduated_pk JOIN users u ON u.pk = g.user_pk\nORDER BY r.created_at DESC, r.pk DESC LIMIT OFFSET
   note right
     상대 현업자가 탈퇴했어도 요청 기록은 보여 줌
     (탈퇴 정책상 graduated_profile · 요청 기록은 보관).

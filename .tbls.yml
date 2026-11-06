@@ -122,8 +122,7 @@ comments:
     tableComment: 현업자 추가 정보. 알림 수단 · 공유할 연락처는 coffee_chat_contact
     columnComments:
       nickname: 가입 후 수정 불가
-      company: 저장 시점의 회사 이름 (company_alias.name 복사본). 배포 중 이전 버전 pod가 읽고 쓰므로 남겨 둠, 다음 릴리스에서 삭제
-      company_alias_pk: 회사. 이전 버전 pod가 저장한 행은 null일 수 있음 (다음 릴리스에서 채우고 NOT NULL)
+      company_alias_pk: 회사. 화면에는 company_alias.name 을 씀
       department: 회사 부서 (비공개)
       job: 직무
       hashtags: 마이페이지에서 선택 입력
