@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title GET /api/manager/v1/coffee-chat/request/{pk}
-caption CRB-45 · 커피챗 요청 상세와 그 요청의 알림 발송 결과 (읽기 전용)
+caption CRB-45 · CRB-75 · 커피챗 요청 상세와 그 요청의 알림 발송 결과 (읽기 전용)
 
 actor Client
 participant "ManagerGuard" as Guard
@@ -45,6 +45,6 @@ note right of Service
   이메일 · 전화번호를 가려서 응답 (maskPersonalInfo)
 end note
 Service --> Controller: CoffeeChatRequestDetailDto
-Controller --> Client: 200 { pk, status, student, graduated, message, created_at, graduated_viewed_at, contact_shared_at, student_viewed_at, notifications: [{ pk, event, channel, status, error, created_at }] }
+Controller --> Client: 200 { pk, status, student, graduated, message, created_at, graduated_viewed_at, contact_shared_at, student_viewed_at, notifications: [{ pk, event, channel, status, error, attempt, next_retry_at, created_at }] }
 
 @enduml

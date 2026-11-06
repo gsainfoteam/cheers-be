@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title POST /api/v1/cheers/request
-caption CRB-37 · 재학생 → 현업자 커피챗 요청 저장 + 현업자 연락 설정으로 비동기 알림
+caption CRB-37 · CRB-75 · 재학생 → 현업자 커피챗 요청 저장 + 현업자 연락 설정으로 비동기 알림 (실패한 채널은 스케줄러가 재시도)
 
 actor Client
 participant "UserGuard\n+ UserTypeGuard" as Guard
@@ -96,11 +96,20 @@ else
 end
 alt 실제 발송 안 함 (로컬 메일 · 알리고 키 미설정 → skipped)
   note over NotificationService: notification_log 기록 안 함
-else 발송 시도함
-  NotificationService -> PostgreSQL: INSERT notification_log\n(event = coffee_chat_requested, channel, status sent | failed, recipient)
-  opt 발송 실패 또는 로그 insert 실패
-    NotificationService ->> Slack: [NOTIFICATION ERROR] (수신자 마스킹)
-  end
+else 발송 성공
+  NotificationService -> PostgreSQL: INSERT notification_log\n(event = coffee_chat_requested, channel, status = sent, attempt = 1, recipient)
+else 발송 실패
+  NotificationService -> PostgreSQL: INSERT notification_log\n(event = coffee_chat_requested, channel, status = failed, attempt = 1,\nnext_retry_at = now + 1분, recipient, error)
+  note right
+    CRB-75: 실패한 채널만 재시도 대상.
+    재시도는 flow/notification-retry.puml (1분 · 5분 · 30분 뒤, 최대 3번).
+    채널마다 따로 기록하므로 메일만 성공해도 알림톡은 재시도함
+  end note
 end
+opt 로그 insert 실패
+  NotificationService ->> Slack: [NOTIFICATION ERROR] (수신자 마스킹)
+  note right: 로그가 없으면 재시도도 할 수 없으므로 바로 알림
+end
+ref over NotificationService, PostgreSQL: 재시도 — flow/notification-retry.puml
 
 @enduml

@@ -1,0 +1,105 @@
+@startuml notification-retry
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title 스케줄러: 커피챗 알림 재시도
+caption CRB-75 · src/cheers/cheers-notification-retry.scheduler.ts · 매분 (Asia/Seoul)
+
+participant "CheersNotificationRetryScheduler" as Scheduler
+participant "CheersNotificationRetryService" as Service
+participant "CheersNotificationBuilder" as Builder
+participant "NotificationService" as NotificationService
+participant "NotificationLogRepository" as LogRepository
+participant "CoffeeChatRequestRepository" as CoffeeChatRequestRepository
+database PostgreSQL
+participant "SMTP"
+participant "Aligo"
+participant "Slack"
+
+Scheduler -> Scheduler: running이면 건너뜀
+note right: 발송이 느려 1분을 넘기면 같은 서버에서 실행이 겹치지 않게 함
+Scheduler -> Service: retryDue(now)
+
+loop 더 처리할 로그가 없을 때까지
+  Service -> LogRepository: findRetryDuePks(now, 50, attempted)
+  LogRepository -> PostgreSQL: SELECT pk FROM notification_log\nWHERE next_retry_at IS NOT NULL AND next_retry_at <= now\nAND pk NOT IN (이번 실행에서 시도한 로그)\nORDER BY next_retry_at LIMIT 50
+  note right: 부분 인덱스 notification_log_next_retry_at_idx\n(next_retry_at IS NOT NULL인 행만)
+  LogRepository --> Service: pks
+
+  loop pk마다 (로그별 트랜잭션)
+    group transaction (DatabaseService.db.transaction)
+      Service -> LogRepository: lockRetryDue(pk, now, tx)
+      LogRepository -> PostgreSQL: SELECT * FROM notification_log\nWHERE pk = ? AND next_retry_at IS NOT NULL AND next_retry_at <= now\nFOR UPDATE SKIP LOCKED
+      note right
+        서버가 여러 대여도 다른 인스턴스가 잡은 로그는 건너뜀.
+        이미 처리돼 next_retry_at이 비었으면 null
+      end note
+      LogRepository --> Service: log | null
+      opt null (다른 인스턴스가 처리 중 · 이미 처리됨)
+        note over Service: 건너뜀
+      end
+
+      Service -> CoffeeChatRequestRepository: findNotificationTarget(log.coffee_chat_request_pk, tx)
+      CoffeeChatRequestRepository -> PostgreSQL: SELECT r.pk, 현업자 · 재학생의 name, 활성 여부(isActiveAccount),\n현재 coffee_chat_contact\nFROM coffee_chat_request r JOIN graduated · student · users\nLEFT JOIN coffee_chat_contact (양쪽)
+      CoffeeChatRequestRepository --> Service: target
+      Service -> Builder: event = coffee_chat_requested → requested(pk, 현업자)\nevent = contact_shared → contactShared(pk, 재학생, 현업자 이름)
+      note right of Builder: 요청 · 연락처 공유 API와 같은 빌더.\n메일 본문 · 알림톡 변수는 저장하지 않으므로 다시 만듦
+      Builder --> Service: NotifyInput (받는 사람이 켠 채널만)
+
+      alt 받는 사람이 탈퇴 · 탈퇴 유예기간 중이거나 그 채널을 끔 (dropped)
+        Service -> LogRepository: clearNextRetry(log.pk, tx)
+        LogRepository -> PostgreSQL: UPDATE notification_log SET next_retry_at = NULL WHERE pk = ?
+        note right: 재시도 중단. 새 로그는 남기지 않음
+      else 재시도
+        Service -> NotificationService: resend(log, input, tx)
+        alt channel = email
+          NotificationService -> SMTP: MailService.send
+          SMTP --> NotificationService: MailResult
+        else channel = kakao_alimtalk
+          NotificationService -> Aligo: AlimtalkService.send (템플릿 = log.event)
+          Aligo --> NotificationService: AlimtalkResult
+        end
+        note right of NotificationService
+          발송은 트랜잭션 안. 잠그는 것은 이 로그 행뿐이라 요청 API와 부딪히지 않음.
+          발송 뒤 커밋 전에 서버가 죽으면 다음 실행에서 한 번 더 보낼 수 있음 (at-least-once)
+        end note
+
+        alt skipped (로컬 · 키 미설정)
+          note over NotificationService: 새 로그 없음
+        else 성공
+          NotificationService -> PostgreSQL: INSERT notification_log\n(status = sent, attempt = log.attempt + 1, next_retry_at = NULL) (tx)
+        else 실패, 재시도가 남음 (attempt + 1 <= 3)
+          NotificationService -> PostgreSQL: INSERT notification_log\n(status = failed, attempt = log.attempt + 1,\nnext_retry_at = now + 간격[attempt], error) (tx)
+          note right
+            NOTIFICATION_RETRY_DELAYS_MS: 1번째 실패 → 1분, 2번째 → 5분, 3번째 → 30분.
+            발송 시도는 최대 4번 (처음 1번 + 재시도 3번). Slack 없이 경고 로그만
+          end note
+        else 실패, 마지막 시도 (attempt + 1 = 4)
+          NotificationService -> PostgreSQL: INSERT notification_log\n(status = failed, attempt = 4, next_retry_at = NULL, error) (tx)
+          NotificationService ->> Slack: [NOTIFICATION GAVE UP] 채널, event, 요청 pk,\n수신자(마스킹), 마지막 error
+          note right: 운영자가 직접 확인 · 연락
+        end
+        opt 로그 insert 실패
+          NotificationService ->> Slack: [NOTIFICATION ERROR]
+          NotificationService -[#red]-> Service: throw (이 로그만 rollback → 다음 실행에서 다시 시도)
+        end
+        NotificationService --> Service: sent | failed | gave_up | skipped
+
+        Service -> LogRepository: clearNextRetry(log.pk, tx)
+        LogRepository -> PostgreSQL: UPDATE notification_log SET next_retry_at = NULL WHERE pk = ?
+      end
+    end
+    note over Service, PostgreSQL: 로그 하나의 예외는 그 로그만 rollback하고 에러 로그를 남긴 뒤 다음으로 넘어감
+  end
+end
+
+Service --> Scheduler: { sent, failed, gaveUp, dropped }
+note right of Scheduler: 실행 중 예외는 에러 로그만 남김 (다음 분에 다시 실행)
+
+@enduml
