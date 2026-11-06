@@ -9,6 +9,6 @@ import { NotificationService } from "./notification.service";
 @Module({
   imports: [ConfigModule, DatabaseModule, MailModule],
   providers: [AlimtalkService, NotificationLogRepository, NotificationService],
-  exports: [NotificationService],
+  exports: [NotificationService, NotificationLogRepository],
 })
 export class NotificationModule {}

@@ -21,6 +21,7 @@ import { TxType } from "@src/global/types/tx.types";
 import { NotificationService } from "@src/notification/notification.service";
 import { NotifyInput } from "@src/notification/notification.types";
 import { CheersGraduatedService } from "./cheers-graduated.service";
+import { CheersNotificationBuilder } from "./cheers-notification.builder";
 import { PaginationQueryDto } from "./dto/pagination.dto";
 
 const userPk = "8f1d2c3b-0000-4000-8000-000000000001";
@@ -125,10 +126,6 @@ describe("CheersGraduatedService", () => {
 
   const createService = (env: Record<string, string | undefined> = {}) =>
     new CheersGraduatedService(
-      {
-        get: (key: string) =>
-          ({ WEB_BASE_URL: "https://cheers.example.com/", ...env })[key],
-      } as unknown as ConfigService,
       dbService as unknown as DatabaseService,
       coffeeChatRequestRepository as unknown as CoffeeChatRequestRepository,
       coffeeChatContactRepository as unknown as CoffeeChatContactRepository,
@@ -136,6 +133,10 @@ describe("CheersGraduatedService", () => {
       graduatedRepository as unknown as GraduatedRepository,
       fileService as unknown as FileService,
       notificationService as unknown as NotificationService,
+      new CheersNotificationBuilder({
+        get: (key: string) =>
+          ({ WEB_BASE_URL: "https://cheers.example.com/", ...env })[key],
+      } as unknown as ConfigService),
     );
 
   beforeEach(() => {

@@ -30,4 +30,9 @@ export interface NotificationLogInput {
   recipient: string;
   providerMessageId?: string;
   error?: string;
+  attempt: number;
+  nextRetryAt: Date | null;
 }
+
+// 한 채널 발송 결과. skipped: 실제로 보내지 않음 (로컬 · 키 미설정), gave_up: 마지막 시도까지 실패
+export type NotificationOutcome = "sent" | "failed" | "gave_up" | "skipped";
