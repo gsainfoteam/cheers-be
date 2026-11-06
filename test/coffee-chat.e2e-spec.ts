@@ -8,6 +8,7 @@ import {
   Session,
   signupGraduated,
   signupStudent,
+  waitUntil,
 } from "./support/flows";
 
 // graduatedInfoBody의 연락처
@@ -142,6 +143,98 @@ describe("시나리오 2: 현업자 가입 → 재학생 목록 조회 → 커�
       expect(ctx.slack.messages[0]).toContain("NOTIFICATION ERROR");
       expect(ctx.slack.messages[0]).not.toContain(GRADUATED_CONTACT_EMAIL);
     });
+
+    describe("알림톡 (가짜 알리고)", () => {
+      const PHONE = "01011112222";
+
+      // 메일 · 알림톡을 모두 고른 현업자에게 요청. 두 채널의 기록이 다 생길 때까지 기다림
+      const requestWithKakao = async (expectedRows: number) => {
+        await signupGraduated(ctx, {
+          contact: {
+            email_enabled: true,
+            kakao_enabled: true,
+            email: GRADUATED_CONTACT_EMAIL,
+            phone: "010-1111-2222",
+          },
+        });
+        const studentSession = await signupStudent(ctx);
+        const card = (await list(studentSession)).items[0];
+        const created = await http(ctx)
+          .post("/api/v1/cheers/request")
+          .set("Authorization", bearer(studentSession))
+          .send({ graduated_id: card.graduated_id, message: "질문" })
+          .expect(201);
+
+        await waitUntil(
+          () =>
+            ctx.mail.sent.some((m) => m.to === GRADUATED_CONTACT_EMAIL) &&
+            ctx.alimtalk.sent.length === 1,
+        );
+        let rows: (typeof notificationLog.$inferSelect)[] = [];
+        await waitUntil(async () => {
+          rows = await ctx.db.select().from(notificationLog);
+          return rows.length >= expectedRows;
+        });
+        return { requestId: created.body.id as string, rows };
+      };
+      const byChannel = (rows: (typeof notificationLog.$inferSelect)[]) =>
+        Object.fromEntries(rows.map((row) => [row.channel, row]));
+
+      it("알리고 대신 가짜 서비스로 현업자 번호 · 이름 · 요청 id를 넘기고, 두 채널을 따로 기록", async () => {
+        ctx.mail.sendResult = { success: true, messageId: "mail-id" };
+        ctx.alimtalk.sendResult = { success: true, messageId: "aligo-mid" };
+
+        const { requestId, rows } = await requestWithKakao(2);
+
+        expect(ctx.alimtalk.sent).toEqual([
+          {
+            event: "coffee_chat_requested",
+            to: PHONE,
+            variables: {
+              recipientName: "박현업",
+              coffeeChatRequestPk: requestId,
+            },
+          },
+        ]);
+        expect(rows).toHaveLength(2);
+        expect(byChannel(rows)).toMatchObject({
+          email: { status: "sent", providerMessageId: "mail-id" },
+          kakao_alimtalk: {
+            coffeeChatRequestPk: requestId,
+            event: "coffee_chat_requested",
+            status: "sent",
+            recipient: PHONE,
+            providerMessageId: "aligo-mid",
+          },
+        });
+        expect(ctx.slack.messages).toHaveLength(0);
+      });
+
+      it("알림톡이 실패해도 메일은 sent이고, 실패 알림에는 번호를 가림", async () => {
+        ctx.mail.sendResult = { success: true, messageId: "mail-id" };
+        ctx.alimtalk.sendResult = {
+          success: false,
+          error: `-99 invalid receiver ${PHONE}`,
+        };
+
+        const { rows } = await requestWithKakao(2);
+
+        expect(byChannel(rows)).toMatchObject({
+          email: { status: "sent" },
+          kakao_alimtalk: { status: "failed" },
+        });
+        await waitUntil(() => ctx.slack.messages.length === 1);
+        expect(ctx.slack.messages[0]).toContain("NOTIFICATION ERROR");
+        expect(ctx.slack.messages[0]).not.toContain(PHONE);
+      });
+
+      it("키가 없을 때처럼 skipped면 호출은 하지만 기록을 남기지 않음", async () => {
+        await requestWithKakao(0);
+        // 비동기 기록이 끝날 틈을 줌
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        expect(await ctx.db.select().from(notificationLog)).toHaveLength(0);
+      });
+    });
   });
 
   it("현업자는 목록만 볼 수 있고 요청 · 보낸 요청 API는 호출할 수 없음", async () => {
@@ -189,13 +282,3 @@ describe("시나리오 2: 현업자 가입 → 재학생 목록 조회 → 커�
       .expect(409);
   });
 });
-
-async function waitUntil(
-  condition: () => boolean | Promise<boolean>,
-): Promise<void> {
-  for (let i = 0; i < 100; i++) {
-    if (await condition()) return;
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
-  throw new Error("Condition not met in time");
-}

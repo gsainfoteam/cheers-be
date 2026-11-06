@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { adminAccessLog } from "@drizzle/schema/admin-access-log";
-import { adminAccount } from "@drizzle/schema/admin-account";
 import { graduated } from "@drizzle/schema/graduated";
 import { users } from "@drizzle/schema/users";
 import { AdminAccessLogRepository } from "@src/admin-repository/admin-access-log.repository";
@@ -15,6 +14,7 @@ import {
   getInfo,
   http,
   login,
+  loginManager,
   Session,
   signupGraduated,
   signupStudent,
@@ -28,22 +28,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 describe("어드민 현업자 명함 (가짜 S3)", () => {
   let ctx: E2eContext;
-
-  const managerAuth = async (
-    email: string,
-    role: "admin" | "superadmin",
-  ): Promise<string> => {
-    await ctx.db.insert(adminAccount).values({ pk: randomUUID(), email, role });
-    const res = await http(ctx)
-      .post("/api/manager/v1/auth/login")
-      .send({
-        code: `fake-idp-code:${email}`,
-        redirect_uri: "http://localhost:5174/admin/callback",
-        code_verifier: "e2e-verifier",
-      })
-      .expect(201);
-    return `Bearer ${res.body.access_token}`;
-  };
 
   const graduatedRowOf = async (session: Session) => {
     const { id } = await getInfo(ctx, session);
@@ -94,7 +78,7 @@ describe("어드민 현업자 명함 (가짜 S3)", () => {
     });
 
     it("admin은 목록 · 명함 조회만, 인증 취소는 403이고 상태가 그대로", async () => {
-      const auth = await managerAuth(ADMIN, "admin");
+      const auth = await loginManager(ctx, ADMIN, "admin");
       const session = await signupGraduated(ctx);
       const { pk, businessCardKey } = await graduatedRowOf(session);
 
@@ -113,7 +97,7 @@ describe("어드민 현업자 명함 (가짜 S3)", () => {
 
   describe("목록", () => {
     it("업로드 여부 · 인증 시각 · 가입 상태. key 원문은 내려주지 않음", async () => {
-      const auth = await managerAuth(ADMIN, "admin");
+      const auth = await loginManager(ctx, ADMIN, "admin");
       const active = await signupGraduated(ctx, { nickname: "가입완료" });
       const activeRow = await graduatedRowOf(active);
       const pending = await login(ctx, "graduated");
@@ -155,7 +139,7 @@ describe("어드민 현업자 명함 (가짜 S3)", () => {
     });
 
     it("탈퇴 유예기간은 표시하고 탈퇴 처리가 끝나면 뺌", async () => {
-      const auth = await managerAuth(ADMIN, "admin");
+      const auth = await loginManager(ctx, ADMIN, "admin");
       const session = await signupGraduated(ctx);
       const { id } = await getInfo(ctx, session);
       await http(ctx)
@@ -182,7 +166,7 @@ describe("어드민 현업자 명함 (가짜 S3)", () => {
     });
 
     it("query 형식 오류는 400", async () => {
-      const auth = await managerAuth(ADMIN, "admin");
+      const auth = await loginManager(ctx, ADMIN, "admin");
       await http(ctx)
         .get(`${BASE}?size=51`)
         .set("Authorization", auth)
@@ -192,7 +176,7 @@ describe("어드민 현업자 명함 (가짜 S3)", () => {
 
   describe("명함 조회와 열람 기록", () => {
     it("URL을 발급하고 어드민 이메일 · 대상 · 시각을 남김", async () => {
-      const auth = await managerAuth(ADMIN, "admin");
+      const auth = await loginManager(ctx, ADMIN, "admin");
       const session = await signupGraduated(ctx);
       const { pk, businessCardKey } = await graduatedRowOf(session);
 
@@ -218,7 +202,7 @@ describe("어드민 현업자 명함 (가짜 S3)", () => {
     });
 
     it("조회할 때마다 기록이 쌓임", async () => {
-      const auth = await managerAuth(ADMIN, "admin");
+      const auth = await loginManager(ctx, ADMIN, "admin");
       const { pk } = await graduatedRowOf(await signupGraduated(ctx));
 
       await http(ctx)
@@ -234,7 +218,7 @@ describe("어드민 현업자 명함 (가짜 S3)", () => {
     });
 
     it("기록 저장에 실패하면 500이고 URL을 발급하지 않음", async () => {
-      const auth = await managerAuth(ADMIN, "admin");
+      const auth = await loginManager(ctx, ADMIN, "admin");
       const { pk } = await graduatedRowOf(await signupGraduated(ctx));
       jest
         .spyOn(ctx.app.get(AdminAccessLogRepository), "insert")
@@ -251,7 +235,7 @@ describe("어드민 현업자 명함 (가짜 S3)", () => {
     });
 
     it("없는 현업자 · 명함 없음은 404, 기록 없음. UUID가 아니면 400", async () => {
-      const auth = await managerAuth(ADMIN, "admin");
+      const auth = await loginManager(ctx, ADMIN, "admin");
       const pending = await login(ctx, "graduated");
       const { pk } = await graduatedRowOf(pending);
 
@@ -274,7 +258,7 @@ describe("어드민 현업자 명함 (가짜 S3)", () => {
     });
 
     it("열람 기록이 있어도 탈퇴 만료 처리와 미완료 가입 정리가 실패하지 않음", async () => {
-      const auth = await managerAuth(ADMIN, "admin");
+      const auth = await loginManager(ctx, ADMIN, "admin");
       const active = await signupGraduated(ctx);
       const activeInfo = await getInfo(ctx, active);
       const activeRow = await graduatedRowOf(active);
@@ -314,7 +298,7 @@ describe("어드민 현업자 명함 (가짜 S3)", () => {
 
   describe("인증 취소", () => {
     it("취소 → 목록 · 새 요청에서 빠짐 → 받은 요청 403 → 재업로드하면 전부 복구, 이전 요청도 그대로", async () => {
-      const auth = await managerAuth(SUPER, "superadmin");
+      const auth = await loginManager(ctx, SUPER, "superadmin");
       const session = await signupGraduated(ctx);
       const student = await signupStudent(ctx);
       const { pk, businessCardKey: oldKey } = await graduatedRowOf(session);
@@ -393,7 +377,7 @@ describe("어드민 현업자 명함 (가짜 S3)", () => {
     });
 
     it("access token을 다시 받아도 active. 토큰 갱신 · 로그인이 막히지 않음", async () => {
-      const auth = await managerAuth(SUPER, "superadmin");
+      const auth = await loginManager(ctx, SUPER, "superadmin");
       const session = await signupGraduated(ctx);
       const { pk } = await graduatedRowOf(session);
       await cancel(auth, pk).expect(200);
@@ -417,7 +401,7 @@ describe("어드민 현업자 명함 (가짜 S3)", () => {
     });
 
     it("가입 중인 현업자를 취소하면 다시 verify 단계", async () => {
-      const auth = await managerAuth(SUPER, "superadmin");
+      const auth = await loginManager(ctx, SUPER, "superadmin");
       const session = await login(ctx, "graduated");
       await agreeConsents(ctx, session);
       await submitBusinessCard(ctx, session);
@@ -435,7 +419,7 @@ describe("어드민 현업자 명함 (가짜 S3)", () => {
     });
 
     it("미인증 현업자는 409, 없는 현업자는 404", async () => {
-      const auth = await managerAuth(SUPER, "superadmin");
+      const auth = await loginManager(ctx, SUPER, "superadmin");
       const { pk } = await graduatedRowOf(await login(ctx, "graduated"));
 
       await cancel(auth, pk).expect(409);
@@ -444,7 +428,7 @@ describe("어드민 현업자 명함 (가짜 S3)", () => {
     });
 
     it("취소된 명함 파일은 고아 파일 정리가 지우고 재업로드한 파일은 남김", async () => {
-      const auth = await managerAuth(SUPER, "superadmin");
+      const auth = await loginManager(ctx, SUPER, "superadmin");
       const session = await signupGraduated(ctx);
       const { pk, businessCardKey: oldKey } = await graduatedRowOf(session);
       await cancel(auth, pk).expect(200);

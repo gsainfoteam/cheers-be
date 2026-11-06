@@ -1,6 +1,4 @@
-import { randomUUID } from "node:crypto";
 import { and, eq, like } from "drizzle-orm";
-import { adminAccount } from "@drizzle/schema/admin-account";
 import { consent } from "@drizzle/schema/consent";
 import { users } from "@drizzle/schema/users";
 import { createE2eApp, E2eContext } from "./support/app";
@@ -10,12 +8,12 @@ import {
   getInfo,
   http,
   login,
+  loginManager,
   Session,
   signupStudent,
 } from "./support/flows";
 
 const BASE = "/api/manager/v1/consent";
-const LOGIN = "/api/manager/v1/auth/login";
 const USER_CONSENT = "/api/v1/user/consent";
 
 const SUPER = "super@gm.gist.ac.kr";
@@ -36,25 +34,6 @@ const body = (overrides: Record<string, unknown> = {}) => ({
 
 describe("manager consent", () => {
   let ctx: E2eContext;
-
-  const tokenOf = async (
-    email: string,
-    role: "admin" | "superadmin",
-  ): Promise<string> => {
-    await ctx.db
-      .insert(adminAccount)
-      .values({ pk: randomUUID(), email, role })
-      .onConflictDoNothing();
-    const res = await http(ctx)
-      .post(LOGIN)
-      .send({
-        code: `fake-idp-code:${email}`,
-        redirect_uri: "http://localhost:5174/admin/callback",
-        code_verifier: "e2e-verifier",
-      })
-      .expect(201);
-    return `Bearer ${res.body.access_token}`;
-  };
 
   const post = (auth: string, payload: object) =>
     http(ctx).post(BASE).set("Authorization", auth).send(payload);
@@ -99,7 +78,7 @@ describe("manager consent", () => {
     });
 
     it("일반 admin은 조회만 되고 등록은 403", async () => {
-      const auth = await tokenOf(ADMIN, "admin");
+      const auth = await loginManager(ctx, ADMIN, "admin");
 
       await http(ctx).get(BASE).set("Authorization", auth).expect(200);
       const res = await post(auth, body()).expect(403);
@@ -117,7 +96,7 @@ describe("manager consent", () => {
     });
 
     it("superadmin은 조회와 등록이 모두 됨", async () => {
-      const auth = await tokenOf(SUPER, "superadmin");
+      const auth = await loginManager(ctx, SUPER, "superadmin");
 
       await http(ctx).get(BASE).set("Authorization", auth).expect(200);
       await post(auth, body()).expect(201);
@@ -127,7 +106,7 @@ describe("manager consent", () => {
 
   describe("목록과 등록", () => {
     it("종류별로 최신 버전부터 나오고 최신 버전만 is_latest", async () => {
-      const auth = await tokenOf(SUPER, "superadmin");
+      const auth = await loginManager(ctx, SUPER, "superadmin");
 
       const created = await post(auth, body()).expect(201);
       expect(created.body).toEqual({
@@ -162,7 +141,7 @@ describe("manager consent", () => {
     });
 
     it("이미 있는 버전은 409이고 기존 행을 바꾸지 않음", async () => {
-      const auth = await tokenOf(SUPER, "superadmin");
+      const auth = await loginManager(ctx, SUPER, "superadmin");
       await post(auth, body()).expect(201);
 
       const res = await post(
@@ -193,12 +172,12 @@ describe("manager consent", () => {
       ["url 프로토콜 없음", { url: "terms.example.com" }],
       ["url 길이", { url: `https://example.com/${"a".repeat(512)}` }],
     ])("%s 오류는 400", async (_name, overrides) => {
-      const auth = await tokenOf(SUPER, "superadmin");
+      const auth = await loginManager(ctx, SUPER, "superadmin");
       await post(auth, body(overrides)).expect(400);
     });
 
     it("기존 버전을 수정 · 삭제하는 API는 없음", async () => {
-      const auth = await tokenOf(SUPER, "superadmin");
+      const auth = await loginManager(ctx, SUPER, "superadmin");
       const path = `${BASE}/tos/251022`;
 
       await http(ctx)
@@ -220,7 +199,7 @@ describe("manager consent", () => {
     };
 
     it("필수 약관을 등록하면 consent_required가 켜지고 재동의하면 꺼짐", async () => {
-      const auth = await tokenOf(SUPER, "superadmin");
+      const auth = await loginManager(ctx, SUPER, "superadmin");
       const session = await signupStudent(ctx);
       expect((await getInfo(ctx, session)).consent_required).toBe(false);
 
@@ -240,7 +219,7 @@ describe("manager consent", () => {
     });
 
     it("선택 약관을 등록해도 consent_required는 꺼져 있음", async () => {
-      const auth = await tokenOf(SUPER, "superadmin");
+      const auth = await loginManager(ctx, SUPER, "superadmin");
       const session = await signupStudent(ctx);
 
       await post(auth, body()).expect(201);
@@ -251,7 +230,7 @@ describe("manager consent", () => {
 
   describe("현황", () => {
     const setup = async () => {
-      const auth = await tokenOf(SUPER, "superadmin");
+      const auth = await loginManager(ctx, SUPER, "superadmin");
       await post(auth, body()).expect(201);
       return auth;
     };
@@ -334,7 +313,7 @@ describe("manager consent", () => {
   });
 
   it("가입 중인 사용자도 login 후 목록에서 새 버전을 봄", async () => {
-    const auth = await tokenOf(SUPER, "superadmin");
+    const auth = await loginManager(ctx, SUPER, "superadmin");
     await post(auth, body({ is_required: true })).expect(201);
 
     const pending = await login(ctx, "student");

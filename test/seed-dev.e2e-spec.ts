@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { count, eq, like } from "drizzle-orm";
 import { seedDevData, uploadDevBusinessCards } from "@drizzle/seed-dev-data";
 import { adminAccessLog } from "@drizzle/schema/admin-access-log";
-import { adminAccount } from "@drizzle/schema/admin-account";
 import { coffeeChatContact } from "@drizzle/schema/coffee-chat-contact";
 import { coffeeChatRequest } from "@drizzle/schema/coffee-chat-request";
 import { graduated } from "@drizzle/schema/graduated";
@@ -18,7 +17,13 @@ import { AuthService } from "@src/auth/auth.service";
 import { calculateNextStep } from "@src/auth/signup-step";
 import { UserRepository } from "@src/database/repository/user.repository";
 import { createE2eApp, E2eContext } from "./support/app";
-import { bearer, getInfo, http, signupStudent } from "./support/flows";
+import {
+  bearer,
+  getInfo,
+  http,
+  loginManager,
+  signupStudent,
+} from "./support/flows";
 
 const REQUESTS = "/api/manager/v1/coffee-chat/request";
 const LOGS = "/api/manager/v1/coffee-chat/notification-log";
@@ -69,19 +74,7 @@ describe("개발용 seed (가짜 S3)", () => {
 
   beforeEach(async () => {
     await ctx.reset();
-    const email = "admin@gm.gist.ac.kr";
-    await ctx.db
-      .insert(adminAccount)
-      .values({ pk: randomUUID(), email, role: "admin" });
-    const res = await http(ctx)
-      .post("/api/manager/v1/auth/login")
-      .send({
-        code: `fake-idp-code:${email}`,
-        redirect_uri: "http://localhost:5174/admin/callback",
-        code_verifier: "e2e-verifier",
-      })
-      .expect(201);
-    auth = `Bearer ${res.body.access_token}`;
+    auth = await loginManager(ctx, "admin@gm.gist.ac.kr", "admin");
   });
 
   afterAll(async () => {

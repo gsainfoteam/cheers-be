@@ -1,8 +1,6 @@
-import { randomUUID } from "node:crypto";
 import { CronExpression, SchedulerRegistry } from "@nestjs/schedule";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { desc, eq } from "drizzle-orm";
-import { adminAccount } from "@drizzle/schema/admin-account";
 import { interest } from "@drizzle/schema/interest";
 import { studentProfile } from "@drizzle/schema/student-profile";
 import { InterestService } from "@src/student/interest.service";
@@ -10,6 +8,7 @@ import { createE2eApp, E2eContext } from "./support/app";
 import {
   bearer,
   http,
+  loginManager,
   saveStudentInfo,
   Session,
   signupStudent,
@@ -63,18 +62,7 @@ describe("manager interest", () => {
   beforeEach(async () => {
     await ctx.reset();
     // superadmin이 아닌 admin으로 호출해 ManagerGuard만 적용됐는지 함께 확인
-    await ctx.db
-      .insert(adminAccount)
-      .values({ pk: randomUUID(), email: ADMIN, role: "admin" });
-    const res = await http(ctx)
-      .post("/api/manager/v1/auth/login")
-      .send({
-        code: `fake-idp-code:${ADMIN}`,
-        redirect_uri: "http://localhost:5174/admin/callback",
-        code_verifier: "e2e-verifier",
-      })
-      .expect(201);
-    auth = `Bearer ${res.body.access_token}`;
+    auth = await loginManager(ctx, ADMIN, "admin");
   });
   afterEach(() => restoreSeed());
   afterAll(() => ctx.close());

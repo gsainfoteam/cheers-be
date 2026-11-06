@@ -1,6 +1,4 @@
-import { randomUUID } from "node:crypto";
 import { eq, notInArray } from "drizzle-orm";
-import { adminAccount } from "@drizzle/schema/admin-account";
 import { department } from "@drizzle/schema/department";
 import { school } from "@drizzle/schema/school";
 import { schoolEmailDomain } from "@drizzle/schema/school-email-domain";
@@ -12,6 +10,7 @@ import {
   getInfo,
   http,
   login,
+  loginManager,
   saveStudentInfo,
   sendCode,
   Session,
@@ -37,19 +36,6 @@ describe("school · department admin", () => {
   let seedDepartments: (typeof department.$inferSelect)[];
   let superAuth: string;
   let adminAuth: string;
-
-  const tokenOf = async (email: string, role: "admin" | "superadmin") => {
-    await ctx.db.insert(adminAccount).values({ pk: randomUUID(), email, role });
-    const res = await http(ctx)
-      .post("/api/manager/v1/auth/login")
-      .send({
-        code: `fake-idp-code:${email}`,
-        redirect_uri: "http://localhost:5174/admin/callback",
-        code_verifier: "e2e-verifier",
-      })
-      .expect(201);
-    return `Bearer ${res.body.access_token}`;
-  };
 
   // 기준 데이터는 reset으로 되돌아가지 않아 테스트마다 복구. 프로필이 참조하므로 reset 뒤에 함
   const restoreSeed = async () => {
@@ -120,8 +106,8 @@ describe("school · department admin", () => {
   });
   beforeEach(async () => {
     await ctx.reset();
-    superAuth = await tokenOf(SUPER, "superadmin");
-    adminAuth = await tokenOf(ADMIN, "admin");
+    superAuth = await loginManager(ctx, SUPER, "superadmin");
+    adminAuth = await loginManager(ctx, ADMIN, "admin");
   });
   afterEach(async () => {
     await ctx.reset();
