@@ -1,43 +1,67 @@
 // 배포된 서버(기본 staging)에 대한 스모크 테스트. 코드 버그가 아니라 "배포 · 설정이 맞는지"를 본다
-// (env 누락, DB 권한, 마이그레이션, 메일, S3 연결 등). CI의 e2e와는 별개
+// (env 누락, DB 권한, 마이그레이션, 메일, 알림톡, S3, IdP 연결 등). CI의 e2e와는 별개
 //
-// Google 계정 2개로 재학생 · 현업자를 각각 로그인시켜 가입부터 커피챗 요청까지 진행한다
-//   1) 재학생 가입 (약관 → 학교 메일 인증 → 추가 정보 → 파일 첨부)
-//   2) 현업자 가입 (약관 → 명함 업로드 · 인증 → 추가 정보)
-//   3) 재학생: 현업자 목록(비공개 정보 미노출 확인) → 커피챗 요청 → 보낸 요청(공유 전: 현업자 연락처 없음)
-//   4) 현업자: 받은 요청 확인 → 연락처 공유
-//   5) 재학생: 보낸 요청(공유 후: 상태 contact_shared + 현업자 연락처 보임)
-//   6) 토큰 갱신 · 로그아웃 (WITHDRAW=1이면 이어서 두 계정 탈퇴 요청)
-//
-// 어드민 API(/api/manager/v1/...)는 IdP 로그인이 필요해 다루지 않는다
+// 어드민 1명(IdP)과 Google 계정 2개(재학생 · 현업자)로 가입부터 커피챗 연락처 공유까지 진행하고, 어드민 화면에서 결과를 확인한다
+//   1) 어드민: IdP 로그인 → 회사 등록(다른 표기 · 로고 포함)
+//   2) 재학생 가입 (약관 → 학교 메일 인증 → 추가 정보 → 파일 첨부)
+//   3) 현업자 가입 (약관 → 명함 업로드 · 인증 → 회사 직접 입력으로 가입 → 어드민 검토 목록 확인
+//      → 회사 검색으로 1)의 회사를 골라 수정 → 직접 입력한 회사 삭제)
+//   4) 재학생: 현업자 목록(비공개 정보 미노출 · 회사 · 로고 확인) → 커피챗 요청 → 보낸 요청(공유 전: 현업자 연락처 없음)
+//   5) 현업자: 받은 요청 확인 → 연락처 공유
+//   6) 재학생: 보낸 요청(공유 후: 상태 contact_shared + 현업자 연락처 보임)
+//   7) 어드민: 커피챗 요청 · 알림 발송 결과 · 명함 열람 확인
+//   8) 토큰 갱신 · 로그아웃
+//   9) 정리: 두 계정 완전탈퇴(superadmin + DEV_USER_DELETE_ENABLED) → 회사 삭제
+//      완전탈퇴를 쓸 수 없으면 탈퇴 요청(유예기간 뒤 삭제)으로 대신하고, 현업자가 고른 회사는 남김
+//      중간 단계가 실패해도 정리는 함 (KEEP_DATA=1이면 정리하지 않음)
 //
 // macOS · Linux · Windows 공통 (bun만 있으면 됨)
 //   bun run smoke:staging
-// Google 로그인은 계정마다 한 번 브라우저에서 한다. REDIRECT_URI의 포트에 잠깐 서버를 띄워 ID token을 받으므로
-// 그 포트가 비어 있어야 한다 (admin 개발 서버가 5173을 쓰고 있으면 끄거나 REDIRECT_URI를 바꿀 것)
+// Google · IdP 로그인은 계정마다 한 번 브라우저에서 한다. redirect URI의 포트에 잠깐 서버를 띄워 결과를 받으므로
+// 그 포트가 비어 있어야 한다 (admin 개발 서버가 5173 · 5174를 쓰고 있으면 끄거나 redirect URI를 바꿀 것)
 //
 // 환경변수 (셸 환경변수가 .env보다 우선. ENV_FILE로 다른 파일 지정 가능)
-//   BASE_URL           대상 서버 (기본 https://api.stg.cheers.gistory.me)
-//   GOOGLE_CLIENT_ID   웹 client ID. 서버 GOOGLE_CLIENT_ID와 같아야 함 (필수)
-//   REDIRECT_URI       Google 콘솔에 등록한 localhost redirect URI (기본 http://localhost:5173)
-//   SCHOOL_EMAIL       재학생 메일 인증에 쓸 학교 메일. 비우면 필요할 때 물어봄
-//   WITHDRAW=1         마지막에 두 계정 모두 탈퇴 요청 (유예기간 뒤 삭제됨. 재로그인하면 취소)
+//   BASE_URL              대상 서버 (기본 https://api.stg.cheers.gistory.me)
+//   GOOGLE_CLIENT_ID      웹 client ID. 서버 GOOGLE_CLIENT_ID와 같아야 함 (필수)
+//   REDIRECT_URI          Google 콘솔에 등록한 localhost redirect URI (기본 http://localhost:5173)
+//   IDP_CLIENT_ID         대상 서버의 IDP_CLIENT_ID와 같은 값 (MANAGER_TOKEN이 없으면 필수)
+//   IDP_AUTHORIZE_URL     IdP 로그인 페이지 (기본 https://account.gistory.me/authorize)
+//   MANAGER_REDIRECT_URI  IdP client에 등록한 localhost redirect URI (기본 http://localhost:5174/admin/callback)
+//   MANAGER_TOKEN         어드민 토큰을 직접 지정하면 IdP 로그인을 건너뜀
+//                         (어드민 화면 로그인 후 localStorage의 cheers_admin_access_token 값, 유효기간 1일)
+//   SCHOOL_EMAIL          재학생 메일 인증에 쓸 학교 메일. 비우면 필요할 때 물어봄
+//   PHONE                 휴대폰 번호(01012345678)를 주면 두 계정의 카카오 연락을 켜서 그 번호로 실제 알림톡을 보냄
+//   KEEP_DATA=1           마지막 정리를 하지 않음 (어드민 화면에서 직접 보고 싶을 때)
 //
-// 이미 진행한 단계는 건너뜀: 서버가 알려 주는 next_step을 보고 이어서 진행하므로 여러 번 돌려도 됨
-//   (같은 두 계정으로 다시 돌리면 커피챗 요청이 하나 더 만들어지고 현업자에게 알림 메일이 나감)
-// 로그에는 토큰 · 비밀 값을 출력하지 않는다
+// 이미 진행한 단계는 건너뜀: 정리 전에 멈춰 계정이 남았으면, 서버가 알려 주는 next_step을 보고 이어서 진행함
+// 현업자 · 재학생에게 실제 알림 메일이 나감. 로그에는 토큰 · 비밀 값을 출력하지 않는다
 import { spawn } from "node:child_process";
 import { createHash, randomBytes, randomInt } from "node:crypto";
-import { createServer } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
 import { createInterface } from "node:readline/promises";
 import * as dotenv from "dotenv";
 
 dotenv.config({ quiet: true, path: process.env.ENV_FILE });
 
 type UserKind = "student" | "graduated";
-type Account = { access: string; refresh: string };
+type Auth = { access: string };
+type Account = Auth & { refresh: string; id: string; label: string };
+type Manager = Auth & { role: string };
+type Company = { id: number; name: string; alias: string };
 // 응답 본문을 스모크 테스트 안에서만 읽으므로 형식을 따로 정의하지 않음
 type Res = { code: number; text: string; json: any };
+
+// 정리할 대상. 중간에 실패해도 여기까지 만든 것만 정리함
+type State = {
+  manager: Manager | null;
+  hardDelete: boolean;
+  accounts: Account[];
+  companies: number[];
+};
 
 // GOOGLE_CLIENT_ID는 서버 설정처럼 쉼표로 여러 개일 수 있으므로 첫 번째(웹 client)를 씀
 const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID ?? "").split(",")[0];
@@ -45,10 +69,19 @@ const BASE_URL = (
   process.env.BASE_URL || "https://api.stg.cheers.gistory.me"
 ).replace(/\/$/, "");
 const REDIRECT_URI = process.env.REDIRECT_URI || "http://localhost:5173";
-const WITHDRAW = process.env.WITHDRAW === "1";
+const IDP_CLIENT_ID = process.env.IDP_CLIENT_ID ?? "";
+const IDP_AUTHORIZE_URL =
+  process.env.IDP_AUTHORIZE_URL || "https://account.gistory.me/authorize";
+const MANAGER_REDIRECT_URI =
+  process.env.MANAGER_REDIRECT_URI || "http://localhost:5174/admin/callback";
+const MANAGER_TOKEN = process.env.MANAGER_TOKEN ?? "";
+const PHONE = process.env.PHONE ?? "";
+const KEEP_DATA = process.env.KEEP_DATA === "1";
 const TIMEOUT_MS = 30_000;
 const LOGIN_TIMEOUT_MS = 5 * 60_000;
+const NOTIFICATION_WAIT_MS = 30_000;
 const OK = [200, 201];
+const MANAGER = "/api/manager/v1";
 
 // 서버가 업로드 파일의 시그니처(magic number)를 확인하므로 형식에 맞는 최소 파일을 씀
 const PNG_1X1 = Buffer.from(
@@ -59,15 +92,20 @@ const MINIMAL_PDF = Buffer.from("%PDF-1.4\n%%EOF\n");
 
 let pass = 0;
 let fail = 0;
+let warnings = 0;
+
+// must가 실패하면 던짐. main에서 받아 정리 후 요약
+class Abort extends Error {}
 
 const color = (code: number, text: string) => `\x1b[${code}m${text}\x1b[0m`;
 const green = (text: string) => console.log(color(32, text));
 const red = (text: string) => console.log(color(31, text));
 const step = (text: string) => console.log(`\n${color(1, `== ${text}`)}`);
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function summary(): never {
   console.log("\n────────────────────────────");
-  const line = `통과 ${pass} / 실패 ${fail}`;
+  const line = `통과 ${pass} / 실패 ${fail} / 경고 ${warnings}`;
   if (fail === 0) green(line);
   else red(line);
   process.exit(fail === 0 ? 0 : 1);
@@ -79,6 +117,12 @@ function failed(name: string, detail?: string): false {
   red(`  ✗ ${name}`);
   if (detail) console.log(`    ${detail.slice(0, 300)}`);
   return false;
+}
+
+// 실패는 아니지만 확인하지 못한 것 (설정상 꺼져 있는 기능 등)
+function warn(text: string): void {
+  warnings += 1;
+  console.log(color(33, `  ! ${text}`));
 }
 
 function check(name: string, res: Res, expect: number | number[]): boolean {
@@ -103,12 +147,12 @@ function assert(name: string, condition: boolean, detail?: string): boolean {
   return failed(name, detail);
 }
 
-// 실패하면 이후 단계가 의미 없으므로 요약만 내고 종료
+// 실패하면 이후 단계가 의미 없으므로 정리 단계로 넘어감
 function must(name: string, res: Res, expect: number | number[]): void {
-  if (!check(name, res, expect)) summary();
+  if (!check(name, res, expect)) throw new Abort();
 }
 function mustAssert(name: string, condition: boolean, detail?: string): void {
-  if (!assert(name, condition, detail)) summary();
+  if (!assert(name, condition, detail)) throw new Abort();
 }
 
 async function send(url: string, init: RequestInit): Promise<Res> {
@@ -133,11 +177,11 @@ async function send(url: string, init: RequestInit): Promise<Res> {
 function req(
   method: string,
   path: string,
-  account?: Account | null,
+  auth?: Auth | null,
   body?: unknown,
 ): Promise<Res> {
   const headers: Record<string, string> = {};
-  if (account) headers.Authorization = `Bearer ${account.access}`;
+  if (auth) headers.Authorization = `Bearer ${auth.access}`;
   if (body !== undefined) headers["Content-Type"] = "application/json";
   return send(`${BASE_URL}${path}`, {
     method,
@@ -170,40 +214,39 @@ function openBrowser(url: string): void {
     .unref();
 }
 
+const DONE_PAGE = `<!doctype html><meta charset="utf-8"><body>완료. 이 탭을 닫고 터미널로 돌아가세요.`;
+
 // Google은 ID token을 주소의 # 뒤에 담아 보내고 #는 서버로 오지 않으므로, 페이지 스크립트가 다시 보내 줌
-const CALLBACK_PAGE = `<!doctype html><meta charset="utf-8"><body>처리 중…<script>
+const GOOGLE_CALLBACK_PAGE = `<!doctype html><meta charset="utf-8"><body>처리 중…<script>
 fetch("/__smoke_callback",{method:"POST",body:location.hash.slice(1)})
   .then(()=>{document.body.textContent="완료. 이 탭을 닫고 터미널로 돌아가세요."})
   .catch(()=>{document.body.textContent="실패. 터미널을 확인하세요."});
 </script>`;
 
-// REDIRECT_URI의 포트에 서버를 띄워 로그인 결과를 받고 ID token을 돌려줌
-function receiveIdToken(state: string, authUrl: string): Promise<string> {
-  const { port, hostname } = new URL(REDIRECT_URI);
+// 요청 하나를 읽어 로그인 결과면 파라미터를, 아니면 null(계속 기다림)을 돌려줌. 응답은 직접 끝냄
+type CallbackReader = (
+  request: IncomingMessage,
+  response: ServerResponse,
+) => Promise<URLSearchParams | null>;
+
+// redirect URI의 포트에 서버를 띄워 로그인 결과를 받음
+function receiveCallback(
+  redirectUri: string,
+  authUrl: string,
+  read: CallbackReader,
+): Promise<URLSearchParams> {
+  const { port, hostname } = new URL(redirectUri);
   return new Promise((resolve, reject) => {
     const server = createServer((request, response) => {
-      if (request.method !== "POST") {
-        response.setHeader("Content-Type", "text/html; charset=utf-8");
-        response.end(CALLBACK_PAGE);
-        return;
-      }
-      let raw = "";
-      request.on("data", (chunk) => (raw += chunk));
-      request.on("end", () => {
-        const params = new URLSearchParams(raw);
-        // state가 다르면 이 로그인의 응답이 아니므로 무시하고 계속 기다림
-        if (params.get("state") !== state) {
+      read(request, response).then(
+        (params) => {
+          if (params) finish(() => resolve(params));
+        },
+        () => {
           response.statusCode = 400;
           response.end();
-          return;
-        }
-        response.end();
-        finish(() => {
-          const token = params.get("id_token");
-          if (token) resolve(token);
-          else reject(new Error(`Google 로그인 실패: ${params.get("error")}`));
-        });
-      });
+        },
+      );
     });
     const timer = setTimeout(
       () => finish(() => reject(new Error("로그인 대기 시간 초과"))),
@@ -217,17 +260,196 @@ function receiveIdToken(state: string, authUrl: string): Promise<string> {
     };
     server.on("error", (error) =>
       finish(() =>
-        reject(new Error(`${REDIRECT_URI}에서 대기할 수 없음: ${error}`)),
+        reject(new Error(`${redirectUri}에서 대기할 수 없음: ${error}`)),
       ),
     );
     server.listen(Number(port) || 80, hostname, () => openBrowser(authUrl));
   });
 }
 
+function readBody(request: IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let raw = "";
+    request.on("data", (chunk) => (raw += chunk));
+    request.on("end", () => resolve(raw));
+    request.on("error", reject);
+  });
+}
+
+const readGoogleCallback =
+  (state: string): CallbackReader =>
+  async (request, response) => {
+    if (request.method !== "POST") {
+      response.setHeader("Content-Type", "text/html; charset=utf-8");
+      response.end(GOOGLE_CALLBACK_PAGE);
+      return null;
+    }
+    const params = new URLSearchParams(await readBody(request));
+    // state가 다르면 이 로그인의 응답이 아니므로 무시하고 계속 기다림
+    const matched = params.get("state") === state;
+    response.statusCode = matched ? 200 : 400;
+    response.end();
+    return matched ? params : null;
+  };
+
+// IdP는 code를 query로 보냄. 콜백 경로가 아닌 요청(favicon 등)은 무시
+const readIdpCallback: CallbackReader = async (request, response) => {
+  const url = new URL(request.url ?? "/", MANAGER_REDIRECT_URI);
+  const isCallback =
+    url.pathname === new URL(MANAGER_REDIRECT_URI).pathname &&
+    (url.searchParams.has("code") || url.searchParams.has("error"));
+  if (!isCallback) {
+    response.statusCode = 404;
+    response.end();
+    return null;
+  }
+  response.setHeader("Content-Type", "text/html; charset=utf-8");
+  response.end(DONE_PAGE);
+  return url.searchParams;
+};
+
+const base64Url = (bytes: Buffer) => bytes.toString("base64url");
+
+// 어드민 화면(admin/src/lib/auth.ts)과 같은 PKCE 흐름. MANAGER_TOKEN이 있으면 건너뜀
+async function managerLogin(): Promise<Manager> {
+  let token = MANAGER_TOKEN;
+  if (token) {
+    console.log("  MANAGER_TOKEN을 씀 (IdP 로그인 건너뜀)");
+  } else {
+    const codeVerifier = base64Url(randomBytes(32));
+    const authUrl = `${IDP_AUTHORIZE_URL}?${new URLSearchParams({
+      response_type: "code",
+      client_id: IDP_CLIENT_ID,
+      redirect_uri: MANAGER_REDIRECT_URI,
+      scope: "email",
+      code_challenge: base64Url(
+        createHash("sha256").update(codeVerifier).digest(),
+      ),
+      code_challenge_method: "S256",
+    })}`;
+    console.log(
+      "[어드민] 브라우저에서 admin_account에 등록된 계정으로 IdP 로그인하세요. 열리지 않으면 아래 주소를 직접 여세요.",
+    );
+    console.log(authUrl);
+
+    let code: string | null;
+    try {
+      const params = await receiveCallback(
+        MANAGER_REDIRECT_URI,
+        authUrl,
+        readIdpCallback,
+      );
+      code = params.get("code");
+      if (!code) throw new Error(`IdP 로그인 실패: ${params.get("error")}`);
+    } catch (error) {
+      failed("IdP 로그인", String(error));
+      throw new Abort();
+    }
+
+    const login = await req("POST", `${MANAGER}/auth/login`, null, {
+      code,
+      redirect_uri: MANAGER_REDIRECT_URI,
+      code_verifier: codeVerifier,
+    });
+    must("POST /manager/auth/login", login, OK);
+    token = login.json.access_token;
+  }
+
+  const me = await req("GET", `${MANAGER}/auth/me`, { access: token });
+  must("GET /manager/auth/me", me, 200);
+  console.log(`    role=${me.json.role}`);
+  return { access: token, role: me.json.role };
+}
+
+// 완전탈퇴 API를 쓸 수 있으면 true. superadmin이 아니거나(403) 꺼진 환경(404)이면 false
+async function checkHardDelete(manager: Manager): Promise<boolean> {
+  const res = await req("GET", `${MANAGER}/dev/user?page=1&size=1`, manager);
+  if (res.code === 403 || res.code === 404) {
+    warn(
+      `완전탈퇴를 쓸 수 없음 (HTTP ${res.code}: superadmin이 아니거나 DEV_USER_DELETE_ENABLED가 꺼짐). 정리는 탈퇴 요청으로 대신함`,
+    );
+    return false;
+  }
+  return check("GET /manager/dev/user (완전탈퇴 사용 가능)", res, 200);
+}
+
+// presigned PUT으로 파일을 올리고 key를 돌려줌. 실패하면 null
+async function uploadFile(
+  path: string,
+  auth: Auth,
+  contentType: string,
+  file: Buffer,
+): Promise<string | null> {
+  const issued = await req("POST", path, auth, {
+    content_type: contentType,
+    size: file.length,
+  });
+  if (!check(`POST ${path}`, issued, OK)) return null;
+  const put = await send(issued.json.url, {
+    method: "PUT",
+    headers: { "Content-Type": contentType, ...issued.json.headers },
+    body: new Uint8Array(file),
+  });
+  return check("PUT presigned URL (S3)", put, 200) ? issued.json.key : null;
+}
+
+// 현업자가 검색해서 고를 회사. 다른 표기로 검색되는지 보려고 표기를 하나 더 등록
+async function createCompany(
+  manager: Manager,
+  state: State,
+  suffix: string,
+): Promise<Company> {
+  const company = { name: `스모크회사${suffix}`, alias: `smokeco${suffix}` };
+  const created = await req("POST", `${MANAGER}/company`, manager, {
+    name: company.name,
+    names: [company.alias],
+  });
+  must("POST /manager/company (다른 표기 포함)", created, OK);
+  const id: number = created.json.company_id;
+  state.companies.push(id);
+  assert(
+    "등록한 표기가 있음",
+    created.json.names?.some((n: { name: string }) => n.name === company.alias),
+    created.text,
+  );
+
+  console.log("\n  회사 로고 업로드 (S3 업로드 · 확정)");
+  const key = await uploadFile(
+    `${MANAGER}/company/logo/upload-url`,
+    manager,
+    "image/png",
+    PNG_1X1,
+  );
+  if (key) {
+    check(
+      "PUT /manager/company/{id}/logo",
+      await req("PUT", `${MANAGER}/company/${id}/logo`, manager, { key }),
+      200,
+    );
+  }
+
+  const search = await req(
+    "GET",
+    `${MANAGER}/company/search?q=${encodeURIComponent(company.alias)}`,
+    manager,
+  );
+  check("GET /manager/company/search (다른 표기로 검색)", search, 200);
+  const found = (search.json ?? []).find(
+    (item: { company_id: number }) => item.company_id === id,
+  );
+  assert("검색 결과에 회사가 있음", Boolean(found), search.text);
+  if (key) assert("검색 결과에 로고가 있음", Boolean(found?.logo_url));
+  return { id, ...company };
+}
+
 // 로그인 후 내 정보까지 확인하고 토큰을 돌려줌
-async function googleLogin(label: string, type: UserKind): Promise<Account> {
+async function googleLogin(
+  label: string,
+  type: UserKind,
+  state: State,
+): Promise<Account> {
   const nonce = randomBytes(16).toString("hex");
-  const state = randomBytes(16).toString("hex");
+  const oauthState = randomBytes(16).toString("hex");
   const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams(
     {
       client_id: GOOGLE_CLIENT_ID,
@@ -235,7 +457,7 @@ async function googleLogin(label: string, type: UserKind): Promise<Account> {
       response_type: "id_token",
       scope: "openid email profile",
       nonce: createHash("sha256").update(nonce).digest("hex"),
-      state,
+      state: oauthState,
       prompt: "select_account",
     },
   )}`;
@@ -244,12 +466,18 @@ async function googleLogin(label: string, type: UserKind): Promise<Account> {
   );
   console.log(authUrl);
 
-  let token: string;
+  let token: string | null;
   try {
-    token = await receiveIdToken(state, authUrl);
+    const params = await receiveCallback(
+      REDIRECT_URI,
+      authUrl,
+      readGoogleCallback(oauthState),
+    );
+    token = params.get("id_token");
+    if (!token) throw new Error(`Google 로그인 실패: ${params.get("error")}`);
   } catch (error) {
     failed(`Google 로그인 (${label})`, String(error));
-    summary();
+    throw new Abort();
   }
 
   const login = await req("POST", "/api/v1/user/oauth/login", null, {
@@ -260,12 +488,9 @@ async function googleLogin(label: string, type: UserKind): Promise<Account> {
   });
   must(`POST /user/oauth/login (${label})`, login, OK);
   mustAssert("응답에 토큰이 있음", Boolean(login.json?.access_token));
-  const account: Account = {
-    access: login.json.access_token,
-    refresh: login.json.refresh_token,
-  };
+  const session = { access: login.json.access_token };
 
-  const info = await req("GET", "/api/v1/user/info", account);
+  const info = await req("GET", "/api/v1/user/info", session);
   must(`GET /user/info (${label})`, info, 200);
   console.log(
     `    status=${info.json.status} next_step=${info.json.next_step} type=${info.json.type}`,
@@ -275,6 +500,13 @@ async function googleLogin(label: string, type: UserKind): Promise<Account> {
     `${type} 계정임 (이미 다른 유형으로 가입한 계정이면 실패)`,
     info.json.type === type,
   );
+  const account: Account = {
+    ...session,
+    refresh: login.json.refresh_token,
+    id: info.json.id,
+    label,
+  };
+  state.accounts.push(account);
   return account;
 }
 
@@ -314,32 +546,20 @@ async function doConsent(account: Account): Promise<void> {
   must("POST /user/consent (전체 동의)", agree, OK);
 }
 
-// presigned PUT으로 파일을 올리고 key를 돌려줌. 실패하면 null
-async function uploadFile(
-  path: string,
-  account: Account,
-  contentType: string,
-  file: Buffer,
-): Promise<string | null> {
-  const issued = await req("POST", path, account, {
-    content_type: contentType,
-    size: file.length,
-  });
-  if (!check(`POST ${path}`, issued, OK)) return null;
-  const put = await send(issued.json.url, {
-    method: "PUT",
-    headers: { "Content-Type": contentType, ...issued.json.headers },
-    body: new Uint8Array(file),
-  });
-  return check("PUT presigned URL (S3)", put, 200) ? issued.json.key : null;
-}
-
 // 가입이 이번 호출로 끝나면 새 토큰이 오므로 계정에 반영
 function applySignupTokens(account: Account, res: Res): void {
   if (!res.json?.access_token) return;
   account.access = res.json.access_token;
   account.refresh = res.json.refresh_token;
 }
+
+// PHONE을 주면 카카오 연락도 켜서 알림톡이 나가게 함
+const contactOf = (email: string) => ({
+  email_enabled: true,
+  kakao_enabled: PHONE !== "",
+  email,
+  phone: PHONE || null,
+});
 
 async function studentSignup(account: Account): Promise<void> {
   await doConsent(account);
@@ -351,13 +571,17 @@ async function studentSignup(account: Account): Promise<void> {
     if (!schoolEmail) {
       schoolEmail = await ask("  학교 메일 주소 (예: id@gm.gist.ac.kr): ");
     }
-    must(
-      "POST /student/verify/send-code",
-      await req("POST", "/api/v1/user/student/verify/send-code", account, {
-        email: schoolEmail,
-      }),
-      OK,
+    const sent = await req(
+      "POST",
+      "/api/v1/user/student/verify/send-code",
+      account,
+      { email: schoolEmail },
     );
+    // 메일을 보낸 뒤에 응답하므로, 발송이 실패하면 502로 바로 알 수 있음
+    if (sent.code === 502) {
+      console.log("    인증 메일 발송 실패: 서버의 SMTP 설정을 확인하세요");
+    }
+    must("POST /student/verify/send-code", sent, OK);
     const code = await ask("  메일함으로 온 6자리 코드: ");
     must(
       "POST /student/verify/code",
@@ -385,7 +609,11 @@ async function studentSignup(account: Account): Promise<void> {
 
   const interests = await req("GET", "/api/v1/user/student/interests", account);
   must("GET /student/interests", interests, 200);
-  console.log(`    관심 분야 ${interests.json.interests?.length}개`);
+  mustAssert(
+    "관심 분야 데이터가 있음 (시드 데이터 확인)",
+    interests.json.interests?.length > 0,
+  );
+  console.log(`    관심 분야 ${interests.json.interests.length}개`);
 
   info = await req("GET", "/api/v1/user/info", account);
   // 연락용 메일: 방금 인증한 학교 메일, 없으면 서버에 저장된 값 (재실행 시)
@@ -394,9 +622,9 @@ async function studentSignup(account: Account): Promise<void> {
   const profile = {
     name: info.json.name || "스모크재학생",
     department_id: departmentId,
-    interests: ["스모크테스트"],
+    interests: [interests.json.interests[0]],
     activities: ["배포 확인"],
-    contact: { email_enabled: true, kakao_enabled: false, email: contactEmail },
+    contact: contactOf(contactEmail),
   };
   const linkAttachment = {
     kind: "portfolio",
@@ -449,8 +677,37 @@ async function studentSignup(account: Account): Promise<void> {
   );
 }
 
+// 직접 입력한 회사가 어드민 검토 목록에 올라왔는지 보고 정리 대상에 넣음
+async function checkPendingCompany(
+  manager: Manager,
+  state: State,
+  name: string,
+): Promise<void> {
+  const list = await req(
+    "GET",
+    `${MANAGER}/company?q=${encodeURIComponent(name)}`,
+    manager,
+  );
+  check("GET /manager/company (직접 입력한 회사)", list, 200);
+  const pending = (list.json?.items ?? []).find(
+    (item: { name: string }) => item.name === name,
+  );
+  if (!assert("직접 입력한 회사가 등록됨", Boolean(pending), list.text)) {
+    return;
+  }
+  state.companies.push(pending.company_id);
+  assert("검토 필요(needs_review=true)", pending.needs_review === true);
+  assert("고른 현업자 1명", pending.graduated_count === 1);
+}
+
 // 가입 완료 후 현업자 닉네임을 돌려줌
-async function graduatedSignup(account: Account): Promise<string> {
+async function graduatedSignup(
+  account: Account,
+  manager: Manager,
+  state: State,
+  company: Company,
+  suffix: string,
+): Promise<string> {
   await doConsent(account);
 
   let info = await req("GET", "/api/v1/user/info", account);
@@ -462,7 +719,7 @@ async function graduatedSignup(account: Account): Promise<string> {
       "image/png",
       PNG_1X1,
     );
-    if (!key) summary();
+    if (!key) throw new Abort();
     must(
       "POST /graduated/verify/business-card",
       await req(
@@ -480,25 +737,29 @@ async function graduatedSignup(account: Account): Promise<string> {
   }
 
   info = await req("GET", "/api/v1/user/info", account);
+  const contactEmail: string =
+    info.json.graduated?.profile?.contact?.email ||
+    info.json.email ||
+    (await ask("  현업자 연락 메일: "));
+  const profile = {
+    name: info.json.name || "스모크현업자",
+    department: "플랫폼팀",
+    job: "백엔드 개발자",
+    hashtags: ["스모크", "배포확인"],
+    links: ["https://example.com"],
+    contact: contactOf(contactEmail),
+  };
   if (info.json.next_step === "profile") {
-    const contactEmail: string =
-      info.json.email || (await ask("  현업자 연락 메일: "));
+    // 검색 결과에 없는 회사를 직접 입력해 가입 → 새 회사로 등록되어 어드민 검토를 기다림
+    const directName = `스모크직접입력${suffix}`;
     const saved = await req("POST", "/api/v1/user/graduated/info", account, {
-      name: info.json.name || "스모크현업자",
+      ...profile,
       nickname: `스모크${randomInt(1000, 10000)}`,
-      company: "스모크컴퍼니",
-      department: "플랫폼팀",
-      job: "백엔드 개발자",
-      hashtags: ["스모크", "배포확인"],
-      links: ["https://example.com"],
-      contact: {
-        email_enabled: true,
-        kakao_enabled: false,
-        email: contactEmail,
-      },
+      company_name: directName,
     });
-    must("POST /graduated/info (가입 완료)", saved, OK);
+    must("POST /graduated/info (가입 완료 · 회사 직접 입력)", saved, OK);
     applySignupTokens(account, saved);
+    await checkPendingCompany(manager, state, directName);
   } else {
     console.log(`  - 추가 정보 건너뜀 (next_step=${info.json.next_step})`);
   }
@@ -506,7 +767,57 @@ async function graduatedSignup(account: Account): Promise<string> {
   info = await req("GET", "/api/v1/user/info", account);
   must("GET /user/info (가입 후)", info, 200);
   mustAssert("현업자 status=active", info.json.status === "active");
-  const nickname: string = info.json.graduated?.profile?.nickname ?? "";
+
+  console.log("\n  회사 검색 · 선택 (마이페이지 수정)");
+  const search = await req(
+    "GET",
+    `/api/v1/company?q=${encodeURIComponent(company.alias)}`,
+    account,
+  );
+  must("GET /company (다른 표기로 검색)", search, 200);
+  const found = (search.json ?? []).find(
+    (item: { company_id: number }) => item.company_id === company.id,
+  );
+  mustAssert(
+    "검색 결과에 어드민이 등록한 회사가 있음",
+    Boolean(found),
+    search.text,
+  );
+  assert(
+    "회사 이름과 맞은 표기가 따로 옴",
+    found.name === company.name && found.matched_name === company.alias,
+    JSON.stringify(found),
+  );
+  must(
+    "POST /graduated/info (company_id로 수정)",
+    await req("POST", "/api/v1/user/graduated/info", account, {
+      ...profile,
+      company_id: company.id,
+    }),
+    OK,
+  );
+  info = await req("GET", "/api/v1/user/info", account);
+  const saved = info.json.graduated?.profile;
+  assert(
+    "내 정보의 회사가 고른 회사로 바뀜",
+    saved?.company_id === company.id && saved?.company === company.name,
+    JSON.stringify(saved),
+  );
+
+  // 직접 입력한 회사는 이제 아무도 고르지 않았으므로 지울 수 있음
+  const pendingId = state.companies.find((id) => id !== company.id);
+  if (pendingId !== undefined) {
+    const removed = check(
+      "DELETE /manager/company/{id} (직접 입력한 회사)",
+      await req("DELETE", `${MANAGER}/company/${pendingId}`, manager),
+      200,
+    );
+    if (removed) {
+      state.companies = state.companies.filter((id) => id !== pendingId);
+    }
+  }
+
+  const nickname: string = saved?.nickname ?? "";
   mustAssert("닉네임이 있음", nickname !== "");
   console.log(`    현업자 닉네임: ${nickname}`);
   return nickname;
@@ -520,6 +831,7 @@ const hasRequest = (res: Res, id: string) =>
 async function requestCoffeeChat(
   student: Account,
   nickname: string,
+  company: Company,
 ): Promise<string> {
   const list = await req(
     "GET",
@@ -538,6 +850,20 @@ async function requestCoffeeChat(
     JSON.stringify(card),
   );
   assert("can_request=true (연락 수단을 켠 현업자)", card.can_request === true);
+  assert(
+    "목록 카드의 회사가 고른 회사 이름",
+    card.company === company.name,
+    JSON.stringify(card),
+  );
+  if (card.company_logo_url) {
+    check(
+      "회사 로고 내려받기 (presigned GET)",
+      await send(card.company_logo_url, { method: "GET" }),
+      200,
+    );
+  } else {
+    failed("목록 카드에 회사 로고가 있음", JSON.stringify(card));
+  }
 
   const created = await req("POST", "/api/v1/cheers/request", student, {
     graduated_id: card.graduated_id,
@@ -620,8 +946,123 @@ async function confirmShared(
   assert("공유 시각(shared_at)이 있음", Boolean(contact?.shared_at));
 }
 
-async function finishAccount(label: string, account: Account): Promise<void> {
-  const { refresh } = account;
+type NotificationLog = {
+  event: string;
+  channel: string;
+  status: string;
+  error: string | null;
+  attempt: number;
+  next_retry_at: string | null;
+};
+
+const EVENTS = ["coffee_chat_requested", "contact_shared"];
+
+// 알림은 응답 뒤에 비동기로 나가므로 두 이벤트의 메일 기록이 생길 때까지 기다린 뒤 상세를 돌려줌
+async function waitForNotifications(
+  manager: Manager,
+  requestId: string,
+): Promise<Res> {
+  const path = `${MANAGER}/coffee-chat/request/${requestId}`;
+  const deadline = Date.now() + NOTIFICATION_WAIT_MS;
+  for (;;) {
+    const detail = await req("GET", path, manager);
+    const logs: NotificationLog[] = detail.json?.notifications ?? [];
+    const done = EVENTS.every((event) =>
+      logs.some((log) => log.event === event && log.channel === "email"),
+    );
+    if (detail.code !== 200 || done || Date.now() > deadline) return detail;
+    await sleep(2000);
+  }
+}
+
+function checkNotification(
+  logs: NotificationLog[],
+  event: string,
+  channel: string,
+): void {
+  const log = logs.find((l) => l.event === event && l.channel === channel);
+  const name = `알림 ${event} · ${channel}`;
+  if (!log) {
+    // 발송 키 · 템플릿이 없어 실제로 나가지 않은 알림톡은 기록이 남지 않음
+    if (channel === "kakao_alimtalk") {
+      warn(`${name} 기록 없음 (알림톡 설정이 비어 있으면 발송하지 않음)`);
+    } else {
+      failed(`${name} 기록이 있음`, `${NOTIFICATION_WAIT_MS / 1000}초 기다림`);
+    }
+    return;
+  }
+  assert(
+    `${name} status=sent`,
+    log.status === "sent",
+    `status=${log.status} attempt=${log.attempt} next_retry_at=${log.next_retry_at} error=${log.error}`,
+  );
+  assert(
+    `${name}에 재시도 필드가 있음 (attempt · next_retry_at)`,
+    typeof log.attempt === "number" && "next_retry_at" in log,
+  );
+}
+
+// 어드민 화면에서 커피챗 결과 · 알림 발송 · 명함을 확인
+async function checkManagerViews(
+  manager: Manager,
+  requestId: string,
+  nickname: string,
+): Promise<void> {
+  const list = await req(
+    "GET",
+    `${MANAGER}/coffee-chat/request?graduated_nickname=${encodeURIComponent(nickname)}`,
+    manager,
+  );
+  check("GET /manager/coffee-chat/request (닉네임 필터)", list, 200);
+  const item = (list.json?.items ?? []).find(
+    (i: { pk: string }) => i.pk === requestId,
+  );
+  assert("요청 목록에 방금 요청이 있음", Boolean(item), list.text);
+  assert("요청 목록 status=contact_shared", item?.status === "contact_shared");
+
+  console.log("\n  알림 발송 결과 (메일 · 알림톡, 최대 30초 기다림)");
+  const detail = await waitForNotifications(manager, requestId);
+  if (check("GET /manager/coffee-chat/request/{id}", detail, 200)) {
+    const logs: NotificationLog[] = detail.json.notifications ?? [];
+    for (const event of EVENTS) {
+      checkNotification(logs, event, "email");
+      if (PHONE) checkNotification(logs, event, "kakao_alimtalk");
+    }
+  }
+  const logs = await req(
+    "GET",
+    `${MANAGER}/coffee-chat/notification-log?channel=email&page=1&size=5`,
+    manager,
+  );
+  check("GET /manager/coffee-chat/notification-log", logs, 200);
+
+  // 상세의 graduated.pk가 명함 API의 graduatedPk
+  const graduatedPk: string | undefined = detail.json?.graduated?.pk;
+  check(
+    "GET /manager/business-card (명함 목록)",
+    await req("GET", `${MANAGER}/business-card?page=1&size=5`, manager),
+    200,
+  );
+  if (!graduatedPk) {
+    failed("요청 상세에 현업자 pk가 있음", detail.text);
+    return;
+  }
+  const card = await req(
+    "GET",
+    `${MANAGER}/business-card/${graduatedPk}`,
+    manager,
+  );
+  if (check("GET /manager/business-card/{id} (열람 기록 저장)", card, 200)) {
+    check(
+      "명함 이미지 내려받기 (presigned GET)",
+      await send(card.json.url, { method: "GET" }),
+      200,
+    );
+  }
+}
+
+async function finishAccount(account: Account): Promise<void> {
+  const { refresh, label } = account;
   const refreshed = await req("POST", "/api/v1/user/refresh", null, {
     refresh_token: refresh,
   });
@@ -641,13 +1082,99 @@ async function finishAccount(label: string, account: Account): Promise<void> {
     await req("POST", "/api/v1/user/refresh", null, { refresh_token: refresh }),
     401,
   );
-  if (WITHDRAW) {
+}
+
+// 만든 계정 · 회사를 지움. 실패해도 나머지는 계속 정리
+async function cleanup(state: State): Promise<void> {
+  const { manager, hardDelete, accounts } = state;
+  if (KEEP_DATA) {
+    warn("KEEP_DATA=1이라 정리하지 않음 (계정 · 회사가 남아 있음)");
+    return;
+  }
+
+  let usersGone = true;
+  for (const account of accounts) {
+    if (manager && hardDelete) {
+      usersGone =
+        check(
+          `DELETE /manager/dev/user/{id} (${account.label} 완전탈퇴)`,
+          await req("DELETE", `${MANAGER}/dev/user/${account.id}`, manager),
+          200,
+        ) && usersGone;
+    } else {
+      usersGone = false;
+      check(
+        `POST /user/withdraw (${account.label}, 유예기간 뒤 삭제. 그 안에 로그인하면 취소)`,
+        await req("POST", "/api/v1/user/withdraw", account),
+        OK,
+      );
+    }
+  }
+
+  if (state.companies.length === 0) return;
+  // 현업자가 남아 있으면 고른 회사는 지울 수 없음 (409)
+  if (!manager || !usersGone) {
+    warn(
+      `현업자가 남아 있어 회사를 지우지 않음 (company_id: ${state.companies.join(", ")})`,
+    );
+    return;
+  }
+  for (const id of state.companies) {
     check(
-      `POST /user/withdraw (${label})`,
-      await req("POST", "/api/v1/user/withdraw", account),
-      OK,
+      `DELETE /manager/company/${id} (로고 포함)`,
+      await req("DELETE", `${MANAGER}/company/${id}`, manager),
+      200,
     );
   }
+}
+
+async function run(state: State): Promise<void> {
+  step("0. 서버 상태 (ingress · 기동 · DB 연결)");
+  must("GET /health", await req("GET", "/health"), 200);
+  must("GET /health/ready", await req("GET", "/health/ready"), 200);
+
+  step("1. 어드민: IdP 로그인 · 회사 등록");
+  const manager = await managerLogin();
+  state.manager = manager;
+  state.hardDelete = await checkHardDelete(manager);
+  // 같은 날 여러 번 돌려도 회사 표기가 겹치지 않게 붙임
+  const suffix = String(randomInt(100000, 1000000));
+  const company = await createCompany(manager, state, suffix);
+
+  step("2. 재학생 계정: Google 로그인 · 가입");
+  const student = await googleLogin("재학생", "student", state);
+  await studentSignup(student);
+
+  step("3. 현업자 계정: Google 로그인 · 가입 (재학생과 다른 Google 계정)");
+  const graduated = await googleLogin("현업자", "graduated", state);
+  const nickname = await graduatedSignup(
+    graduated,
+    manager,
+    state,
+    company,
+    suffix,
+  );
+  check(
+    "현업자도 GET /cheers (현업자 목록) 가능",
+    await req("GET", "/api/v1/cheers?page=1&size=1", graduated),
+    200,
+  );
+
+  step("4. 재학생: 현업자 목록 · 커피챗 요청");
+  const requestId = await requestCoffeeChat(student, nickname, company);
+
+  step("5. 현업자: 받은 요청 확인 · 연락처 공유");
+  const shared = await shareContact(graduated, requestId);
+
+  step("6. 재학생: 연락처 공유 후 보낸 요청");
+  await confirmShared(student, requestId, shared);
+
+  step("7. 어드민: 커피챗 요청 · 알림 발송 결과 · 명함 확인");
+  await checkManagerViews(manager, requestId, nickname);
+
+  step("8. 토큰 갱신 · 로그아웃");
+  await finishAccount(student);
+  await finishAccount(graduated);
 }
 
 async function main(): Promise<void> {
@@ -655,43 +1182,49 @@ async function main(): Promise<void> {
     console.log("GOOGLE_CLIENT_ID를 지정하세요 (웹 client ID)");
     process.exit(2);
   }
-  const redirect = new URL(REDIRECT_URI);
-  if (redirect.protocol !== "http:" || redirect.hostname !== "localhost") {
+  if (!MANAGER_TOKEN && !IDP_CLIENT_ID) {
     console.log(
-      "REDIRECT_URI는 http://localhost:<포트> 형식이어야 합니다 (이 스크립트가 그 포트에서 로그인 결과를 받음)",
+      "IDP_CLIENT_ID(대상 서버와 같은 값) 또는 MANAGER_TOKEN을 지정하세요",
     );
+    process.exit(2);
+  }
+  for (const uri of [
+    REDIRECT_URI,
+    ...(MANAGER_TOKEN ? [] : [MANAGER_REDIRECT_URI]),
+  ]) {
+    const redirect = new URL(uri);
+    if (redirect.protocol !== "http:" || redirect.hostname !== "localhost") {
+      console.log(
+        `${uri}: redirect URI는 http://localhost:<포트> 형식이어야 합니다 (이 스크립트가 그 포트에서 로그인 결과를 받음)`,
+      );
+      process.exit(2);
+    }
+  }
+  if (PHONE && !/^01\d{8,9}$/.test(PHONE)) {
+    console.log("PHONE은 하이픈 없는 휴대폰 번호여야 합니다 (예: 01012345678)");
     process.exit(2);
   }
 
   console.log(`대상 서버: ${BASE_URL}`);
-  step("0. 서버 상태 (ingress · 기동 · DB 연결)");
-  must("GET /health", await req("GET", "/health"), 200);
-  must("GET /health/ready", await req("GET", "/health/ready"), 200);
+  const state: State = {
+    manager: null,
+    hardDelete: false,
+    accounts: [],
+    companies: [],
+  };
+  try {
+    await run(state);
+  } catch (error) {
+    if (!(error instanceof Abort)) failed("예상하지 못한 오류", String(error));
+  }
 
-  step("1. 재학생 계정: Google 로그인 · 가입");
-  const student = await googleLogin("재학생", "student");
-  await studentSignup(student);
-
-  step("2. 현업자 계정: Google 로그인 · 가입 (재학생과 다른 Google 계정)");
-  const graduated = await googleLogin("현업자", "graduated");
-  const nickname = await graduatedSignup(graduated);
-
-  step("3. 재학생: 현업자 목록 · 커피챗 요청");
-  const requestId = await requestCoffeeChat(student, nickname);
-
-  step("4. 현업자: 받은 요청 확인 · 연락처 공유");
-  const shared = await shareContact(graduated, requestId);
-
-  step("5. 재학생: 연락처 공유 후 보낸 요청");
-  await confirmShared(student, requestId, shared);
-
+  if (state.accounts.length === 0 && state.companies.length === 0) summary();
   step(
-    WITHDRAW
-      ? "6. 토큰 갱신 · 로그아웃 · 탈퇴 요청 (유예기간 뒤 삭제, 그 안에 로그인하면 취소)"
-      : "6. 토큰 갱신 · 로그아웃",
+    state.hardDelete
+      ? "9. 정리: 완전탈퇴 · 회사 삭제"
+      : "9. 정리: 탈퇴 요청 (완전탈퇴를 쓸 수 없음)",
   );
-  await finishAccount("재학생", student);
-  await finishAccount("현업자", graduated);
+  await cleanup(state);
 
   summary();
 }
