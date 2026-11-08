@@ -321,7 +321,7 @@ describe("CheersStudentService", () => {
       });
       const { email } = lastNotified();
       expect(email?.text).toContain(
-        `https://cheers.example.com/cheers/received/${requestPk}`,
+        `https://cheers.example.com/applications/${requestPk}`,
       );
     });
 
@@ -358,7 +358,7 @@ describe("CheersStudentService", () => {
       );
 
       const { email } = lastNotified();
-      expect(email?.text).not.toContain("/cheers/received/");
+      expect(email?.text).not.toContain("/applications/");
       expect(email?.html).not.toContain("<a ");
     });
 

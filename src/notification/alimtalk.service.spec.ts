@@ -87,8 +87,8 @@ describe("AlimtalkService", () => {
           name: "Cheers에서 확인하기",
           linkType: "WL",
           linkTypeName: "웹링크",
-          linkMo: "https://cheers.example.com/cheers/sent",
-          linkPc: "https://cheers.example.com/cheers/sent",
+          linkMo: "https://cheers.example.com/applications/request-pk",
+          linkPc: "https://cheers.example.com/applications/request-pk",
         },
       ],
     });
@@ -114,8 +114,8 @@ describe("AlimtalkService", () => {
     );
     const { button } = JSON.parse(params.button_1);
     expect(button[0].name).toBe("Cheers에서 확인하기");
-    expect(button[0].linkMo).toBe("https://cheers.example.com/cheers/received");
-    expect(button[0].linkPc).toBe("https://cheers.example.com/cheers/received");
+    expect(button[0].linkMo).toBe("https://cheers.example.com/applications/request-pk");
+    expect(button[0].linkPc).toBe("https://cheers.example.com/applications/request-pk");
   });
 
   it("removes the trailing slash of WEB_BASE_URL from the button link", async () => {
@@ -128,7 +128,7 @@ describe("AlimtalkService", () => {
     await service.send(input);
 
     const { button } = JSON.parse(sentParams().button_1);
-    expect(button[0].linkMo).toBe("https://cheers.example.com/cheers/sent");
+    expect(button[0].linkMo).toBe("https://cheers.example.com/applications/request-pk");
   });
 
   it("keeps a message id sent as a string", async () => {

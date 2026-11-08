@@ -71,7 +71,7 @@ note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후
 
 == 커밋 뒤 ==
 
-Service -> Service: 켜진 채널만 담음\nemail_enabled → buildCoffeeChatRequestedMail(contact.email, name,\n  link = WEB_BASE_URL/cheers/received/<id>)\nkakao_enabled → { to: contact.phone,\n  variables: { recipientName: name, coffeeChatRequestPk } }
+Service -> Service: 켜진 채널만 담음\nemail_enabled → buildCoffeeChatRequestedMail(contact.email, name,\n  link = WEB_BASE_URL/applications/<id>)\nkakao_enabled → { to: contact.phone,\n  variables: { recipientName: name, coffeeChatRequestPk } }
 note right of Service
   WEB_BASE_URL: production에서 비어 있으면 서버 시작 실패,
   로컬에서 비어 있으면 링크 없이 발송.

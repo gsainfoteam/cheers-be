@@ -92,7 +92,7 @@ note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후
 
 == 커밋 뒤 ==
 
-Service -> Service: 재학생이 켠 채널만 담음\nemail_enabled → buildContactSharedMail(c.email, studentName, graduatedName,\n  link = WEB_BASE_URL/cheers/sent/<id>)\nkakao_enabled → { to: c.phone,\n  variables: { recipientName, graduatedName, coffeeChatRequestPk } }
+Service -> Service: 재학생이 켠 채널만 담음\nemail_enabled → buildContactSharedMail(c.email, studentName, graduatedName,\n  link = WEB_BASE_URL/applications/<id>)\nkakao_enabled → { to: c.phone,\n  variables: { recipientName, graduatedName, coffeeChatRequestPk } }
 note right of Service
   연락처 자체는 알림에 넣지 않음 (링크의 상세에서 로그인 후 확인).
   WEB_BASE_URL: production에서 비어 있으면 서버 시작 실패,

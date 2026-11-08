@@ -11,8 +11,8 @@ interface AlimtalkTemplate {
   title: string;
   message: string;
   buttonName: string;
-  // WEB_BASE_URL 뒤에 붙는 버튼 링크 경로
-  path: string;
+  // WEB_BASE_URL 뒤에 붙는 버튼 링크 경로. cheers-fe의 신청 상세(/applications/{id})는 학생 · 현업자 공용
+  path: (coffeeChatRequestPk: string) => string;
 }
 
 // title, message, 버튼은 알리고에 등록한 템플릿과 글자 하나까지 같아야 함 (다르면 전송되지 않음)
@@ -23,7 +23,7 @@ const TEMPLATES: Record<NotificationEvent, AlimtalkTemplate> = {
     message:
       "Cheers\n\n☕ 새로운 커피챗 요청이 도착했어요\n요청자로부터 온 메시지를 확인하고 커피챗 가능 여부를 알려주세요",
     buttonName: "Cheers에서 확인하기",
-    path: "/cheers/received",
+    path: (pk) => `/applications/${encodeURIComponent(pk)}`,
   },
   contact_shared: {
     title: "☕️ 연락처 공유 안내",
@@ -31,7 +31,7 @@ const TEMPLATES: Record<NotificationEvent, AlimtalkTemplate> = {
       "회원님의 커피챗 요청에 대해 선배가 연락처를 공유했어요\n" +
       "연락처를 확인하고 커피챗 일정을 잡아볼까요?",
     buttonName: "Cheers에서 확인하기",
-    path: "/cheers/sent",
+    path: (pk) => `/applications/${encodeURIComponent(pk)}`,
   },
 };
 
@@ -138,7 +138,7 @@ export class AlimtalkService {
     }
 
     const template = TEMPLATES[input.event];
-    const link = `${this.config.webBaseUrl}${template.path}`;
+    const link = `${this.config.webBaseUrl}${template.path(input.variables.coffeeChatRequestPk)}`;
 
     try {
       const response = await fetch(ALIGO_SEND_URL, {
