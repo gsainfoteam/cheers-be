@@ -22,7 +22,8 @@ participant "Slack"
 note over Scheduler, Aligo
   알리고 /akv10/alimtalk/send/ 의 code = 0은 접수 성공일 뿐이라 notification_log.status = sent여도
   카카오 단계(템플릿 불일치 등)에서 실패할 수 있음. 접수된 알림톡은 delivery_status = pending,
-  delivery_next_check_at = 접수 + 1분으로 남기고 (cheers/post-cheers-request.puml 등), 이 스케줄러가 최종 결과를 가져옴
+  delivery_next_check_at = 접수 + 1분으로 남기고 (cheers/post-cheers-request.puml 등), 이 스케줄러가 최종 결과를 가져옴.
+  어드민이 한 건을 바로 조회할 수도 있음 (manager/post-coffee-chat-notification-log-pk-delivery-lookup.puml)
 end note
 
 Scheduler -> Scheduler: running이면 건너뜀
