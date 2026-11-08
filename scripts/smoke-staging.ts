@@ -1123,7 +1123,7 @@ async function checkManagerViews(
 
   if (PHONE) {
     console.log(
-      `\n  휴대폰(${PHONE.slice(0, 3)}****${PHONE.slice(-4)})에서 알림톡 2건(커피챗 요청 도착 · 연락처 공유 안내)을 확인하세요`,
+      `\n  휴대폰(${PHONE.slice(0, 3)}****${PHONE.slice(-4)})에서 알림톡 2건(커피챗 요청 안내 · 연락처 공유 안내)을 확인하세요`,
     );
     console.log(
       "  각 알림톡의 [Cheers에서 확인하기] 버튼이 로그인 후 이번 신청의 상세 화면(/applications/{id})을 여는지도 확인하세요",

@@ -107,10 +107,10 @@ describe("AlimtalkService", () => {
 
     const params = sentParams();
     expect(params.tpl_code).toBe("TPL-REQUESTED");
-    expect(params.subject_1).toBe("커피챗 요청 도착");
-    expect(params.emtitle_1).toBe("커피챗 요청 도착");
+    expect(params.subject_1).toBe("☕️ 커피챗 요청 안내");
+    expect(params.emtitle_1).toBe("☕️ 커피챗 요청 안내");
     expect(params.message_1).toBe(
-      "Cheers\n\n☕ 새로운 커피챗 요청이 도착했어요\n요청자로부터 온 메시지를 확인하고 커피챗 가능 여부를 알려주세요",
+      "재학생 회원으로부터 새로운 커피챗 요청이 도착했어요\n요청 내용을 확인하고 커피챗 가능 여부를 알려주세요 :)",
     );
     const { button } = JSON.parse(params.button_1);
     expect(button[0].name).toBe("Cheers에서 확인하기");

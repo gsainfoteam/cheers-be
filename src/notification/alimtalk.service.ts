@@ -19,9 +19,10 @@ interface AlimtalkTemplate {
 // 버튼 링크는 템플릿에 https://#{cheers_url}로 등록되어 있어서 WEB_BASE_URL은 https://로 시작해야 함
 const TEMPLATES: Record<NotificationEvent, AlimtalkTemplate> = {
   coffee_chat_requested: {
-    title: "커피챗 요청 도착",
+    title: "☕️ 커피챗 요청 안내",
     message:
-      "Cheers\n\n☕ 새로운 커피챗 요청이 도착했어요\n요청자로부터 온 메시지를 확인하고 커피챗 가능 여부를 알려주세요",
+      "재학생 회원으로부터 새로운 커피챗 요청이 도착했어요\n" +
+      "요청 내용을 확인하고 커피챗 가능 여부를 알려주세요 :)",
     buttonName: "Cheers에서 확인하기",
     path: (pk) => `/applications/${encodeURIComponent(pk)}`,
   },
