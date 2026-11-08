@@ -11,6 +11,7 @@
 | [flow/cleanup-schedulers.puml](flow/cleanup-schedulers.puml)                                                                         | 스케줄러: 미완료 가입 · 만료 인증 데이터 정리                          |
 | [flow/s3-orphan-cleanup.puml](flow/s3-orphan-cleanup.puml)                                                                           | 스케줄러: DB에서 참조하지 않는 S3 파일 정리                            |
 | [flow/notification-retry.puml](flow/notification-retry.puml)                                                                         | 스케줄러: 커피챗 알림 재시도                                           |
+| [flow/notification-delivery-sync.puml](flow/notification-delivery-sync.puml)                                                         | 스케줄러: 알림톡 최종 결과 동기화                                      |
 | [flow/file-upload.puml](flow/file-upload.puml)                                                                                       | 파일 업로드 · 확정 · 조회 · 삭제                                       |
 | [flow/jwt-signing-key-bootstrap.puml](flow/jwt-signing-key-bootstrap.puml)                                                           | 서버 기동 시 JWT 서명 키 로드 · 생성                                   |
 | [flow/interest-cache-bootstrap.puml](flow/interest-cache-bootstrap.puml)                                                             | 관심 분야 메모리 캐시 (기동 로드 · 1분 주기 갱신)                      |
