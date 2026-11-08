@@ -6,7 +6,10 @@ import { notificationLog } from "@drizzle/schema/notification-log";
 export type AdminNotificationLogRow = typeof notificationLog.$inferSelect;
 
 export type AdminNotificationLogFilter = Partial<
-  Pick<AdminNotificationLogRow, "channel" | "status" | "event">
+  Pick<
+    AdminNotificationLogRow,
+    "channel" | "status" | "event" | "deliveryStatus"
+  >
 > & {
   // 발송 시각 [createdFrom, createdTo)
   createdFrom?: Date;
@@ -23,6 +26,8 @@ const toConditions = (filter: AdminNotificationLogFilter): SQL | undefined =>
     filter.channel && eq(notificationLog.channel, filter.channel),
     filter.status && eq(notificationLog.status, filter.status),
     filter.event && eq(notificationLog.event, filter.event),
+    filter.deliveryStatus &&
+      eq(notificationLog.deliveryStatus, filter.deliveryStatus),
     filter.createdFrom && gte(notificationLog.createdAt, filter.createdFrom),
     filter.createdTo && lt(notificationLog.createdAt, filter.createdTo),
   );

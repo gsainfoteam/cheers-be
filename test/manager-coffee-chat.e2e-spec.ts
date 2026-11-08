@@ -4,6 +4,7 @@ import { coffeeChatRequest } from "@drizzle/schema/coffee-chat-request";
 import { notificationLog } from "@drizzle/schema/notification-log";
 import { student } from "@drizzle/schema/student";
 import { users } from "@drizzle/schema/users";
+import { NotificationDeliverySyncService } from "@src/notification/notification-delivery-sync.service";
 import { createE2eApp, E2eContext } from "./support/app";
 import {
   bearer,
@@ -379,6 +380,11 @@ describe("어드민 커피챗 요청 관리", () => {
           channel: "kakao_alimtalk",
           status: "failed",
           error: "-99 invalid receiver 010****5432",
+          provider_message_id: null,
+          delivery_status: null,
+          delivery_code: null,
+          delivery_message: null,
+          delivery_reported_at: null,
           attempt: 1,
           next_retry_at: null,
           created_at: expect.any(String),
@@ -450,6 +456,11 @@ describe("어드민 커피챗 요청 관리", () => {
         channel: "kakao_alimtalk",
         status: "failed",
         error: "-99 invalid receiver 010****5432",
+        provider_message_id: null,
+        delivery_status: null,
+        delivery_code: null,
+        delivery_message: null,
+        delivery_reported_at: null,
         // 재시도 (CRB-75)
         attempt: 2,
         next_retry_at: "2026-10-03T00:05:00.000Z",
@@ -489,6 +500,7 @@ describe("어드민 커피챗 요청 관리", () => {
         { channel: "sms" },
         { status: "unknown" },
         { event: "unknown" },
+        { delivery_status: "sent" },
         { created_to: "tomorrow" },
         { created_from: "20261015" },
         { created_to: "2026-10-15T00:00:00" },
@@ -499,6 +511,143 @@ describe("어드민 커피챗 요청 관리", () => {
           .set("Authorization", auth)
           .expect(400);
       }
+    });
+  });
+
+  describe("알림톡 최종 결과 (CRB-77)", () => {
+    it("동기화 스케줄러가 알리고 결과를 저장하고 어드민에서 mid와 함께 보임", async () => {
+      await signupGraduatedWithPhone("결과현업");
+      const studentSession = await signupStudent(ctx);
+      const pk = await sendRequest(
+        studentSession,
+        await graduatedIdOf(studentSession, "결과현업"),
+      );
+      const now = new Date();
+      const minutesAgo = (minutes: number) =>
+        new Date(now.getTime() - minutes * 60 * 1000);
+      const kakao = (mid: string, createdAt: Date, nextCheckAt: Date) => ({
+        channel: "kakao_alimtalk" as const,
+        recipient: CONTACT_PHONE,
+        providerMessageId: mid,
+        createdAt,
+        deliveryStatus: "pending" as const,
+        deliveryNextCheckAt: nextCheckAt,
+      });
+      const delivered = await seedLog(
+        pk,
+        kakao("1001", minutesAgo(5), minutesAgo(1)),
+      );
+      const failed = await seedLog(
+        pk,
+        kakao("1002", minutesAgo(4), minutesAgo(1)),
+      );
+      const stillSending = await seedLog(
+        pk,
+        kakao("1003", minutesAgo(3), minutesAgo(1)),
+      );
+      // 24시간이 지나도 결과가 없음
+      const unknown = await seedLog(
+        pk,
+        kakao("1004", minutesAgo(26 * 60), minutesAgo(1)),
+      );
+      // 아직 조회할 때가 아님
+      const notDue = await seedLog(
+        pk,
+        kakao("1005", minutesAgo(1), new Date(now.getTime() + 60 * 1000)),
+      );
+      const email = await seedLog(pk, { createdAt: minutesAgo(2) });
+      ctx.alimtalk.deliveryResults.set("1001", {
+        status: "delivered",
+        code: "0",
+        message: "성공",
+        reportedAt: new Date("2026-11-08T04:03:00.000Z"),
+      });
+      ctx.alimtalk.deliveryResults.set("1002", {
+        status: "failed",
+        code: "U",
+        message: `메시지가 템플릿과 일치하지않음 ${CONTACT_PHONE}`,
+        reportedAt: null,
+      });
+
+      const result = await ctx.app
+        .get(NotificationDeliverySyncService)
+        .syncDue(now);
+
+      expect(result).toEqual({
+        delivered: 1,
+        failed: 1,
+        unknown: 1,
+        pending: 1,
+      });
+      expect(ctx.alimtalk.fetchedMids.sort()).toEqual([
+        "1001",
+        "1002",
+        "1003",
+        "1004",
+      ]);
+      expect(ctx.slack.messages).toHaveLength(2);
+      expect(ctx.slack.messages.join("\n")).not.toContain(CONTACT_PHONE);
+
+      const body = (
+        await http(ctx)
+          .get(LOGS)
+          .query({ channel: "kakao_alimtalk" })
+          .set("Authorization", auth)
+          .expect(200)
+      ).body;
+      const byPk = Object.fromEntries(
+        body.items.map((item: { pk: string }) => [item.pk, item]),
+      );
+      expect(byPk[delivered.pk]).toMatchObject({
+        status: "sent",
+        provider_message_id: "1001",
+        delivery_status: "delivered",
+        delivery_code: "0",
+        delivery_message: "성공",
+        delivery_reported_at: "2026-11-08T04:03:00.000Z",
+      });
+      expect(byPk[failed.pk]).toMatchObject({
+        provider_message_id: "1002",
+        delivery_status: "failed",
+        delivery_code: "U",
+        delivery_message: "메시지가 템플릿과 일치하지않음 010****5432",
+        delivery_reported_at: null,
+      });
+      expect(byPk[stillSending.pk]).toMatchObject({
+        delivery_status: "pending",
+        delivery_code: null,
+      });
+      expect(byPk[unknown.pk]).toMatchObject({ delivery_status: "unknown" });
+      expect(byPk[notDue.pk]).toMatchObject({ delivery_status: "pending" });
+      expect(JSON.stringify(body)).not.toContain(CONTACT_PHONE);
+
+      const nextCheckOf = async (logPk: string) =>
+        (
+          await ctx.db
+            .select({ at: notificationLog.deliveryNextCheckAt })
+            .from(notificationLog)
+            .where(eq(notificationLog.pk, logPk))
+        )[0].at;
+      // 결과가 확정되면 더 조회하지 않고, 아직이면 5분 뒤 다시 조회
+      expect(await nextCheckOf(delivered.pk)).toBeNull();
+      expect(await nextCheckOf(failed.pk)).toBeNull();
+      expect(await nextCheckOf(unknown.pk)).toBeNull();
+      expect(await nextCheckOf(stillSending.pk)).toEqual(
+        new Date(now.getTime() + 5 * 60 * 1000),
+      );
+      expect(await nextCheckOf(email.pk)).toBeNull();
+
+      expect(
+        pksOf(
+          (
+            await http(ctx)
+              .get(LOGS)
+              .query({ delivery_status: "failed" })
+              .set("Authorization", auth)
+              .expect(200)
+          ).body,
+        ),
+      ).toEqual([failed.pk]);
     });
   });
 

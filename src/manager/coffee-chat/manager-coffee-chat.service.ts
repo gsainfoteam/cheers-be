@@ -81,6 +81,7 @@ export class ManagerCoffeeChatService {
         channel: query.channel,
         status: query.status,
         event: query.event,
+        deliveryStatus: query.delivery_status,
       },
       toOffset(page, size),
       size,
@@ -133,6 +134,13 @@ export class ManagerCoffeeChatService {
       channel: row.channel,
       status: row.status,
       error: row.error && maskPersonalInfo(row.error, row.recipient),
+      provider_message_id: row.providerMessageId,
+      delivery_status: row.deliveryStatus,
+      delivery_code: row.deliveryCode,
+      delivery_message:
+        row.deliveryMessage &&
+        maskPersonalInfo(row.deliveryMessage, row.recipient),
+      delivery_reported_at: row.deliveryReportedAt,
       attempt: row.attempt,
       next_retry_at: row.nextRetryAt,
       created_at: row.createdAt,

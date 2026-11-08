@@ -33,6 +33,11 @@ const logRow = (overrides: object = {}) => ({
   error: "-99 invalid receiver 01012345678",
   attempt: 2,
   nextRetryAt: new Date(NOW.getTime() + 5 * 60 * 1000),
+  deliveryStatus: null,
+  deliveryCode: null,
+  deliveryMessage: null,
+  deliveryReportedAt: null,
+  deliveryNextCheckAt: null,
   ...overrides,
 });
 
@@ -143,6 +148,11 @@ describe("ManagerCoffeeChatService", () => {
           channel: "kakao_alimtalk",
           status: "failed",
           error: "-99 invalid receiver 010****5678",
+          provider_message_id: "mid",
+          delivery_status: null,
+          delivery_code: null,
+          delivery_message: null,
+          delivery_reported_at: null,
           attempt: 2,
           next_retry_at: new Date(NOW.getTime() + 5 * 60 * 1000),
           created_at: NOW,
@@ -202,6 +212,46 @@ describe("ManagerCoffeeChatService", () => {
       expect(JSON.stringify(res)).not.toContain("01012345678");
       expect(JSON.stringify(res)).not.toContain("someone@example.com");
       expect(res.items[0]).not.toHaveProperty("recipient");
+    });
+
+    it("알림톡 mid와 카카오 최종 결과를 내려주고 실패 사유의 전화번호는 가림 (CRB-77)", async () => {
+      logs.findPage.mockResolvedValue({
+        rows: [
+          logRow({
+            status: "sent",
+            error: null,
+            attempt: 1,
+            nextRetryAt: null,
+            providerMessageId: "123456788",
+            deliveryStatus: "failed",
+            deliveryCode: "U",
+            deliveryMessage: "메시지가 템플릿과 일치하지않음 01012345678",
+            deliveryReportedAt: NOW,
+          }),
+        ],
+        total: 1,
+      });
+
+      const res = await service.listNotificationLogs({
+        page: 1,
+        size: 20,
+        delivery_status: "failed",
+      });
+
+      expect(logs.findPage).toHaveBeenCalledWith(
+        expect.objectContaining({ deliveryStatus: "failed" }),
+        0,
+        20,
+      );
+      expect(res.items[0]).toMatchObject({
+        status: "sent",
+        provider_message_id: "123456788",
+        delivery_status: "failed",
+        delivery_code: "U",
+        delivery_message: "메시지가 템플릿과 일치하지않음 010****5678",
+        delivery_reported_at: NOW,
+      });
+      expect(res.items[0]).not.toHaveProperty("delivery_next_check_at");
     });
   });
 });
