@@ -6,12 +6,12 @@ import {
   errorMessage,
   EVENT_LABELS,
   formatDateTime,
-  LOG_STATUS_LABELS,
   NotificationLog,
   REQUEST_BASE_PATH,
   REQUEST_STATUS_LABELS,
 } from "../lib/coffee-chat";
 import { CoffeeChatRequest } from "./CoffeeChatRequestsPage";
+import { NotificationResultCells } from "./NotificationResultCells";
 
 type CoffeeChatRequestDetail = CoffeeChatRequest & {
   message: string | null;
@@ -101,6 +101,7 @@ export function CoffeeChatRequestDetailPage() {
                     <th>채널</th>
                     <th>결과</th>
                     <th>실패 사유</th>
+                    <th>알리고 mid</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -109,8 +110,7 @@ export function CoffeeChatRequestDetailPage() {
                       <td>{formatDateTime(log.created_at)}</td>
                       <td>{EVENT_LABELS[log.event]}</td>
                       <td>{CHANNEL_LABELS[log.channel]}</td>
-                      <td>{LOG_STATUS_LABELS[log.status]}</td>
-                      <td className="pre-wrap">{log.error ?? "-"}</td>
+                      <NotificationResultCells log={log} />
                     </tr>
                   ))}
                 </tbody>

@@ -1,20 +1,18 @@
 import { Link } from "react-router-dom";
 import {
   CHANNEL_LABELS,
+  DELIVERY_STATUS_LABELS,
   EVENT_LABELS,
   formatDateTime,
   LOG_STATUS_LABELS,
   NOTIFICATION_LOG_PATH,
-  NotificationLog,
+  NotificationLogItem,
 } from "../lib/coffee-chat";
 import { usePagedList } from "../lib/use-paged-list";
+import { NotificationResultCells } from "./NotificationResultCells";
 import { Pagination } from "./Pagination";
 
-type NotificationLogItem = NotificationLog & {
-  coffee_chat_request_pk: string;
-};
-
-const FILTER_KEYS = ["status", "channel", "event"];
+const FILTER_KEYS = ["status", "delivery_status", "channel", "event"];
 
 export function NotificationLogsPage() {
   const { params, result, error, search, goToPage, formKey } =
@@ -35,6 +33,18 @@ export function NotificationLogsPage() {
         <select name="status" defaultValue={read("status")} aria-label="결과">
           <option value="">전체 결과</option>
           {Object.entries(LOG_STATUS_LABELS).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <select
+          name="delivery_status"
+          defaultValue={read("delivery_status")}
+          aria-label="카카오 결과"
+        >
+          <option value="">전체 카카오 결과</option>
+          {Object.entries(DELIVERY_STATUS_LABELS).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
@@ -85,6 +95,7 @@ export function NotificationLogsPage() {
                 <th>채널</th>
                 <th>결과</th>
                 <th>실패 사유</th>
+                <th>알리고 mid</th>
                 <th>요청</th>
               </tr>
             </thead>
@@ -94,8 +105,7 @@ export function NotificationLogsPage() {
                   <td>{formatDateTime(log.created_at)}</td>
                   <td>{EVENT_LABELS[log.event]}</td>
                   <td>{CHANNEL_LABELS[log.channel]}</td>
-                  <td>{LOG_STATUS_LABELS[log.status]}</td>
-                  <td className="pre-wrap">{log.error ?? "-"}</td>
+                  <NotificationResultCells log={log} />
                   <td>
                     <Link to={`/coffee-chats/${log.coffee_chat_request_pk}`}>
                       상세
