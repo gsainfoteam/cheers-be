@@ -30,6 +30,11 @@ const failedLog = (
   error: "3040 failed",
   attempt: 1,
   nextRetryAt: now,
+  deliveryStatus: null,
+  deliveryCode: null,
+  deliveryMessage: null,
+  deliveryReportedAt: null,
+  deliveryNextCheckAt: null,
   ...overrides,
 });
 

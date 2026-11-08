@@ -29,7 +29,7 @@ FK는 모두 `ON DELETE NO ACTION`입니다. 부모 행을 지우기 전에 백�
 | [public.department](public.department.md) | 4 | 학과 기준 데이터. 어드민에서 추가 · 수정. 학과명이 바뀌면 같은 행의 name만 수정 (버전 관리 안 함). 학생 프로필이 참조하므로 지우지 않고 비활성화함 | BASE TABLE |
 | [public.graduated_profile](public.graduated_profile.md) | 9 | 현업자 추가 정보. 알림 수단 · 공유할 연락처는 coffee_chat_contact | BASE TABLE |
 | [public.graduated](public.graduated.md) | 6 | 현업자 | BASE TABLE |
-| [public.notification_log](public.notification_log.md) | 11 | 이메일 · 카카오 알림톡 전송 로그 (channel로 구분). 시도마다 새 행. 실패한 행에 next_retry_at이 있으면 재시도 스케줄러가 처리하고 비움 (CRB-75) | BASE TABLE |
+| [public.notification_log](public.notification_log.md) | 16 | 이메일 · 카카오 알림톡 전송 로그 (channel로 구분). 시도마다 새 행. 실패한 행에 next_retry_at이 있으면 재시도 스케줄러가 처리하고 비움 (CRB-75). 접수된 알림톡은 결과 동기화 스케줄러가 알리고에서 카카오 최종 결과를 가져와 delivery_*에 남김 (CRB-77) | BASE TABLE |
 | [public.refresh_token](public.refresh_token.md) | 4 | 리프레시 토큰 | BASE TABLE |
 | [public.school](public.school.md) | 3 | 학교 기준 데이터 (seed로 pk를 고정해서 넣음) | BASE TABLE |
 | [public.student_email_verification](public.student_email_verification.md) | 6 | 진행 중인 학교 이메일 인증. 학생당 1개, 재요청 시 upsert, 인증 성공 시 행 삭제 | BASE TABLE |
@@ -93,6 +93,7 @@ FK는 모두 `ON DELETE NO ACTION`입니다. 부모 행을 지우기 전에 백�
 | public.attachment_kind | cv, portfolio |
 | public.attachment_source | file, link |
 | public.notification_channel | email, kakao_alimtalk |
+| public.notification_delivery_status | delivered, failed, pending, unknown |
 | public.notification_event | coffee_chat_requested, contact_shared |
 | public.notification_status | failed, sent |
 | public.oauth_provider | apple, google, naver |
@@ -193,6 +194,11 @@ erDiagram
   text error
   smallint attempt
   timestamp_with_time_zone next_retry_at
+  notification_delivery_status delivery_status
+  varchar_32_ delivery_code
+  text delivery_message
+  timestamp_with_time_zone delivery_reported_at
+  timestamp_with_time_zone delivery_next_check_at
 }
 "public.refresh_token" {
   text opaque_hash

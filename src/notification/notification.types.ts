@@ -1,6 +1,7 @@
 import { SendMailInput } from "@src/mail/mail.types";
 import {
   notificationChannel,
+  notificationDeliveryStatus,
   notificationEvent,
   notificationStatus,
 } from "@drizzle/schema/enums";
@@ -10,6 +11,8 @@ export type NotificationEvent = (typeof notificationEvent.enumValues)[number];
 export type NotificationChannel =
   (typeof notificationChannel.enumValues)[number];
 export type NotificationStatus = (typeof notificationStatus.enumValues)[number];
+export type NotificationDeliveryStatus =
+  (typeof notificationDeliveryStatus.enumValues)[number];
 
 export interface NotifyInput<E extends NotificationEvent = NotificationEvent> {
   coffeeChatRequestPk: string;
@@ -32,6 +35,9 @@ export interface NotificationLogInput {
   error?: string;
   attempt: number;
   nextRetryAt: Date | null;
+  // 접수된 알림톡만 pending과 첫 조회 시각을 넣음 (CRB-77)
+  deliveryStatus?: NotificationDeliveryStatus;
+  deliveryNextCheckAt?: Date;
 }
 
 // 한 채널 발송 결과. skipped: 실제로 보내지 않음 (로컬 · 키 미설정), gave_up: 마지막 시도까지 실패
