@@ -526,7 +526,7 @@ describe("CheersGraduatedService", () => {
         },
       });
       expect(notified.email?.text).toContain(
-        `https://cheers.example.com/cheers/sent/${requestPk}`,
+        `https://cheers.example.com/applications/${requestPk}`,
       );
       // 연락처 자체는 알림에 넣지 않음
       expect(notified.email?.text).not.toContain("chulsoo@example.com");

@@ -2,7 +2,7 @@
 
 ## Description
 
-이메일 · 카카오 알림톡 전송 로그 (channel로 구분). 시도마다 새 행. 실패한 행에 next_retry_at이 있으면 재시도 스케줄러가 처리하고 비움 (CRB-75)
+이메일 · 카카오 알림톡 전송 로그 (channel로 구분). 시도마다 새 행. 실패한 행에 next_retry_at이 있으면 재시도 스케줄러가 처리하고 비움 (CRB-75). 접수된 알림톡은 결과 동기화 스케줄러가 알리고에서 카카오 최종 결과를 가져와 delivery_*에 남김 (CRB-77)
 
 ## Columns
 
@@ -14,11 +14,16 @@
 | channel | notification_channel |  | false |  |  |  |
 | status | notification_status |  | false |  |  |  |
 | created_at | timestamp with time zone | now() | false |  |  |  |
-| provider_message_id | varchar(128) |  | true |  |  |  |
+| provider_message_id | varchar(128) |  | true |  |  | 발송사 메시지 ID (알림톡은 알리고 mid) |
 | recipient | varchar(255) |  | false |  |  | 이메일 주소 또는 전화번호 |
 | error | text |  | true |  |  |  |
 | attempt | smallint | 1 | false |  |  | 몇 번째 발송 시도인지 (1 = 처음 발송, 최대 4) |
 | next_retry_at | timestamp with time zone |  | true |  |  | 이 실패를 다시 보낼 시각. null이면 재시도 대상이 아님 (성공 · 마지막 시도 · 이미 재시도함) |
+| delivery_status | notification_delivery_status |  | true |  |  | 알림톡 최종 결과 (pending 대기 · delivered 도달 · failed 카카오 단계 실패 · unknown 24시간 내 결과 없음). null이면 조회 대상이 아님 (이메일 · 접수 실패) |
+| delivery_code | varchar(32) |  | true |  |  | 알리고 전송결과의 rslt (카카오 결과 코드) |
+| delivery_message | text |  | true |  |  | 알리고 전송결과의 rslt_message (실패 사유) |
+| delivery_reported_at | timestamp with time zone |  | true |  |  | 알리고가 카카오 결과를 받은 시각 (rsltdate) |
+| delivery_next_check_at | timestamp with time zone |  | true |  |  | 다음에 결과를 조회할 시각. null이면 조회하지 않음 (결과 확정 · 대상 아님) |
 
 ## Constraints
 
@@ -34,6 +39,7 @@
 | notification_log_pkey | CREATE UNIQUE INDEX notification_log_pkey ON public.notification_log USING btree (pk) |
 | notification_log_coffee_chat_request_pk_index | CREATE INDEX notification_log_coffee_chat_request_pk_index ON public.notification_log USING btree (coffee_chat_request_pk) |
 | notification_log_next_retry_at_idx | CREATE INDEX notification_log_next_retry_at_idx ON public.notification_log USING btree (next_retry_at) WHERE (next_retry_at IS NOT NULL) |
+| notification_log_delivery_next_check_at_idx | CREATE INDEX notification_log_delivery_next_check_at_idx ON public.notification_log USING btree (delivery_next_check_at) WHERE (delivery_next_check_at IS NOT NULL) |
 
 ## Relations
 
@@ -54,6 +60,11 @@ erDiagram
   text error
   smallint attempt
   timestamp_with_time_zone next_retry_at
+  notification_delivery_status delivery_status
+  varchar_32_ delivery_code
+  text delivery_message
+  timestamp_with_time_zone delivery_reported_at
+  timestamp_with_time_zone delivery_next_check_at
 }
 "public.coffee_chat_request" {
   uuid *pk

@@ -92,7 +92,7 @@ note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후
 
 == 커밋 뒤 ==
 
-Service -> Service: 재학생이 켠 채널만 담음\nemail_enabled → buildContactSharedMail(c.email, studentName, graduatedName,\n  link = WEB_BASE_URL/cheers/sent/<id>)\nkakao_enabled → { to: c.phone,\n  variables: { recipientName, graduatedName, coffeeChatRequestPk } }
+Service -> Service: 재학생이 켠 채널만 담음\nemail_enabled → buildContactSharedMail(c.email, studentName, graduatedName,\n  link = WEB_BASE_URL/applications/<id>)\nkakao_enabled → { to: c.phone,\n  variables: { recipientName, graduatedName, coffeeChatRequestPk } }
 note right of Service
   연락처 자체는 알림에 넣지 않음 (링크의 상세에서 로그인 후 확인).
   WEB_BASE_URL: production에서 비어 있으면 서버 시작 실패,
@@ -120,6 +120,11 @@ alt 실제 발송 안 함 (로컬 메일 · 알리고 키 미설정 → skipped)
   note over NotificationService: notification_log 기록 안 함
 else 발송 성공
   NotificationService -> PostgreSQL: INSERT notification_log\n(event = contact_shared, channel, status = sent, attempt = 1, recipient)
+  note right
+    CRB-77: 알림톡은 provider_message_id(알리고 mid)와 함께
+    delivery_status = pending, delivery_next_check_at = now + 1분으로 남김.
+    접수 성공일 뿐이라 카카오 최종 결과는 flow/notification-delivery-sync.puml에서 가져옴
+  end note
 else 발송 실패
   NotificationService -> PostgreSQL: INSERT notification_log\n(event = contact_shared, channel, status = failed, attempt = 1,\nnext_retry_at = now + 1분, recipient, error)
   note right

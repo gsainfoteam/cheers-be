@@ -52,6 +52,7 @@ const ROUTES: Route[] = [
   route("GET", "/coffee-chat/request"),
   route("GET", "/coffee-chat/request/:pk"),
   route("GET", "/coffee-chat/notification-log"),
+  route("POST", "/coffee-chat/notification-log/:pk/delivery-lookup"),
 
   route("GET", "/company"),
   route("GET", "/company/search"),
@@ -84,7 +85,11 @@ const PARAMS: Record<string, string> = {
   version: "e2e-none",
 };
 const UUID_PARAMS: Record<string, string[]> = {
-  pk: ["/admin-account/", "/coffee-chat/request/"],
+  pk: [
+    "/admin-account/",
+    "/coffee-chat/request/",
+    "/coffee-chat/notification-log/",
+  ],
 };
 
 const fill = (path: string) =>

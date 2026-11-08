@@ -6,12 +6,14 @@
 //   2) 재학생 가입 (약관 → 학교 메일 인증 → 추가 정보 → 파일 첨부)
 //   3) 현업자 가입 (약관 → 명함 업로드 · 인증 → 회사 직접 입력으로 가입 → 어드민 검토 목록 확인
 //      → 회사 검색으로 1)의 회사를 골라 수정 → 직접 입력한 회사 삭제)
-//   4) 재학생: 현업자 목록(비공개 정보 미노출 · 회사 · 로고 확인) → 커피챗 요청 → 보낸 요청(공유 전: 현업자 연락처 없음)
-//   5) 현업자: 받은 요청 확인 → 연락처 공유
-//   6) 재학생: 보낸 요청(공유 후: 상태 contact_shared + 현업자 연락처 보임)
-//   7) 어드민: 커피챗 요청 · 알림 발송 결과 · 명함 열람 확인
-//   8) 토큰 갱신 · 로그아웃
-//   9) 정리: 두 계정 완전탈퇴(superadmin + DEV_USER_DELETE_ENABLED) → 회사 삭제
+//   4) 알림 방식 설정: 가입 때는 메일만 켜 두고, 마이페이지 수정(POST /info)으로 두 계정의 알림톡을 켬 (PHONE이 있을 때)
+//   5) 재학생: 현업자 목록(비공개 정보 미노출 · 회사 · 로고 확인) → 커피챗 요청 → 보낸 요청(공유 전: 현업자 연락처 없음)
+//   6) 현업자: 받은 요청 확인 → 연락처 공유
+//   7) 재학생: 보낸 요청(공유 후: 상태 contact_shared + 현업자 연락처 보임)
+//   8) 어드민: 커피챗 요청 · 알림 발송 결과(메일 · 알림톡 notification_log) · 명함 열람 확인
+//      PHONE이 있으면 알림톡 기록이 없거나 sent가 아니면 실패. 휴대폰에서 받은 알림톡 버튼이 신청 상세로 열리는지도 물어봄
+//   9) 토큰 갱신 · 로그아웃
+//  10) 정리: 두 계정 완전탈퇴(superadmin + DEV_USER_DELETE_ENABLED) → 회사 삭제
 //      완전탈퇴를 쓸 수 없으면 탈퇴 요청(유예기간 뒤 삭제)으로 대신하고, 현업자가 고른 회사는 남김
 //      중간 단계가 실패해도 정리는 함 (KEEP_DATA=1이면 정리하지 않음)
 //
@@ -30,7 +32,8 @@
 //   MANAGER_TOKEN         어드민 토큰을 직접 지정하면 IdP 로그인을 건너뜀
 //                         (어드민 화면 로그인 후 localStorage의 cheers_admin_access_token 값, 유효기간 1일)
 //   SCHOOL_EMAIL          재학생 메일 인증에 쓸 학교 메일. 비우면 필요할 때 물어봄
-//   PHONE                 휴대폰 번호(01012345678)를 주면 두 계정의 카카오 연락을 켜서 그 번호로 실제 알림톡을 보냄
+//   PHONE                 휴대폰 번호(01012345678)를 주면 가입 후 두 계정의 알림 방식에 알림톡을 켜서 그 번호로 실제 알림톡을 보냄
+//                         (요청 알림은 현업자, 연락처 공유 알림은 재학생에게 가므로 이 번호로 2건이 옴)
 //   KEEP_DATA=1           마지막 정리를 하지 않음 (어드민 화면에서 직접 보고 싶을 때)
 //
 // 이미 진행한 단계는 건너뜀: 정리 전에 멈춰 계정이 남았으면, 서버가 알려 주는 next_step을 보고 이어서 진행함
@@ -553,15 +556,21 @@ function applySignupTokens(account: Account, res: Res): void {
   account.refresh = res.json.refresh_token;
 }
 
-// PHONE을 주면 카카오 연락도 켜서 알림톡이 나가게 함
+// 가입 때는 메일만 켬. 알림톡은 가입 후 알림 방식 설정(enableAlimtalk)에서 켬
 const contactOf = (email: string) => ({
   email_enabled: true,
-  kakao_enabled: PHONE !== "",
+  kakao_enabled: false,
   email,
-  phone: PHONE || null,
+  phone: null,
 });
 
-async function studentSignup(account: Account): Promise<void> {
+// POST /info 본문 (가입 후에는 마이페이지 수정). 알림 방식 설정에서 연락 설정만 바꿔 다시 보냄
+type ProfileBody = { contact: ReturnType<typeof contactOf> } & Record<
+  string,
+  unknown
+>;
+
+async function studentSignup(account: Account): Promise<ProfileBody> {
   await doConsent(account);
 
   let info = await req("GET", "/api/v1/user/info", account);
@@ -619,7 +628,7 @@ async function studentSignup(account: Account): Promise<void> {
   // 연락용 메일: 방금 인증한 학교 메일, 없으면 서버에 저장된 값 (재실행 시)
   const contactEmail: string =
     schoolEmail || info.json.student?.email || info.json.email;
-  const profile = {
+  const profile: ProfileBody = {
     name: info.json.name || "스모크재학생",
     department_id: departmentId,
     interests: [interests.json.interests[0]],
@@ -654,7 +663,7 @@ async function studentSignup(account: Account): Promise<void> {
     "application/pdf",
     MINIMAL_PDF,
   );
-  if (!key) return;
+  if (!key) return profile;
   const savedFile = await req("POST", "/api/v1/user/student/info", account, {
     ...profile,
     attachments: [
@@ -662,19 +671,22 @@ async function studentSignup(account: Account): Promise<void> {
       { kind: "cv", source: "file", key, file_name: "smoke.pdf" },
     ],
   });
-  if (!check("POST /student/info (파일 첨부 저장)", savedFile, OK)) return;
+  if (!check("POST /student/info (파일 첨부 저장)", savedFile, OK)) {
+    return profile;
+  }
   info = await req("GET", "/api/v1/user/info", account);
   const attachment = info.json.student?.profile?.attachments?.find(
     (a: { source: string }) => a.source === "file",
   );
   if (!assert("내 정보에 파일 첨부가 있음", Boolean(attachment), info.text)) {
-    return;
+    return profile;
   }
   check(
     "첨부 파일 내려받기 (presigned GET)",
     await send(attachment.url, { method: "GET" }),
     200,
   );
+  return profile;
 }
 
 // 직접 입력한 회사가 어드민 검토 목록에 올라왔는지 보고 정리 대상에 넣음
@@ -707,7 +719,7 @@ async function graduatedSignup(
   state: State,
   company: Company,
   suffix: string,
-): Promise<string> {
+): Promise<{ nickname: string; body: ProfileBody }> {
   await doConsent(account);
 
   let info = await req("GET", "/api/v1/user/info", account);
@@ -741,7 +753,7 @@ async function graduatedSignup(
     info.json.graduated?.profile?.contact?.email ||
     info.json.email ||
     (await ask("  현업자 연락 메일: "));
-  const profile = {
+  const profile: ProfileBody = {
     name: info.json.name || "스모크현업자",
     department: "플랫폼팀",
     job: "백엔드 개발자",
@@ -820,7 +832,56 @@ async function graduatedSignup(
   const nickname: string = saved?.nickname ?? "";
   mustAssert("닉네임이 있음", nickname !== "");
   console.log(`    현업자 닉네임: ${nickname}`);
-  return nickname;
+  return { nickname, body: { ...profile, company_id: company.id } };
+}
+
+// 마이페이지에서 알림 방식에 알림톡을 켜는 흐름. 메일은 켠 채로 두고 PHONE을 연락 번호로 저장
+async function enableAlimtalk(
+  account: Account,
+  kind: UserKind,
+  body: ProfileBody,
+): Promise<void> {
+  // 재학생 첨부는 저장된 값으로 다시 보냄 (올릴 때의 tmp key는 저장하면서 최종 key로 바뀌어 다시 쓸 수 없음)
+  let attachments: unknown;
+  if (kind === "student") {
+    const current = await req("GET", "/api/v1/user/info", account);
+    attachments = (current.json?.student?.profile?.attachments ?? []).map(
+      (a: {
+        kind: string;
+        source: string;
+        url: string;
+        key: string | null;
+        file_name: string | null;
+      }) =>
+        a.source === "file"
+          ? {
+              kind: a.kind,
+              source: a.source,
+              key: a.key,
+              file_name: a.file_name,
+            }
+          : { kind: a.kind, source: a.source, url: a.url },
+    );
+  }
+  const saved = await req("POST", `/api/v1/user/${kind}/info`, account, {
+    ...body,
+    ...(attachments === undefined ? {} : { attachments }),
+    contact: { ...body.contact, kakao_enabled: true, phone: PHONE },
+  });
+  if (!check(`POST /${kind}/info (${account.label} 알림톡 켜기)`, saved, OK)) {
+    return;
+  }
+  const info = await req("GET", "/api/v1/user/info", account);
+  const contact = info.json?.[kind]?.profile?.contact;
+  assert(
+    `${account.label} 연락 설정: 메일 · 알림톡 둘 다 켜짐`,
+    contact?.email_enabled === true && contact?.kakao_enabled === true,
+    JSON.stringify(contact),
+  );
+  assert(
+    `${account.label} 연락 설정: 알림톡 번호가 PHONE으로 저장됨`,
+    contact?.phone === PHONE,
+  );
 }
 
 const hasNoKeys = (value: object, keys: string[]) =>
@@ -956,8 +1017,10 @@ type NotificationLog = {
 };
 
 const EVENTS = ["coffee_chat_requested", "contact_shared"];
+// PHONE이 있으면 알림톡도 켰으므로 두 채널을 다 확인
+const CHANNELS = PHONE ? ["email", "kakao_alimtalk"] : ["email"];
 
-// 알림은 응답 뒤에 비동기로 나가므로 두 이벤트의 메일 기록이 생길 때까지 기다린 뒤 상세를 돌려줌
+// 알림은 응답 뒤에 비동기로 나가므로 두 이벤트의 기록(메일, PHONE이 있으면 알림톡도)이 생길 때까지 기다린 뒤 상세를 돌려줌
 async function waitForNotifications(
   manager: Manager,
   requestId: string,
@@ -968,7 +1031,9 @@ async function waitForNotifications(
     const detail = await req("GET", path, manager);
     const logs: NotificationLog[] = detail.json?.notifications ?? [];
     const done = EVENTS.every((event) =>
-      logs.some((log) => log.event === event && log.channel === "email"),
+      CHANNELS.every((channel) =>
+        logs.some((log) => log.event === event && log.channel === channel),
+      ),
     );
     if (detail.code !== 200 || done || Date.now() > deadline) return detail;
     await sleep(2000);
@@ -983,12 +1048,12 @@ function checkNotification(
   const log = logs.find((l) => l.event === event && l.channel === channel);
   const name = `알림 ${event} · ${channel}`;
   if (!log) {
-    // 발송 키 · 템플릿이 없어 실제로 나가지 않은 알림톡은 기록이 남지 않음
-    if (channel === "kakao_alimtalk") {
-      warn(`${name} 기록 없음 (알림톡 설정이 비어 있으면 발송하지 않음)`);
-    } else {
-      failed(`${name} 기록이 있음`, `${NOTIFICATION_WAIT_MS / 1000}초 기다림`);
-    }
+    failed(
+      `${name} 기록이 있음`,
+      channel === "kakao_alimtalk"
+        ? `${NOTIFICATION_WAIT_MS / 1000}초 기다림. 서버의 ALIGO_* · KAKAO_TEMPLATE_* · WEB_BASE_URL(https://) 중 비어 있으면 발송 없이 건너뛰어 기록이 남지 않음`
+        : `${NOTIFICATION_WAIT_MS / 1000}초 기다림`,
+    );
     return;
   }
   assert(
@@ -1025,16 +1090,52 @@ async function checkManagerViews(
   if (check("GET /manager/coffee-chat/request/{id}", detail, 200)) {
     const logs: NotificationLog[] = detail.json.notifications ?? [];
     for (const event of EVENTS) {
-      checkNotification(logs, event, "email");
-      if (PHONE) checkNotification(logs, event, "kakao_alimtalk");
+      for (const channel of CHANNELS) checkNotification(logs, event, channel);
     }
   }
-  const logs = await req(
-    "GET",
-    `${MANAGER}/coffee-chat/notification-log?channel=email&page=1&size=5`,
-    manager,
-  );
-  check("GET /manager/coffee-chat/notification-log", logs, 200);
+
+  // 어드민 알림 발송 기록 목록 (채널 필터)에도 이번 요청의 기록이 보이는지
+  for (const channel of CHANNELS) {
+    const logs = await req(
+      "GET",
+      `${MANAGER}/coffee-chat/notification-log?channel=${channel}&page=1&size=20`,
+      manager,
+    );
+    if (
+      !check(
+        `GET /manager/coffee-chat/notification-log (${channel})`,
+        logs,
+        200,
+      )
+    ) {
+      continue;
+    }
+    const mine: NotificationLog[] = (logs.json?.items ?? []).filter(
+      (log: { coffee_chat_request_pk: string }) =>
+        log.coffee_chat_request_pk === requestId,
+    );
+    assert(
+      `알림 발송 기록 목록(${channel})에 이번 요청의 두 이벤트가 있음`,
+      EVENTS.every((event) => mine.some((log) => log.event === event)),
+      JSON.stringify(mine.map((log) => [log.event, log.status])),
+    );
+  }
+
+  if (PHONE) {
+    console.log(
+      `\n  휴대폰(${PHONE.slice(0, 3)}****${PHONE.slice(-4)})에서 알림톡 2건(커피챗 요청 안내 · 연락처 공유 안내)을 확인하세요`,
+    );
+    console.log(
+      "  각 알림톡의 [Cheers에서 확인하기] 버튼이 로그인 후 이번 신청의 상세 화면(/applications/{id})을 여는지도 확인하세요",
+    );
+    const answer = await ask(
+      "  두 알림톡을 받았고 버튼이 신청 상세를 열었나요? (y/N): ",
+    );
+    assert(
+      "알림톡 2건 수신 · 버튼 링크 확인 (직접 확인)",
+      answer.trim().toLowerCase() === "y",
+    );
+  }
 
   // 상세의 graduated.pk가 명함 API의 graduatedPk
   const graduatedPk: string | undefined = detail.json?.graduated?.pk;
@@ -1143,11 +1244,11 @@ async function run(state: State): Promise<void> {
 
   step("2. 재학생 계정: Google 로그인 · 가입");
   const student = await googleLogin("재학생", "student", state);
-  await studentSignup(student);
+  const studentBody = await studentSignup(student);
 
   step("3. 현업자 계정: Google 로그인 · 가입 (재학생과 다른 Google 계정)");
   const graduated = await googleLogin("현업자", "graduated", state);
-  const nickname = await graduatedSignup(
+  const { nickname, body: graduatedBody } = await graduatedSignup(
     graduated,
     manager,
     state,
@@ -1160,19 +1261,27 @@ async function run(state: State): Promise<void> {
     200,
   );
 
-  step("4. 재학생: 현업자 목록 · 커피챗 요청");
+  step("4. 알림 방식 설정: 두 계정의 알림톡 켜기 (마이페이지 수정)");
+  if (PHONE) {
+    await enableAlimtalk(student, "student", studentBody);
+    await enableAlimtalk(graduated, "graduated", graduatedBody);
+  } else {
+    warn("PHONE이 없어 알림톡을 켜지 않음 (메일 알림만 확인)");
+  }
+
+  step("5. 재학생: 현업자 목록 · 커피챗 요청");
   const requestId = await requestCoffeeChat(student, nickname, company);
 
-  step("5. 현업자: 받은 요청 확인 · 연락처 공유");
+  step("6. 현업자: 받은 요청 확인 · 연락처 공유");
   const shared = await shareContact(graduated, requestId);
 
-  step("6. 재학생: 연락처 공유 후 보낸 요청");
+  step("7. 재학생: 연락처 공유 후 보낸 요청");
   await confirmShared(student, requestId, shared);
 
-  step("7. 어드민: 커피챗 요청 · 알림 발송 결과 · 명함 확인");
+  step("8. 어드민: 커피챗 요청 · 알림 발송 결과 · 명함 확인");
   await checkManagerViews(manager, requestId, nickname);
 
-  step("8. 토큰 갱신 · 로그아웃");
+  step("9. 토큰 갱신 · 로그아웃");
   await finishAccount(student);
   await finishAccount(graduated);
 }
@@ -1221,8 +1330,8 @@ async function main(): Promise<void> {
   if (state.accounts.length === 0 && state.companies.length === 0) summary();
   step(
     state.hardDelete
-      ? "9. 정리: 완전탈퇴 · 회사 삭제"
-      : "9. 정리: 탈퇴 요청 (완전탈퇴를 쓸 수 없음)",
+      ? "10. 정리: 완전탈퇴 · 회사 삭제"
+      : "10. 정리: 탈퇴 요청 (완전탈퇴를 쓸 수 없음)",
   );
   await cleanup(state);
 

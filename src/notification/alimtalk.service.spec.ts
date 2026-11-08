@@ -87,8 +87,8 @@ describe("AlimtalkService", () => {
           name: "Cheers에서 확인하기",
           linkType: "WL",
           linkTypeName: "웹링크",
-          linkMo: "https://cheers.example.com/cheers/sent",
-          linkPc: "https://cheers.example.com/cheers/sent",
+          linkMo: "https://cheers.example.com/applications/request-pk",
+          linkPc: "https://cheers.example.com/applications/request-pk",
         },
       ],
     });
@@ -107,15 +107,19 @@ describe("AlimtalkService", () => {
 
     const params = sentParams();
     expect(params.tpl_code).toBe("TPL-REQUESTED");
-    expect(params.subject_1).toBe("커피챗 요청 도착");
-    expect(params.emtitle_1).toBe("커피챗 요청 도착");
+    expect(params.subject_1).toBe("☕️ 커피챗 요청 안내");
+    expect(params.emtitle_1).toBe("☕️ 커피챗 요청 안내");
     expect(params.message_1).toBe(
-      "Cheers\n\n☕ 새로운 커피챗 요청이 도착했어요\n요청자로부터 온 메시지를 확인하고 커피챗 가능 여부를 알려주세요",
+      "재학생 회원으로부터 새로운 커피챗 요청이 도착했어요\n요청 내용을 확인하고 커피챗 가능 여부를 알려주세요 :)",
     );
     const { button } = JSON.parse(params.button_1);
     expect(button[0].name).toBe("Cheers에서 확인하기");
-    expect(button[0].linkMo).toBe("https://cheers.example.com/cheers/received");
-    expect(button[0].linkPc).toBe("https://cheers.example.com/cheers/received");
+    expect(button[0].linkMo).toBe(
+      "https://cheers.example.com/applications/request-pk",
+    );
+    expect(button[0].linkPc).toBe(
+      "https://cheers.example.com/applications/request-pk",
+    );
   });
 
   it("removes the trailing slash of WEB_BASE_URL from the button link", async () => {
@@ -128,7 +132,9 @@ describe("AlimtalkService", () => {
     await service.send(input);
 
     const { button } = JSON.parse(sentParams().button_1);
-    expect(button[0].linkMo).toBe("https://cheers.example.com/cheers/sent");
+    expect(button[0].linkMo).toBe(
+      "https://cheers.example.com/applications/request-pk",
+    );
   });
 
   it("keeps a message id sent as a string", async () => {
@@ -259,5 +265,196 @@ describe("AlimtalkService", () => {
       "[ALIMTALK SKIPPED] to=010****5678 event=contact_shared",
     );
     log.mockRestore();
+  });
+
+  describe("fetchResult", () => {
+    // 알리고 문서의 전송결과조회(상세) 응답 예시 형식 (숫자도 문자열로 옴)
+    const detailBody = (item: Record<string, unknown>) => ({
+      code: 0,
+      message: "정상적으로 호출하였습니다.",
+      list: [
+        {
+          msgid: "123456788",
+          type: "AT",
+          sender: "0212345678",
+          phone: "01012345678",
+          status: "3",
+          reqdate: "2026-11-08 13:02:56",
+          sentdate: "2026-11-08 13:02:57",
+          rsltdate: "2026-11-08 13:03:00",
+          reportdate: "2026-11-08 13:03:01",
+          rslt: "0",
+          rslt_message: "성공",
+          tpl_code: "TPL-SHARED",
+          smid: "0",
+          ...item,
+        },
+      ],
+      currentPage: "1",
+      totalPage: "1",
+      totalCount: "1",
+    });
+
+    it("queries the history detail of the mid", async () => {
+      fetchMock.mockResolvedValue(jsonResponse(detailBody({})));
+      const service = createService(config);
+
+      await service.fetchResult("123456788");
+
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe("https://kakaoapi.aligo.in/akv10/history/detail/");
+      expect(init.method).toBe("POST");
+      expect(sentParams()).toEqual({
+        apikey: "api-key",
+        userid: "user-id",
+        mid: "123456788",
+      });
+    });
+
+    it("returns delivered when rslt is 0, with rsltdate as KST", async () => {
+      fetchMock.mockResolvedValue(jsonResponse(detailBody({})));
+      const service = createService(config);
+
+      await expect(service.fetchResult("123456788")).resolves.toEqual({
+        status: "delivered",
+        code: "0",
+        message: "성공",
+        reportedAt: new Date("2026-11-08T04:03:00.000Z"),
+      });
+    });
+
+    it("accepts rslt sent as a number", async () => {
+      fetchMock.mockResolvedValue(jsonResponse(detailBody({ rslt: 0 })));
+      const service = createService(config);
+
+      await expect(service.fetchResult("1")).resolves.toMatchObject({
+        status: "delivered",
+        code: "0",
+      });
+    });
+
+    it("returns failed with the kakao code and reason", async () => {
+      fetchMock.mockResolvedValue(
+        jsonResponse(
+          detailBody({
+            rslt: "U",
+            rslt_message: "메시지가 템플릿과 일치하지않음",
+          }),
+        ),
+      );
+      const service = createService(config);
+
+      await expect(service.fetchResult("123456788")).resolves.toEqual({
+        status: "failed",
+        code: "U",
+        message: "메시지가 템플릿과 일치하지않음",
+        reportedAt: new Date("2026-11-08T04:03:00.000Z"),
+      });
+    });
+
+    it("keeps a failure without reason or result time", async () => {
+      fetchMock.mockResolvedValue(
+        jsonResponse(detailBody({ rslt: "K", rslt_message: "", rsltdate: "" })),
+      );
+      const service = createService(config);
+
+      await expect(service.fetchResult("1")).resolves.toEqual({
+        status: "failed",
+        code: "K",
+        message: null,
+        reportedAt: null,
+      });
+    });
+
+    it("returns pending while the message is still being sent (msgid starts with Q)", async () => {
+      fetchMock.mockResolvedValue(
+        jsonResponse(
+          detailBody({ msgid: "Q123456788", rslt: "", rsltdate: "" }),
+        ),
+      );
+      const service = createService(config);
+
+      await expect(service.fetchResult("1")).resolves.toEqual({
+        status: "pending",
+      });
+    });
+
+    it("returns pending when rslt is not set yet", async () => {
+      fetchMock.mockResolvedValue(jsonResponse(detailBody({ rslt: "" })));
+      const service = createService(config);
+
+      await expect(service.fetchResult("1")).resolves.toEqual({
+        status: "pending",
+      });
+    });
+
+    it("returns pending when the mid is not in the list yet", async () => {
+      fetchMock.mockResolvedValue(
+        jsonResponse({
+          code: 0,
+          message: "정상적으로 호출하였습니다.",
+          list: [],
+        }),
+      );
+      const service = createService(config);
+
+      await expect(service.fetchResult("1")).resolves.toEqual({
+        status: "pending",
+      });
+    });
+
+    it("returns error when aligo answers 200 with a non-zero code", async () => {
+      fetchMock.mockResolvedValue(
+        jsonResponse({ code: -101, message: "인증오류입니다." }),
+      );
+      const service = createService(config);
+
+      await expect(service.fetchResult("1")).resolves.toEqual({
+        status: "error",
+        error: "-101 인증오류입니다.",
+      });
+    });
+
+    it("returns error on a non-2xx response that is not json", async () => {
+      fetchMock.mockResolvedValue(textResponse("<html>502</html>", false, 502));
+      const service = createService(config);
+
+      await expect(service.fetchResult("1")).resolves.toEqual({
+        status: "error",
+        error: "502",
+      });
+    });
+
+    it("returns error when a 2xx body is not json", async () => {
+      fetchMock.mockResolvedValue(textResponse("<html></html>"));
+      const service = createService(config);
+
+      await expect(service.fetchResult("1")).resolves.toEqual({
+        status: "error",
+        error: "200 invalid response body",
+      });
+    });
+
+    it("returns error instead of throwing when the request fails", async () => {
+      fetchMock.mockRejectedValue(
+        new Error("The operation was aborted due to timeout"),
+      );
+      const service = createService(config);
+
+      await expect(service.fetchResult("1")).resolves.toEqual({
+        status: "error",
+        error: "The operation was aborted due to timeout",
+      });
+    });
+
+    it("does not call aligo when config is not set", async () => {
+      const service = createService({});
+
+      await expect(service.fetchResult("1")).resolves.toEqual({
+        status: "error",
+        error: "alimtalk is not configured",
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
   });
 });

@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title GET /api/manager/v1/coffee-chat/request/{pk}
-caption CRB-45 · CRB-75 · 커피챗 요청 상세와 그 요청의 알림 발송 결과 (읽기 전용)
+caption CRB-45 · CRB-75 · CRB-77 · 커피챗 요청 상세와 그 요청의 알림 발송 결과 (읽기 전용)
 
 actor Client
 participant "ManagerGuard" as Guard
@@ -42,9 +42,11 @@ LogRepository --> Service: rows
 note right of Service
   recipient는 응답에 넣지 않음.
   error는 발송사 문구에 수신자가 섞여 있을 수 있어
-  이메일 · 전화번호를 가려서 응답 (maskPersonalInfo)
+  이메일 · 전화번호를 가려서 응답 (maskPersonalInfo). delivery_message도 같음.
+  provider_message_id: 알림톡은 알리고 mid.
+  delivery_*: 카카오 최종 결과 (CRB-77, flow/notification-delivery-sync.puml)
 end note
 Service --> Controller: CoffeeChatRequestDetailDto
-Controller --> Client: 200 { pk, status, student, graduated, message, created_at, graduated_viewed_at, contact_shared_at, student_viewed_at, notifications: [{ pk, event, channel, status, error, attempt, next_retry_at, created_at }] }
+Controller --> Client: 200 { pk, status, student, graduated, message, created_at, graduated_viewed_at, contact_shared_at, student_viewed_at, notifications: [{ pk, event, channel, status, error, provider_message_id, delivery_status, delivery_code, delivery_message, delivery_reported_at, attempt, next_retry_at, created_at }] }
 
 @enduml
