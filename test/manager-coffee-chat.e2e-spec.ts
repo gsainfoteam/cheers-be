@@ -649,6 +649,85 @@ describe("어드민 커피챗 요청 관리", () => {
         ),
       ).toEqual([failed.pk]);
     });
+
+    it("버튼으로 알리고에 바로 조회해서 실패 사유를 저장하고 내려줌", async () => {
+      await signupGraduatedWithPhone("조회현업");
+      const studentSession = await signupStudent(ctx);
+      const pk = await sendRequest(
+        studentSession,
+        await graduatedIdOf(studentSession, "조회현업"),
+      );
+      const later = new Date(Date.now() + 60 * 60 * 1000);
+      const log = await seedLog(pk, {
+        channel: "kakao_alimtalk",
+        recipient: CONTACT_PHONE,
+        providerMessageId: "2001",
+        deliveryStatus: "pending",
+        deliveryNextCheckAt: later,
+      });
+      const lookup = (logPk: string) =>
+        http(ctx)
+          .post(`${LOGS}/${logPk}/delivery-lookup`)
+          .set("Authorization", auth);
+
+      // 아직 전송 중: 아무것도 바꾸지 않음
+      const pending = await lookup(log.pk).expect(200);
+      expect(pending.body.lookup).toBe("pending");
+      expect(pending.body.log).toMatchObject({
+        pk: log.pk,
+        delivery_status: "pending",
+      });
+
+      ctx.alimtalk.deliveryResults.set("2001", {
+        status: "failed",
+        code: "U",
+        message: `메시지가 템플릿과 일치하지않음 ${CONTACT_PHONE}`,
+        reportedAt: new Date("2026-11-08T04:03:00.000Z"),
+      });
+      const failed = await lookup(log.pk).expect(200);
+      expect(failed.body).toEqual({
+        lookup: "failed",
+        log: expect.objectContaining({
+          pk: log.pk,
+          coffee_chat_request_pk: pk,
+          provider_message_id: "2001",
+          delivery_status: "failed",
+          delivery_code: "U",
+          delivery_message: "메시지가 템플릿과 일치하지않음 010****5432",
+          delivery_reported_at: "2026-11-08T04:03:00.000Z",
+        }),
+      });
+      expect(JSON.stringify(failed.body)).not.toContain(CONTACT_PHONE);
+      expect(ctx.alimtalk.fetchedMids).toEqual(["2001", "2001"]);
+      // 어드민이 보고 있으므로 Slack은 보내지 않고, 결과가 확정돼 스케줄러도 더 조회하지 않음
+      expect(ctx.slack.messages).toEqual([]);
+      const [saved] = await ctx.db
+        .select()
+        .from(notificationLog)
+        .where(eq(notificationLog.pk, log.pk));
+      expect(saved.deliveryNextCheckAt).toBeNull();
+
+      ctx.alimtalk.deliveryResults.set("2001", {
+        status: "error",
+        error: "-101 인증오류입니다.",
+      });
+      const error = await lookup(log.pk).expect(502);
+      expect(error.body.message).toBe(
+        "Failed to fetch the result from Aligo: -101 인증오류입니다.",
+      );
+
+      const email = await seedLog(pk);
+      await lookup(email.pk).expect(400);
+      const notAccepted = await seedLog(pk, {
+        channel: "kakao_alimtalk",
+        status: "failed",
+        recipient: CONTACT_PHONE,
+      });
+      await lookup(notAccepted.pk).expect(400);
+      await lookup(randomUUID()).expect(404);
+      await lookup("not-a-uuid").expect(400);
+      await http(ctx).post(`${LOGS}/${log.pk}/delivery-lookup`).expect(401);
+    });
   });
 
   it("읽기만 하므로 요청 상태가 바뀌지 않음", async () => {

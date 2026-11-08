@@ -76,4 +76,15 @@ export class AdminNotificationLogRepository {
       .where(eq(notificationLog.coffeeChatRequestPk, coffeeChatRequestPk))
       .orderBy(desc(notificationLog.createdAt), desc(notificationLog.pk));
   }
+
+  /*
+  SELECT * FROM notification_log WHERE pk = ?1;
+   */
+  async findByPk(pk: string): Promise<AdminNotificationLogRow | null> {
+    const rows = await this.dbService.db
+      .select()
+      .from(notificationLog)
+      .where(eq(notificationLog.pk, pk));
+    return rows[0] ?? null;
+  }
 }

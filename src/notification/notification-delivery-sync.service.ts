@@ -1,6 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { SlackService } from "nestjs-slack";
 import { AlimtalkService } from "./alimtalk.service";
+import { AlimtalkDeliveryResult } from "./alimtalk.types";
 import {
   DeliveryCheckRow,
   NotificationLogRepository,
@@ -81,13 +82,7 @@ export class NotificationDeliverySyncService {
     const target = `alimtalk (event: ${row.event}, coffee_chat_request: ${row.coffeeChatRequestPk}, attempt: ${row.attempt}, mid: ${row.providerMessageId})`;
 
     if (delivery.status === "delivered" || delivery.status === "failed") {
-      await this.notificationLogRepository.updateDelivery(row.pk, {
-        deliveryStatus: delivery.status,
-        deliveryCode: delivery.code,
-        deliveryMessage: delivery.message,
-        deliveryReportedAt: delivery.reportedAt,
-        deliveryNextCheckAt: null,
-      });
+      await this.saveFinal(row.pk, delivery);
       if (delivery.status === "failed") {
         // 실패 사유에 전화번호가 섞여 있을 수 있음. DB에는 원문을 두고 어드민 응답 · Slack에서 가림
         const reason = this.mask(delivery.message ?? "", row);
@@ -128,6 +123,36 @@ export class NotificationDeliverySyncService {
       deliveryNextCheckAt: new Date(now.getTime() + interval),
     });
     return "pending";
+  }
+
+  /**
+   * 어드민이 누른 알림톡 한 건의 결과를 지금 알리고에서 조회합니다 (CRB-77).
+   * 최종 결과(delivered · failed)면 스케줄러와 같이 저장하고 더 조회하지 않습니다.
+   * 아직 전송 중이거나 조회에 실패하면 아무것도 바꾸지 않고 스케줄러가 하던 대로 둡니다.
+   * 운영자가 직접 보고 있으므로 Slack으로 알리지 않습니다.
+   */
+  async refresh(pk: string, mid: string): Promise<AlimtalkDeliveryResult> {
+    const delivery = await this.alimtalkService.fetchResult(mid);
+    if (delivery.status === "delivered" || delivery.status === "failed") {
+      await this.saveFinal(pk, delivery);
+    }
+    return delivery;
+  }
+
+  private async saveFinal(
+    pk: string,
+    delivery: Extract<
+      AlimtalkDeliveryResult,
+      { status: "delivered" | "failed" }
+    >,
+  ): Promise<void> {
+    await this.notificationLogRepository.updateDelivery(pk, {
+      deliveryStatus: delivery.status,
+      deliveryCode: delivery.code,
+      deliveryMessage: delivery.message,
+      deliveryReportedAt: delivery.reportedAt,
+      deliveryNextCheckAt: null,
+    });
   }
 
   private mask(text: string, row: DeliveryCheckRow): string {

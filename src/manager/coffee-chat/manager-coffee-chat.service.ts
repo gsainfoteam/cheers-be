@@ -1,4 +1,5 @@
 import {
+  BadGatewayException,
   BadRequestException,
   Injectable,
   NotFoundException,
@@ -18,10 +19,12 @@ import {
   CoffeeChatRequestDto,
   CoffeeChatRequestListQueryDto,
   CreatedPeriodQueryDto,
+  NotificationDeliveryLookupDto,
   NotificationLogDto,
   NotificationLogItemDto,
   NotificationLogListQueryDto,
 } from "@src/manager/coffee-chat/dto/manager-coffee-chat.dto";
+import { NotificationDeliverySyncService } from "@src/notification/notification-delivery-sync.service";
 import { maskPersonalInfo } from "@src/notification/notification.utils";
 
 @Injectable()
@@ -29,6 +32,7 @@ export class ManagerCoffeeChatService {
   constructor(
     private readonly requestRepository: AdminCoffeeChatRequestRepository,
     private readonly notificationLogRepository: AdminNotificationLogRepository,
+    private readonly deliverySyncService: NotificationDeliverySyncService,
   ) {}
 
   async listRequests(
@@ -88,14 +92,41 @@ export class ManagerCoffeeChatService {
     );
 
     return {
-      items: rows.map((row) => ({
-        ...this.toLogDto(row),
-        coffee_chat_request_pk: row.coffeeChatRequestPk,
-      })),
+      items: rows.map((row) => this.toLogItemDto(row)),
       page,
       size,
       total,
     };
+  }
+
+  // 알리고 접수에 성공한 알림톡의 카카오 결과를 지금 조회 (CRB-77). 결과가 나왔으면 저장
+  async lookupDelivery(pk: string): Promise<NotificationDeliveryLookupDto> {
+    const log = await this.notificationLogRepository.findByPk(pk);
+    if (!log) {
+      throw new NotFoundException("Notification log not found.");
+    }
+    if (
+      log.channel !== "kakao_alimtalk" ||
+      log.status !== "sent" ||
+      !log.providerMessageId
+    ) {
+      throw new BadRequestException(
+        "Only alimtalk accepted by Aligo has a delivery result.",
+      );
+    }
+
+    const delivery = await this.deliverySyncService.refresh(
+      log.pk,
+      log.providerMessageId,
+    );
+    if (delivery.status === "error") {
+      throw new BadGatewayException(
+        `Failed to fetch the result from Aligo: ${maskPersonalInfo(delivery.error, log.recipient)}`,
+      );
+    }
+
+    const updated = (await this.notificationLogRepository.findByPk(pk)) ?? log;
+    return { lookup: delivery.status, log: this.toLogItemDto(updated) };
   }
 
   private toPeriod(query: CreatedPeriodQueryDto): {
@@ -123,6 +154,13 @@ export class ManagerCoffeeChatService {
       created_at: row.createdAt,
       graduated_viewed_at: row.graduatedViewedAt,
       contact_shared_at: row.contactSharedAt,
+    };
+  }
+
+  private toLogItemDto(row: AdminNotificationLogRow): NotificationLogItemDto {
+    return {
+      ...this.toLogDto(row),
+      coffee_chat_request_pk: row.coffeeChatRequestPk,
     };
   }
 

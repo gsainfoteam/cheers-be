@@ -230,4 +230,45 @@ describe("NotificationDeliverySyncService", () => {
     expect(updateDelivery).toHaveBeenCalledTimes(2);
     expect(result.pending).toBe(1);
   });
+
+  describe("refresh", () => {
+    it("stores a final result without alerting Slack", async () => {
+      const delivery = {
+        status: "failed",
+        code: "U",
+        message: "메시지가 템플릿과 일치하지않음",
+        reportedAt: null,
+      };
+      fetchResult.mockResolvedValue(delivery);
+
+      await expect(service.refresh("log-1", "123456788")).resolves.toEqual(
+        delivery,
+      );
+      await flushPromises();
+
+      expect(fetchResult).toHaveBeenCalledWith("123456788");
+      expect(updateDelivery).toHaveBeenCalledWith("log-1", {
+        deliveryStatus: "failed",
+        deliveryCode: "U",
+        deliveryMessage: "메시지가 템플릿과 일치하지않음",
+        deliveryReportedAt: null,
+        deliveryNextCheckAt: null,
+      });
+      expect(sendText).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [{ status: "pending" }],
+      [{ status: "error", error: "-101 인증오류입니다." }],
+    ])(
+      "leaves the log for the scheduler when there is no result (%o)",
+      async (delivery) => {
+        fetchResult.mockResolvedValue(delivery);
+
+        await expect(service.refresh("log-1", "1")).resolves.toEqual(delivery);
+
+        expect(updateDelivery).not.toHaveBeenCalled();
+      },
+    );
+  });
 });

@@ -191,6 +191,24 @@ export class NotificationLogItemDto extends NotificationLogDto {
   coffee_chat_request_pk: string;
 }
 
+export const DELIVERY_LOOKUP_RESULTS = [
+  "delivered",
+  "failed",
+  "pending",
+] as const;
+
+// 어드민이 알리고에 바로 조회한 결과 (CRB-77)
+export class NotificationDeliveryLookupDto {
+  /**
+   * 이번 조회 결과. delivered · failed는 저장했고, pending은 아직 전송 중이라 바꾸지 않음
+   * (스케줄러가 계속 조회)
+   */
+  @ApiProperty({ enum: DELIVERY_LOOKUP_RESULTS })
+  lookup: (typeof DELIVERY_LOOKUP_RESULTS)[number];
+  /** 조회 뒤의 로그 */
+  log: NotificationLogItemDto;
+}
+
 export class CoffeeChatRequestDetailDto extends CoffeeChatRequestDto {
   /** 요청 메시지 */
   message: string | null;
