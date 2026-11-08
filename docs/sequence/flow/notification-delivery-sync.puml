@@ -1,0 +1,88 @@
+@startuml notification-delivery-sync
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title 스케줄러: 알림톡 최종 결과 동기화
+caption CRB-77 · src/notification/notification-delivery-sync.scheduler.ts · 매분 30초 (Asia/Seoul)
+
+participant "NotificationDeliverySyncScheduler" as Scheduler
+participant "NotificationDeliverySyncService" as Service
+participant "NotificationLogRepository" as LogRepository
+participant "AlimtalkService" as Alimtalk
+database PostgreSQL
+participant "Aligo"
+participant "Slack"
+
+note over Scheduler, Aligo
+  알리고 /akv10/alimtalk/send/ 의 code = 0은 접수 성공일 뿐이라 notification_log.status = sent여도
+  카카오 단계(템플릿 불일치 등)에서 실패할 수 있음. 접수된 알림톡은 delivery_status = pending,
+  delivery_next_check_at = 접수 + 1분으로 남기고 (cheers/post-cheers-request.puml 등), 이 스케줄러가 최종 결과를 가져옴.
+  어드민이 한 건을 바로 조회할 수도 있음 (manager/post-coffee-chat-notification-log-pk-delivery-lookup.puml)
+end note
+
+Scheduler -> Scheduler: running이면 건너뜀
+note right: 조회가 느려 1분을 넘기면 같은 서버에서 실행이 겹치지 않게 함
+Scheduler -> Service: syncDue(now)
+
+loop 잡히는 로그가 없을 때까지
+  Service -> LogRepository: claimDeliveryCheckDue(now, now + 5분, 50)
+  LogRepository -> PostgreSQL: UPDATE notification_log SET delivery_next_check_at = now + 5분\nWHERE pk IN (SELECT pk FROM notification_log\n  WHERE delivery_next_check_at IS NOT NULL AND delivery_next_check_at <= now\n  ORDER BY delivery_next_check_at LIMIT 50 FOR UPDATE SKIP LOCKED)\nRETURNING pk, coffee_chat_request_pk, event, attempt, created_at, recipient, provider_message_id
+  note right
+    부분 인덱스 notification_log_delivery_next_check_at_idx.
+    한 문장이라 트랜잭션을 길게 잡지 않음. 서버가 여러 대여도 다른 인스턴스가 잠근 행은 건너뜀.
+    잡은 행은 5분 뒤로 미뤄져서 같은 실행에서 다시 잡히지 않고,
+    알리고 조회 중 서버가 죽어도 5분 뒤 다시 조회됨
+  end note
+  LogRepository --> Service: rows
+
+  loop 행마다 (트랜잭션 밖에서 HTTP)
+    Service -> Alimtalk: fetchResult(provider_message_id)
+    Alimtalk -> Aligo: POST https://kakaoapi.aligo.in/akv10/history/detail/\n(apikey, userid, mid)
+    Aligo --> Alimtalk: { code, message, list: [{ msgid, rslt, rslt_message, rsltdate, ... }] }
+    note right of Alimtalk
+      throw하지 않음. 수신자가 1명이라 list의 첫 건만 봄
+      · HTTP 오류 · JSON 아님 · code != 0 (예: -101 인증오류입니다.) · 타임아웃 10초 → error
+      · list가 비었거나 msgid가 Q로 시작(전송 중)하거나 rslt가 비어 있음 → pending
+      · rslt = "0" → delivered
+      · 그 밖의 rslt (예: U 메시지가 템플릿과 일치하지않음) → failed
+      rsltdate (KST)는 reported_at으로 변환
+    end note
+    Alimtalk --> Service: delivered | failed | pending | error
+
+    alt delivered · failed
+      Service -> LogRepository: updateDelivery(pk, ...)
+      LogRepository -> PostgreSQL: UPDATE notification_log SET delivery_status, delivery_code = rslt,\ndelivery_message = rslt_message, delivery_reported_at = rsltdate,\ndelivery_next_check_at = NULL WHERE pk = ?
+      opt failed
+        Service ->> Slack: [ALIMTALK DELIVERY FAILED] event, 요청 pk, attempt, mid, rslt, 사유 (전화번호 가림)
+        note right
+          다시 보내지 않음 (템플릿 불일치처럼 재시도로 해결되지 않는 경우가 많음).
+          운영자가 확인 후 조치
+        end note
+      end
+    else pending · error, 접수 후 25시간이 지남
+      Service -> LogRepository: updateDelivery(pk, ...)
+      LogRepository -> PostgreSQL: UPDATE notification_log SET delivery_status = 'unknown',\ndelivery_message = 마지막 조회 error | NULL, delivery_next_check_at = NULL WHERE pk = ?
+      Service ->> Slack: [ALIMTALK DELIVERY UNKNOWN] event, 요청 pk, mid
+      note right: 알리고는 최대 24시간 동안 전송을 시도함. 여유 1시간
+    else pending · error
+      Service -> LogRepository: updateDelivery(pk, ...)
+      LogRepository -> PostgreSQL: UPDATE notification_log SET delivery_next_check_at = now + 간격 WHERE pk = ?
+      note right
+        간격: 접수 후 1시간 안이면 5분, 그 뒤로는 1시간.
+        error는 경고 로그만 남김
+      end note
+    end
+    note over Service, PostgreSQL: 행 하나의 예외는 에러 로그만 남기고 다음으로 넘어감 (그 행은 5분 lease 뒤 다시 잡힘)
+  end
+end
+
+Service --> Scheduler: { delivered, failed, unknown, pending }
+note right of Scheduler: 실행 중 예외는 에러 로그만 남김 (다음 분에 다시 실행)
+
+@enduml

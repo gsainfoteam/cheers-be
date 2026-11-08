@@ -1,8 +1,10 @@
 import {
   Controller,
   Get,
+  HttpCode,
   Param,
   ParseUUIDPipe,
+  Post,
   Query,
   UseGuards,
 } from "@nestjs/common";
@@ -17,6 +19,7 @@ import {
   CoffeeChatRequestDetailDto,
   CoffeeChatRequestDto,
   CoffeeChatRequestListQueryDto,
+  NotificationDeliveryLookupDto,
   NotificationLogItemDto,
   NotificationLogListQueryDto,
 } from "@src/manager/coffee-chat/dto/manager-coffee-chat.dto";
@@ -57,5 +60,19 @@ export class ManagerCoffeeChatController {
     @Query() query: NotificationLogListQueryDto,
   ): Promise<PageResponseDto<NotificationLogItemDto>> {
     return this.coffeeChatService.listNotificationLogs(query);
+  }
+
+  /** 알림톡의 카카오 최종 결과를 지금 알리고에서 조회 (CRB-77). 결과가 나왔으면 저장 */
+  @Post("/notification-log/:pk/delivery-lookup")
+  @HttpCode(200)
+  @ApiErrors({
+    400: "pk 형식 오류, 알리고 접수에 성공한 알림톡이 아님",
+    404: "없는 로그",
+    502: "알리고 조회 실패",
+  })
+  async lookupDelivery(
+    @Param("pk", ParseUUIDPipe) pk: string,
+  ): Promise<NotificationDeliveryLookupDto> {
+    return this.coffeeChatService.lookupDelivery(pk);
   }
 }

@@ -3,12 +3,24 @@ import { ConfigModule } from "@src/config/config.module";
 import { DatabaseModule } from "@src/database/database.module";
 import { MailModule } from "@src/mail/mail.module";
 import { AlimtalkService } from "./alimtalk.service";
+import { NotificationDeliverySyncScheduler } from "./notification-delivery-sync.scheduler";
+import { NotificationDeliverySyncService } from "./notification-delivery-sync.service";
 import { NotificationLogRepository } from "./notification-log.repository";
 import { NotificationService } from "./notification.service";
 
 @Module({
   imports: [ConfigModule, DatabaseModule, MailModule],
-  providers: [AlimtalkService, NotificationLogRepository, NotificationService],
-  exports: [NotificationService, NotificationLogRepository],
+  providers: [
+    AlimtalkService,
+    NotificationLogRepository,
+    NotificationService,
+    NotificationDeliverySyncService,
+    NotificationDeliverySyncScheduler,
+  ],
+  exports: [
+    NotificationService,
+    NotificationLogRepository,
+    NotificationDeliverySyncService,
+  ],
 })
 export class NotificationModule {}
