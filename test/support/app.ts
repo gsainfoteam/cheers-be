@@ -11,6 +11,7 @@ import { MailResult, SendMailInput } from "@src/mail/mail.types";
 import { InfoteamIdpService } from "@src/manager/infoteam-idp.service";
 import { AlimtalkService } from "@src/notification/alimtalk.service";
 import {
+  AlimtalkDeliveryResult,
   AlimtalkResult,
   SendAlimtalkInput,
 } from "@src/notification/alimtalk.types";
@@ -66,9 +67,18 @@ export class FakeAlimtalkService {
   // notification_log 기록을 확인할 때만 바꿈 (skipped면 기록하지 않음). reset에서 되돌림
   sendResult: AlimtalkResult = ALIMTALK_SKIPPED;
 
+  // mid → 알리고 전송결과 조회 결과. 없으면 아직 전송 중. 실제 HTTP 응답 해석은 alimtalk.service.spec.ts에서 확인 (CRB-77)
+  readonly deliveryResults = new Map<string, AlimtalkDeliveryResult>();
+  readonly fetchedMids: string[] = [];
+
   async send(input: SendAlimtalkInput): Promise<AlimtalkResult> {
     this.sent.push(input);
     return this.sendResult;
+  }
+
+  async fetchResult(mid: string): Promise<AlimtalkDeliveryResult> {
+    this.fetchedMids.push(mid);
+    return this.deliveryResults.get(mid) ?? { status: "pending" };
   }
 }
 
@@ -170,6 +180,8 @@ export async function createE2eApp(): Promise<E2eContext> {
       mail.verificationResult = MAIL_SKIPPED;
       alimtalk.sent.length = 0;
       alimtalk.sendResult = ALIMTALK_SKIPPED;
+      alimtalk.deliveryResults.clear();
+      alimtalk.fetchedMids.length = 0;
       slack.messages.length = 0;
     },
     close: async () => {

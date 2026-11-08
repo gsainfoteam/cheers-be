@@ -1,0 +1,75 @@
+@startuml post-manager-coffee-chat-notification-log-pk-delivery-lookup
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title POST /api/manager/v1/coffee-chat/notification-log/{pk}/delivery-lookup
+caption CRB-77 · 어드민이 알림톡 한 건의 카카오 최종 결과를 알리고에서 바로 조회 (어드민 화면의 "알리고 결과 조회" 버튼)
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ParseUUIDPipe" as Pipe
+participant "ManagerCoffeeChatController" as Controller
+participant "ManagerCoffeeChatService" as Service
+participant "AdminNotificationLogRepository" as LogRepository
+participant "NotificationDeliverySyncService" as SyncService
+participant "AlimtalkService" as Alimtalk
+participant "NotificationLogRepository" as NotificationLogRepository
+database PostgreSQL
+participant "Aligo"
+
+Client -> Guard: POST /api/manager/v1/coffee-chat/notification-log/{pk}/delivery-lookup\nAuthorization: Bearer <manager token>
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Pipe: 통과
+alt pk가 UUID가 아님
+  Pipe -[#red]-> Client: 400 Validation failed (uuid is expected)
+end
+Pipe -> Controller: lookupDelivery(pk)
+Controller -> Service: lookupDelivery(pk)
+Service -> LogRepository: findByPk(pk)
+LogRepository -> PostgreSQL: SELECT * FROM notification_log WHERE pk = ?
+PostgreSQL --> LogRepository: row | 없음
+LogRepository --> Service: log | null
+alt 없는 로그
+  Service -[#red]-> Client: 404 Notification log not found.
+end
+alt channel != kakao_alimtalk 또는 status != sent 또는 provider_message_id 없음
+  Service -[#red]-> Client: 400 Only alimtalk accepted by Aligo has a delivery result.
+end
+
+Service -> SyncService: refresh(pk, provider_message_id)
+SyncService -> Alimtalk: fetchResult(mid)
+Alimtalk -> Aligo: POST https://kakaoapi.aligo.in/akv10/history/detail/ (apikey, userid, mid)
+Aligo --> Alimtalk: { code, message, list: [{ msgid, rslt, rslt_message, rsltdate, ... }] }
+note right of Alimtalk: 해석 규칙은 flow/notification-delivery-sync.puml과 같음
+Alimtalk --> SyncService: delivered | failed | pending | error
+opt delivered · failed
+  SyncService -> NotificationLogRepository: updateDelivery(pk, ...)
+  NotificationLogRepository -> PostgreSQL: UPDATE notification_log SET delivery_status, delivery_code,\ndelivery_message, delivery_reported_at, delivery_next_check_at = NULL WHERE pk = ?
+  note right
+    스케줄러와 같은 저장. 결과가 확정돼 스케줄러는 더 조회하지 않음.
+    운영자가 보고 있으므로 Slack으로 알리지 않음
+  end note
+end
+note over SyncService: pending · error는 아무것도 바꾸지 않음 (스케줄러가 하던 대로 계속 조회)
+SyncService --> Service: delivery
+
+alt error (HTTP 오류 · JSON 아님 · code != 0 · 타임아웃 · 키 미설정)
+  Service -[#red]-> Client: 502 Failed to fetch the result from Aligo: <사유, 이메일 · 전화번호 가림>
+end
+Service -> LogRepository: findByPk(pk)
+LogRepository -> PostgreSQL: SELECT * FROM notification_log WHERE pk = ?
+LogRepository --> Service: 조회 뒤의 log
+note right of Service
+  recipient는 응답에 넣지 않음.
+  error · delivery_message는 이메일 · 전화번호를 가려서 응답 (maskPersonalInfo)
+end note
+Service --> Controller: NotificationDeliveryLookupDto
+Controller --> Client: 200 { lookup: delivered | failed | pending, log: { pk, coffee_chat_request_pk, event, channel, status, error, provider_message_id, delivery_status, delivery_code, delivery_message, delivery_reported_at, attempt, next_retry_at, created_at } }
+
+@enduml

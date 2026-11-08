@@ -1,10 +1,20 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { AlimtalkResult, SendAlimtalkInput } from "./alimtalk.types";
+import {
+  AlimtalkDeliveryResult,
+  AlimtalkResult,
+  SendAlimtalkInput,
+} from "./alimtalk.types";
 import { NotificationEvent } from "./notification.types";
 import { maskRecipient } from "./notification.utils";
 
 const ALIGO_SEND_URL = "https://kakaoapi.aligo.in/akv10/alimtalk/send/";
+const ALIGO_HISTORY_DETAIL_URL =
+  "https://kakaoapi.aligo.in/akv10/history/detail/";
+
+// 전송결과의 rslt가 이 값이면 카카오톡으로 도달한 것
+// 알리고 문서에는 성공 값이 적혀 있지 않음. 실패 예시는 "U" (메시지가 템플릿과 일치하지않음)
+const ALIGO_DELIVERED_RSLT = "0";
 
 interface AlimtalkTemplate {
   // 강조표기형 타이틀 (emtitle_1). 관리용 제목(subject_1)에도 같은 값을 씀
@@ -56,12 +66,36 @@ interface AligoSendResponse {
   };
 }
 
-function parseJson(text: string): AligoSendResponse | null {
+// POST /akv10/history/detail/ 응답. 숫자도 문자열로 오는 경우가 있음
+interface AligoHistoryDetailResponse {
+  code?: number | string;
+  message?: string;
+  list?: {
+    // 전송 중이면 "Q"로 시작
+    msgid?: string;
+    rslt?: string | number;
+    rslt_message?: string;
+    // YYYY-MM-DD HH:ii:ss (KST)
+    rsltdate?: string;
+  }[];
+}
+
+function parseJson<T>(text: string): T | null {
   try {
-    return JSON.parse(text) as AligoSendResponse;
+    return JSON.parse(text) as T;
   } catch {
     return null;
   }
+}
+
+// 알리고 시각은 KST. 비어 있거나 형식이 다르면 null
+function parseAligoDate(value: string | undefined): Date | null {
+  const match = value
+    ?.trim()
+    .match(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})$/);
+  if (!match) return null;
+  const date = new Date(`${match[1]}T${match[2]}+09:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 @Injectable()
@@ -173,7 +207,7 @@ export class AlimtalkService {
       });
 
       // 게이트웨이가 HTML 에러 페이지를 줄 수 있어서 상태 코드를 먼저 보고 JSON은 실패해도 진행
-      const body = parseJson(await response.text());
+      const body = parseJson<AligoSendResponse>(await response.text());
 
       if (!response.ok) {
         return {
@@ -214,6 +248,72 @@ export class AlimtalkService {
     } catch (error) {
       return {
         success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  /**
+   * 접수된 알림톡(mid)의 카카오 단계 결과를 알리고 전송결과 조회로 가져옵니다. throw하지 않습니다.
+   * 수신자가 1명이라 목록의 첫 건만 봅니다. 최종 결과는 접수 후 최대 24시간 뒤에 나옵니다.
+   */
+  async fetchResult(mid: string): Promise<AlimtalkDeliveryResult> {
+    if (!this.config) {
+      return { status: "error", error: "alimtalk is not configured" };
+    }
+
+    try {
+      const response = await fetch(ALIGO_HISTORY_DETAIL_URL, {
+        method: "POST",
+        body: new URLSearchParams({
+          apikey: this.config.apiKey,
+          userid: this.config.userId,
+          mid,
+        }),
+        signal: AbortSignal.timeout(10_000),
+      });
+
+      const body = parseJson<AligoHistoryDetailResponse>(await response.text());
+
+      if (!response.ok) {
+        return {
+          status: "error",
+          error:
+            `${response.status} ${body?.code ?? ""} ${body?.message ?? ""}`.trim(),
+        };
+      }
+
+      if (!body) {
+        return {
+          status: "error",
+          error: `${response.status} invalid response body`,
+        };
+      }
+
+      // 조회 실패도 HTTP 200으로 옴 (예: -101 인증오류입니다.)
+      if (Number(body.code) !== 0) {
+        return {
+          status: "error",
+          error: `${body.code ?? ""} ${body.message ?? ""}`.trim(),
+        };
+      }
+
+      // 목록에 없거나 msgid가 Q로 시작하거나 rslt가 비어 있으면 아직 전송 중
+      const item = body.list?.[0];
+      const code = String(item?.rslt ?? "").trim();
+      if (!item || item.msgid?.startsWith("Q") || code === "") {
+        return { status: "pending" };
+      }
+
+      return {
+        status: code === ALIGO_DELIVERED_RSLT ? "delivered" : "failed",
+        code,
+        message: item.rslt_message?.trim() || null,
+        reportedAt: parseAligoDate(item.rsltdate),
+      };
+    } catch (error) {
+      return {
+        status: "error",
         error: error instanceof Error ? error.message : String(error),
       };
     }

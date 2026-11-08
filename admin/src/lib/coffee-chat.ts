@@ -11,13 +11,35 @@ export type PageResponse<T> = {
   total: number;
 };
 
+export type DeliveryStatus = "pending" | "delivered" | "failed" | "unknown";
+
 export type NotificationLog = {
   pk: string;
   event: "coffee_chat_requested" | "contact_shared";
   channel: "email" | "kakao_alimtalk";
+  // 발송사 접수 결과. 알림톡의 sent는 알리고 접수 성공일 뿐이고 도달 여부는 delivery_status
   status: "sent" | "failed";
   error: string | null;
+  // 알림톡은 알리고 mid
+  provider_message_id: string | null;
+  // 알림톡 카카오 최종 결과 (CRB-77). 이메일 · 접수 실패는 null
+  delivery_status: DeliveryStatus | null;
+  delivery_code: string | null;
+  delivery_message: string | null;
+  delivery_reported_at: string | null;
+  attempt: number;
+  next_retry_at: string | null;
   created_at: string;
+};
+
+export type NotificationLogItem = NotificationLog & {
+  coffee_chat_request_pk: string;
+};
+
+// POST {NOTIFICATION_LOG_PATH}/:pk/delivery-lookup 응답
+export type DeliveryLookup = {
+  lookup: "delivered" | "failed" | "pending";
+  log: NotificationLogItem;
 };
 
 export const REQUEST_STATUS_LABELS = {
@@ -36,10 +58,37 @@ export const CHANNEL_LABELS: Record<NotificationLog["channel"], string> = {
   kakao_alimtalk: "알림톡",
 };
 
+// 발송사 접수 결과. 알림톡은 접수 뒤 카카오 단계에서 실패할 수 있어 DELIVERY_STATUS_LABELS를 함께 봄
 export const LOG_STATUS_LABELS: Record<NotificationLog["status"], string> = {
-  sent: "성공",
-  failed: "실패",
+  sent: "발송 성공",
+  failed: "발송 실패",
 };
+
+export const DELIVERY_STATUS_LABELS: Record<DeliveryStatus, string> = {
+  pending: "결과 대기",
+  delivered: "도달",
+  failed: "카카오 실패",
+  unknown: "결과 확인 불가",
+};
+
+// 표에 보여 줄 결과. 알림톡은 알리고 접수만으로는 성공이 아니므로 카카오 결과를 보여 줌
+export function logResultLabel(log: NotificationLog): string {
+  if (log.status === "failed") return LOG_STATUS_LABELS.failed;
+  if (log.channel === "email") return LOG_STATUS_LABELS.sent;
+  return log.delivery_status
+    ? `알리고 접수 · ${DELIVERY_STATUS_LABELS[log.delivery_status]}`
+    : "알리고 접수";
+}
+
+// 알리고에 바로 조회할 수 있는 로그 (접수된 알림톡 중 도달이 확인되지 않은 것)
+export function canLookupDelivery(log: NotificationLog): boolean {
+  return (
+    log.channel === "kakao_alimtalk" &&
+    log.status === "sent" &&
+    !!log.provider_message_id &&
+    log.delivery_status !== "delivered"
+  );
+}
 
 export function errorMessage(err: unknown, fallback: string): string {
   return err instanceof ApiError ? err.message : fallback;

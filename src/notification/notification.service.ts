@@ -9,7 +9,10 @@ import {
   NotificationLogRepository,
   NotificationLogRow,
 } from "./notification-log.repository";
-import { NOTIFICATION_RETRY_DELAYS_MS } from "./notification.constants";
+import {
+  ALIMTALK_DELIVERY_FIRST_CHECK_DELAY_MS,
+  NOTIFICATION_RETRY_DELAYS_MS,
+} from "./notification.constants";
 import { maskRecipient } from "./notification.utils";
 import {
   NotificationChannel,
@@ -137,6 +140,10 @@ export class NotificationService {
       }
     }
 
+    // 알리고 접수 성공은 도달이 아니므로 결과 동기화 스케줄러가 카카오 최종 결과를 가져오게 함 (CRB-77)
+    const awaitsDelivery =
+      channel === "kakao_alimtalk" && result.success && !!result.messageId;
+
     try {
       await this.notificationLogRepository.insert(
         {
@@ -149,6 +156,12 @@ export class NotificationService {
           error: result.error,
           attempt,
           nextRetryAt,
+          ...(awaitsDelivery && {
+            deliveryStatus: "pending",
+            deliveryNextCheckAt: new Date(
+              Date.now() + ALIMTALK_DELIVERY_FIRST_CHECK_DELAY_MS,
+            ),
+          }),
         },
         tx,
       );

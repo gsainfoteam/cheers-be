@@ -1,4 +1,5 @@
 import {
+  BadGatewayException,
   BadRequestException,
   Injectable,
   NotFoundException,
@@ -18,10 +19,12 @@ import {
   CoffeeChatRequestDto,
   CoffeeChatRequestListQueryDto,
   CreatedPeriodQueryDto,
+  NotificationDeliveryLookupDto,
   NotificationLogDto,
   NotificationLogItemDto,
   NotificationLogListQueryDto,
 } from "@src/manager/coffee-chat/dto/manager-coffee-chat.dto";
+import { NotificationDeliverySyncService } from "@src/notification/notification-delivery-sync.service";
 import { maskPersonalInfo } from "@src/notification/notification.utils";
 
 @Injectable()
@@ -29,6 +32,7 @@ export class ManagerCoffeeChatService {
   constructor(
     private readonly requestRepository: AdminCoffeeChatRequestRepository,
     private readonly notificationLogRepository: AdminNotificationLogRepository,
+    private readonly deliverySyncService: NotificationDeliverySyncService,
   ) {}
 
   async listRequests(
@@ -81,20 +85,48 @@ export class ManagerCoffeeChatService {
         channel: query.channel,
         status: query.status,
         event: query.event,
+        deliveryStatus: query.delivery_status,
       },
       toOffset(page, size),
       size,
     );
 
     return {
-      items: rows.map((row) => ({
-        ...this.toLogDto(row),
-        coffee_chat_request_pk: row.coffeeChatRequestPk,
-      })),
+      items: rows.map((row) => this.toLogItemDto(row)),
       page,
       size,
       total,
     };
+  }
+
+  // 알리고 접수에 성공한 알림톡의 카카오 결과를 지금 조회 (CRB-77). 결과가 나왔으면 저장
+  async lookupDelivery(pk: string): Promise<NotificationDeliveryLookupDto> {
+    const log = await this.notificationLogRepository.findByPk(pk);
+    if (!log) {
+      throw new NotFoundException("Notification log not found.");
+    }
+    if (
+      log.channel !== "kakao_alimtalk" ||
+      log.status !== "sent" ||
+      !log.providerMessageId
+    ) {
+      throw new BadRequestException(
+        "Only alimtalk accepted by Aligo has a delivery result.",
+      );
+    }
+
+    const delivery = await this.deliverySyncService.refresh(
+      log.pk,
+      log.providerMessageId,
+    );
+    if (delivery.status === "error") {
+      throw new BadGatewayException(
+        `Failed to fetch the result from Aligo: ${maskPersonalInfo(delivery.error, log.recipient)}`,
+      );
+    }
+
+    const updated = (await this.notificationLogRepository.findByPk(pk)) ?? log;
+    return { lookup: delivery.status, log: this.toLogItemDto(updated) };
   }
 
   private toPeriod(query: CreatedPeriodQueryDto): {
@@ -125,6 +157,13 @@ export class ManagerCoffeeChatService {
     };
   }
 
+  private toLogItemDto(row: AdminNotificationLogRow): NotificationLogItemDto {
+    return {
+      ...this.toLogDto(row),
+      coffee_chat_request_pk: row.coffeeChatRequestPk,
+    };
+  }
+
   // recipient는 응답하지 않음. 탈퇴 처리 후에도 원문이 남아 있어 error도 가림
   private toLogDto(row: AdminNotificationLogRow): NotificationLogDto {
     return {
@@ -133,6 +172,13 @@ export class ManagerCoffeeChatService {
       channel: row.channel,
       status: row.status,
       error: row.error && maskPersonalInfo(row.error, row.recipient),
+      provider_message_id: row.providerMessageId,
+      delivery_status: row.deliveryStatus,
+      delivery_code: row.deliveryCode,
+      delivery_message:
+        row.deliveryMessage &&
+        maskPersonalInfo(row.deliveryMessage, row.recipient),
+      delivery_reported_at: row.deliveryReportedAt,
       attempt: row.attempt,
       next_retry_at: row.nextRetryAt,
       created_at: row.createdAt,

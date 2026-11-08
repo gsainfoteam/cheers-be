@@ -144,8 +144,14 @@ comments:
       shared_phone: 공유 시점 현업자 연락처
       shared_email: 공유 시점 현업자 연락처
   - table: notification_log
-    tableComment: 이메일 · 카카오 알림톡 전송 로그 (channel로 구분). 시도마다 새 행. 실패한 행에 next_retry_at이 있으면 재시도 스케줄러가 처리하고 비움 (CRB-75)
+    tableComment: 이메일 · 카카오 알림톡 전송 로그 (channel로 구분). 시도마다 새 행. 실패한 행에 next_retry_at이 있으면 재시도 스케줄러가 처리하고 비움 (CRB-75). 접수된 알림톡은 결과 동기화 스케줄러가 알리고에서 카카오 최종 결과를 가져와 delivery_*에 남김 (CRB-77)
     columnComments:
       recipient: 이메일 주소 또는 전화번호
+      provider_message_id: 발송사 메시지 ID (알림톡은 알리고 mid)
       attempt: 몇 번째 발송 시도인지 (1 = 처음 발송, 최대 4)
       next_retry_at: 이 실패를 다시 보낼 시각. null이면 재시도 대상이 아님 (성공 · 마지막 시도 · 이미 재시도함)
+      delivery_status: 알림톡 최종 결과 (pending 대기 · delivered 도달 · failed 카카오 단계 실패 · unknown 24시간 내 결과 없음). null이면 조회 대상이 아님 (이메일 · 접수 실패)
+      delivery_code: 알리고 전송결과의 rslt (카카오 결과 코드)
+      delivery_message: 알리고 전송결과의 rslt_message (실패 사유)
+      delivery_reported_at: 알리고가 카카오 결과를 받은 시각 (rsltdate)
+      delivery_next_check_at: 다음에 결과를 조회할 시각. null이면 조회하지 않음 (결과 확정 · 대상 아님)

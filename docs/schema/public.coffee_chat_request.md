@@ -74,6 +74,11 @@ erDiagram
   text error
   smallint attempt
   timestamp_with_time_zone next_retry_at
+  notification_delivery_status delivery_status
+  varchar_32_ delivery_code
+  text delivery_message
+  timestamp_with_time_zone delivery_reported_at
+  timestamp_with_time_zone delivery_next_check_at
 }
 "public.graduated" {
   uuid *pk

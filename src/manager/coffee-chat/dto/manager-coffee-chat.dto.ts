@@ -14,11 +14,13 @@ import { PaginationQueryDto } from "@src/cheers/dto/pagination.dto";
 import { CoffeeChatRequestStatus } from "@src/cheers/cheers.utils";
 import {
   NotificationChannel,
+  NotificationDeliveryStatus,
   NotificationEvent,
   NotificationStatus,
 } from "@src/notification/notification.types";
 import {
   notificationChannel,
+  notificationDeliveryStatus,
   notificationEvent,
   notificationStatus,
 } from "@drizzle/schema/enums";
@@ -101,6 +103,12 @@ export class NotificationLogListQueryDto extends CreatedPeriodQueryDto {
   @IsOptional()
   @IsIn(notificationEvent.enumValues)
   event?: NotificationEvent;
+
+  /** 알림톡 최종 결과로 거름 (CRB-77) */
+  @ApiPropertyOptional({ enum: notificationDeliveryStatus.enumValues })
+  @IsOptional()
+  @IsIn(notificationDeliveryStatus.enumValues)
+  delivery_status?: NotificationDeliveryStatus;
 }
 
 export class CoffeeChatRequestStudentDto {
@@ -154,6 +162,24 @@ export class NotificationLogDto {
 
   /** 실패 사유. 이메일 · 전화번호는 가려서 내려줌 */
   error: string | null;
+  /** 발송사 메시지 ID. 알림톡은 알리고 mid (알리고 콘솔 전송결과에서 찾을 때 씀) */
+  provider_message_id: string | null;
+  /**
+   * 알림톡 접수 뒤 카카오 단계 최종 결과 (CRB-77). pending 대기 · delivered 도달 · failed 카카오 단계 실패 ·
+   * unknown 24시간이 지나도 결과 없음. 이메일 · 접수 실패(status=failed)는 null
+   */
+  @ApiProperty({
+    enum: notificationDeliveryStatus.enumValues,
+    nullable: true,
+    type: String,
+  })
+  delivery_status: NotificationDeliveryStatus | null;
+  /** 알리고 전송결과 코드 (rslt) */
+  delivery_code: string | null;
+  /** 알리고 전송결과 메시지 (rslt_message). 실패 사유이며 이메일 · 전화번호는 가려서 내려줌 */
+  delivery_message: string | null;
+  /** 알리고가 카카오 결과를 받은 시각 (rsltdate) */
+  delivery_reported_at: Date | null;
   /** 몇 번째 발송 시도인지 (1 = 처음 발송, 최대 4) */
   attempt: number;
   /** 실패한 발송을 다시 보낼 예정 시각. 재시도 대상이 아니면 null (성공 · 마지막 시도 · 이미 재시도함) */
@@ -163,6 +189,24 @@ export class NotificationLogDto {
 
 export class NotificationLogItemDto extends NotificationLogDto {
   coffee_chat_request_pk: string;
+}
+
+export const DELIVERY_LOOKUP_RESULTS = [
+  "delivered",
+  "failed",
+  "pending",
+] as const;
+
+// 어드민이 알리고에 바로 조회한 결과 (CRB-77)
+export class NotificationDeliveryLookupDto {
+  /**
+   * 이번 조회 결과. delivered · failed는 저장했고, pending은 아직 전송 중이라 바꾸지 않음
+   * (스케줄러가 계속 조회)
+   */
+  @ApiProperty({ enum: DELIVERY_LOOKUP_RESULTS })
+  lookup: (typeof DELIVERY_LOOKUP_RESULTS)[number];
+  /** 조회 뒤의 로그 */
+  log: NotificationLogItemDto;
 }
 
 export class CoffeeChatRequestDetailDto extends CoffeeChatRequestDto {
