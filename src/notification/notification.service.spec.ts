@@ -51,6 +51,11 @@ const failedLog = (
   error: "3040 failed",
   attempt: 1,
   nextRetryAt: now,
+  deliveryStatus: null,
+  deliveryCode: null,
+  deliveryMessage: null,
+  deliveryReportedAt: null,
+  deliveryNextCheckAt: null,
   ...overrides,
 });
 
@@ -116,10 +121,26 @@ describe("NotificationService", () => {
         error: undefined,
         attempt: 1,
         nextRetryAt: null,
+        // 접수 성공은 도달이 아니므로 1분 뒤 알리고에서 최종 결과를 조회 (CRB-77)
+        deliveryStatus: "pending",
+        deliveryNextCheckAt: new Date("2026-11-07T03:01:00.000Z"),
       },
       undefined,
     );
     expect(sendText).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["a failed alimtalk", { success: false, messageId: "M4V2", error: "3040" }],
+    ["an alimtalk accepted without mid", { success: true }],
+  ])("does not wait for the delivery result of %s", async (_, result) => {
+    alimtalkSend.mockResolvedValue(result);
+
+    await service.notify({ ...input, email: undefined });
+
+    const [log] = insert.mock.calls[0];
+    expect(log).not.toHaveProperty("deliveryStatus");
+    expect(log).not.toHaveProperty("deliveryNextCheckAt");
   });
 
   it("logs a failed channel for retry in 1 minute and still sends the other one", async () => {

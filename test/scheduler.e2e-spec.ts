@@ -82,6 +82,7 @@ describe("시나리오 4: 스케줄러 작업", () => {
       ["withdrawal-purge", "0 0 4 * * *"],
       ["orphan-file-cleanup", "0 30 4 * * 0"],
       ["notification-retry", "0 * * * * *"],
+      ["notification-delivery-sync", "30 * * * * *"],
     ])(
       "%s는 %s(KST)에 등록되고 테스트 중에는 멈춰 있음",
       (name, expression) => {
