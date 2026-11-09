@@ -376,3 +376,49 @@ select {
     padding: 20px 16px;
   }
 }
+
+.company-import {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.company-import h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.company-import input[type="file"] {
+  max-width: 100%;
+}
+
+.company-import td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  min-width: 80px;
+}
+
+.company-import td ul {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.import-caption {
+  text-align: left;
+  margin-bottom: 8px;
+  color: var(--text-secondary);
+}
+
+.import-action-create,
+.import-action-merge {
+  color: var(--primary);
+}
+
+.import-action-skip {
+  background: var(--background);
+}
+
+.import-action-error {
+  color: var(--danger);
+  background: #fff0f0;
+}

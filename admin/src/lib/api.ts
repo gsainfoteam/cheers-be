@@ -4,6 +4,7 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    readonly body?: unknown,
   ) {
     super(message);
   }
@@ -19,7 +20,7 @@ async function toApiError(res: Response): Promise<ApiError> {
     : typeof body?.message === "string"
       ? body.message
       : `요청에 실패했습니다. (${res.status})`;
-  return new ApiError(res.status, message);
+  return new ApiError(res.status, message, body);
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -27,7 +28,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     ...init,
     headers: {
-      "Content-Type": "application/json",
+      ...(init?.body instanceof FormData
+        ? {}
+        : { "Content-Type": "application/json" }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
   });
@@ -48,6 +51,8 @@ export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body: unknown) =>
     request<T>(path, { method: "POST", body: JSON.stringify(body) }),
+  upload: <T>(path: string, body: FormData) =>
+    request<T>(path, { method: "POST", body }),
   patch: <T>(path: string, body: unknown) =>
     request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
   put: <T>(path: string, body: unknown) =>
