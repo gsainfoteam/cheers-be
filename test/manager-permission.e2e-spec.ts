@@ -58,6 +58,8 @@ const ROUTES: Route[] = [
   route("GET", "/company/search"),
   route("POST", "/company"),
   route("POST", "/company/logo/upload-url"),
+  route("POST", "/company/import/preview"),
+  route("POST", "/company/import"),
   route("PATCH", "/company/:pk"),
   route("DELETE", "/company/:pk"),
   route("POST", "/company/:pk/name"),
