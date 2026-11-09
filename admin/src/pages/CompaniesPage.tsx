@@ -8,6 +8,7 @@ import {
 import { api } from "../lib/api";
 import { PageResponse } from "../lib/coffee-chat";
 import { errorMessage } from "../lib/format";
+import { CompanyImportPanel } from "./CompanyImportPanel";
 import { Pagination } from "./Pagination";
 
 const BASE_PATH = "/api/manager/v1/company";
@@ -229,6 +230,8 @@ export function CompaniesPage() {
           회사 등록
         </button>
       </form>
+
+      <CompanyImportPanel onImported={load} />
 
       <CompanySearchPreview />
 
