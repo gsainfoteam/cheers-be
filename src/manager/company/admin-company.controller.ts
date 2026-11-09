@@ -10,8 +10,11 @@ import {
   Put,
   Query,
   UseGuards,
+  UploadedFile,
+  UseInterceptors,
 } from "@nestjs/common";
-import { ApiTags } from "@nestjs/swagger";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { ApiBody, ApiConsumes, ApiTags } from "@nestjs/swagger";
 import { PageResponseDto } from "@src/cheers/dto/pagination.dto";
 import { CompanyService } from "@src/company/company.service";
 import {
@@ -41,6 +44,12 @@ import {
   UpdateAdminCompanyLogoRequestDto,
   UpdateAdminCompanyRequestDto,
 } from "./dto/admin-company.dto";
+import { CompanyImportService } from "./company-import.service";
+import {
+  COMPANY_IMPORT_MAX_BYTES,
+  CompanyImportFile,
+} from "./company-import.parser";
+import { CompanyImportResultDto } from "./dto/company-import.dto";
 import { ParseCompanyPkPipe } from "./parse-company-pk.pipe";
 
 // 회사(alias) · 표기(name) · 로고 관리, 현업자가 직접 입력한 회사 검토 (CRB-68)
@@ -52,6 +61,7 @@ export class AdminCompanyController {
   constructor(
     private readonly adminCompanyService: AdminCompanyService,
     private readonly companyService: CompanyService,
+    private readonly companyImportService: CompanyImportService,
   ) {}
 
   /** 회사 목록 (검토가 필요한 회사가 맨 위, 그다음 최근 등록 순) */
@@ -100,6 +110,68 @@ export class AdminCompanyController {
       req.content_type,
       req.size,
     );
+  }
+
+  /** 회사 · 표기 일괄 등록 미리보기 (DB에 저장하지 않음) */
+  @Post("/import/preview")
+  @HttpCode(200)
+  @ApiConsumes("multipart/form-data")
+  @ApiBody({
+    schema: {
+      type: "object",
+      required: ["file"],
+      properties: {
+        file: {
+          type: "string",
+          format: "binary",
+          description:
+            ".xlsx 또는 UTF-8 .csv (company name, alias1, alias2, …), 최대 1000행 · 별칭 50개 · 2MB",
+        },
+      },
+    },
+  })
+  @ApiErrors({
+    400: "파일 누락, 파일 형식 · 헤더 오류, 행 · 열 제한 초과",
+    413: "파일 크기 초과",
+  })
+  @UseInterceptors(
+    FileInterceptor("file", { limits: { fileSize: COMPANY_IMPORT_MAX_BYTES } }),
+  )
+  async previewImport(
+    @UploadedFile() file: CompanyImportFile,
+  ): Promise<CompanyImportResultDto> {
+    return this.companyImportService.preview(file);
+  }
+
+  /** 회사 · 표기 일괄 등록 (전체 검증 후 한 번에 저장) */
+  @Post("/import")
+  @ApiConsumes("multipart/form-data")
+  @ApiBody({
+    schema: {
+      type: "object",
+      required: ["file"],
+      properties: {
+        file: {
+          type: "string",
+          format: "binary",
+          description:
+            ".xlsx 또는 UTF-8 .csv (company name, alias1, alias2, …), 최대 1000행 · 별칭 50개 · 2MB",
+        },
+      },
+    },
+  })
+  @ApiErrors({
+    400: "파일 형식 오류 또는 표기 충돌 (전체 등록 취소)",
+    409: "동시 변경으로 재시도 필요",
+    413: "파일 크기 초과",
+  })
+  @UseInterceptors(
+    FileInterceptor("file", { limits: { fileSize: COMPANY_IMPORT_MAX_BYTES } }),
+  )
+  async importCompanies(
+    @UploadedFile() file: CompanyImportFile,
+  ): Promise<CompanyImportResultDto> {
+    return this.companyImportService.commit(file);
   }
 
   /** 회사 이름 변경 · 검토 완료 */
