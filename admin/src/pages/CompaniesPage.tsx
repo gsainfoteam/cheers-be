@@ -49,6 +49,11 @@ const splitNames = (value: string) =>
     .map((name) => name.trim())
     .filter(Boolean);
 
+// 서버의 company_name.normalized_name 규칙과 맞춘다. 표기는 공백과 대소문자만
+// 달라도 같은 것으로 취급되므로, 요청 전에 바로 이유를 알려 준다.
+const normalizeCompanyName = (name: string) =>
+  name.normalize("NFC").trim().replace(/\s+/g, " ").toLowerCase();
+
 export function CompaniesPage() {
   const [page, setPage] = useState(1);
   const [data, setData] = useState<PageResponse<Company> | null>(null);
@@ -60,6 +65,7 @@ export function CompaniesPage() {
     pk: number;
     name: string;
   } | null>(null);
+  const [addNameNotice, setAddNameNotice] = useState<string | null>(null);
   const [mergeSource, setMergeSource] = useState<Company | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -129,14 +135,36 @@ export function CompaniesPage() {
   const handleAddName = async (e: FormEvent) => {
     e.preventDefault();
     if (!addingName) return;
+    const company = data?.items.find(
+      (item) => item.company_id === addingName.pk,
+    );
+    const name = addingName.name.trim();
+    const existingName = [
+      ...(company ? [company.name] : []),
+      ...(company?.names.map((item) => item.name) ?? []),
+    ].find(
+      (item) => normalizeCompanyName(item) === normalizeCompanyName(name),
+    );
+
+    if (existingName) {
+      setAddNameNotice(
+        `이미 등록된 표기입니다. 대소문자와 공백은 구분하지 않으므로 “${existingName}”와 같은 표기는 추가할 수 없습니다.`,
+      );
+      return;
+    }
+
+    setAddNameNotice(null);
     const added = await mutate(
       () =>
         api.post(`${BASE_PATH}/${addingName.pk}/name`, {
-          name: addingName.name.trim(),
+          name,
         }),
       "표기를 추가하지 못했습니다.",
     );
-    if (added) setAddingName(null);
+    if (added) {
+      setAddingName(null);
+      setAddNameNotice(null);
+    }
   };
 
   const handleRemoveName = (company: Company, nameId: number, name: string) => {
@@ -315,42 +343,54 @@ export function CompaniesPage() {
                       </span>
                     ))}
                     {addingName?.pk === company.company_id ? (
-                      <form className="row-form" onSubmit={handleAddName}>
-                        <input
-                          required
-                          autoFocus
-                          maxLength={128}
-                          value={addingName.name}
-                          aria-label={`${company.name}에 추가할 표기`}
-                          onChange={(e) =>
-                            setAddingName({
-                              pk: company.company_id,
-                              name: e.target.value,
-                            })
-                          }
-                        />
-                        <button
-                          className="button small"
-                          type="submit"
-                          disabled={submitting}
-                        >
-                          추가
-                        </button>
-                        <button
-                          className="button secondary small"
-                          type="button"
-                          onClick={() => setAddingName(null)}
-                        >
-                          취소
-                        </button>
-                      </form>
+                      <>
+                        <form className="row-form" onSubmit={handleAddName}>
+                          <input
+                            required
+                            autoFocus
+                            maxLength={128}
+                            value={addingName.name}
+                            aria-label={`${company.name}에 추가할 표기`}
+                            onChange={(e) => {
+                              setAddNameNotice(null);
+                              setAddingName({
+                                pk: company.company_id,
+                                name: e.target.value,
+                              });
+                            }}
+                          />
+                          <button
+                            className="button small"
+                            type="submit"
+                            disabled={submitting}
+                          >
+                            추가
+                          </button>
+                          <button
+                            className="button secondary small"
+                            type="button"
+                            onClick={() => {
+                              setAddingName(null);
+                              setAddNameNotice(null);
+                            }}
+                          >
+                            취소
+                          </button>
+                        </form>
+                        {addNameNotice && (
+                          <p className="error-text add-name-notice" role="status">
+                            {addNameNotice}
+                          </p>
+                        )}
+                      </>
                     ) : (
                       <button
                         className="button secondary small"
                         disabled={submitting}
-                        onClick={() =>
-                          setAddingName({ pk: company.company_id, name: "" })
-                        }
+                        onClick={() => {
+                          setAddNameNotice(null);
+                          setAddingName({ pk: company.company_id, name: "" });
+                        }}
                       >
                         + 표기
                       </button>
