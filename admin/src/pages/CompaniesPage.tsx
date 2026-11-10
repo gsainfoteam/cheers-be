@@ -142,9 +142,7 @@ export function CompaniesPage() {
     const existingName = [
       ...(company ? [company.name] : []),
       ...(company?.names.map((item) => item.name) ?? []),
-    ].find(
-      (item) => normalizeCompanyName(item) === normalizeCompanyName(name),
-    );
+    ].find((item) => normalizeCompanyName(item) === normalizeCompanyName(name));
 
     if (existingName) {
       setAddNameNotice(
@@ -378,7 +376,10 @@ export function CompaniesPage() {
                           </button>
                         </form>
                         {addNameNotice && (
-                          <p className="error-text add-name-notice" role="status">
+                          <p
+                            className="error-text add-name-notice"
+                            role="status"
+                          >
                             {addNameNotice}
                           </p>
                         )}
