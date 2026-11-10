@@ -216,6 +216,13 @@ select {
   gap: 8px;
 }
 
+.add-name-notice {
+  flex-basis: 100%;
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
 .company-logo {
   width: 32px;
   height: 32px;
