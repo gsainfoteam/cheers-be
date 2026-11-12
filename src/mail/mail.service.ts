@@ -4,6 +4,15 @@ import { isEmail } from "class-validator";
 import { SlackService } from "nestjs-slack";
 import { createTransport, Transporter } from "nodemailer";
 import { MailResult, SendMailInput } from "./mail.types";
+import { CHEERS_LOGO_CID, CHEERS_LOGO_PNG_BASE64 } from "./templates/logo";
+
+// 템플릿 html이 cid:cheers-logo를 쓰면 로고를 인라인 첨부로 붙임 (CRB-70)
+const LOGO_ATTACHMENT = {
+  filename: "cheers-logo.png",
+  content: Buffer.from(CHEERS_LOGO_PNG_BASE64, "base64"),
+  contentType: "image/png",
+  cid: CHEERS_LOGO_CID,
+};
 
 @Injectable()
 export class MailService {
@@ -73,6 +82,9 @@ export class MailService {
         subject: input.subject,
         html: input.html,
         text: input.text,
+        ...(input.html.includes(`cid:${CHEERS_LOGO_CID}`)
+          ? { attachments: [LOGO_ATTACHMENT] }
+          : {}),
       });
       return { success: true, messageId: info.messageId };
     } catch (error) {

@@ -1,3 +1,4 @@
+import { ConfigService } from "@nestjs/config";
 import {
   BadRequestException,
   ConflictException,
@@ -53,7 +54,11 @@ type VerifyResult =
 export class StudentVerificationService {
   private readonly logger = new Logger(StudentVerificationService.name);
 
+  // 인증 메일 하단의 사이트 링크 (WEB_BASE_URL, 끝의 / 제거). 없으면 링크 없이 발송
+  private readonly webBaseUrl: string | null;
+
   constructor(
+    configService: ConfigService,
     private readonly jwtKeyService: JwtKeyService,
     private readonly dbService: DatabaseService,
     private readonly mailService: MailService,
@@ -62,7 +67,11 @@ export class StudentVerificationService {
     private readonly studentEmailVerificationRepository: StudentEmailVerificationRepository,
     private readonly studentEmailSendLogRepository: StudentEmailSendLogRepository,
     private readonly slackService: SlackService,
-  ) {}
+  ) {
+    this.webBaseUrl =
+      configService.get<string>("WEB_BASE_URL")?.trim().replace(/\/+$/, "") ||
+      null;
+  }
 
   // 재전송도 같은 API. 이전 코드는 덮어써서 무효
   async sendCode(userPk: string, email: string): Promise<SendCodeResponseDto> {
@@ -128,7 +137,12 @@ export class StudentVerificationService {
 
     // 커밋 뒤에 보내고 결과를 기다림 (학생 행 잠금을 메일 발송 동안 잡지 않음). 실패는 MailService가 로그 + Slack
     const result = await this.mailService.sendAndAlert(
-      buildVerificationCodeMail(email, code, VERIFICATION_CODE_TTL_MINUTES),
+      buildVerificationCodeMail(
+        email,
+        code,
+        VERIFICATION_CODE_TTL_MINUTES,
+        this.webBaseUrl,
+      ),
     );
     if (!result.success) {
       await this.discardSend(userPk, studentPk, createdAt);

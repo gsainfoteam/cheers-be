@@ -1,3 +1,4 @@
+import { ConfigService } from "@nestjs/config";
 import {
   BadRequestException,
   ConflictException,
@@ -116,6 +117,7 @@ describe("StudentVerificationService", () => {
   };
   const jwtKeyService = { privateKey: "test-jwt-key" };
   const service = new StudentVerificationService(
+    { get: () => undefined } as unknown as ConfigService,
     jwtKeyService as unknown as JwtKeyService,
     dbService as unknown as DatabaseService,
     mailService as unknown as MailService,

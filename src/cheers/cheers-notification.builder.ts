@@ -44,7 +44,12 @@ export class CheersNotificationBuilder {
       event: "coffee_chat_requested",
       email:
         contact?.emailEnabled && contact.email
-          ? buildCoffeeChatRequestedMail(contact.email, name, link)
+          ? buildCoffeeChatRequestedMail(
+              contact.email,
+              name,
+              link,
+              this.webBaseUrl,
+            )
           : undefined,
       alimtalk:
         contact?.kakaoEnabled && contact.phone
@@ -79,6 +84,7 @@ export class CheersNotificationBuilder {
               recipientName,
               senderName,
               link,
+              this.webBaseUrl,
             )
           : undefined,
       alimtalk:

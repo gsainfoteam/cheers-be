@@ -56,6 +56,24 @@ describe("MailService", () => {
     expect(result).toEqual({ success: true, messageId: "<id@gmail.com>" });
   });
 
+  it("attaches the logo inline when the html uses it", async () => {
+    sendMail.mockResolvedValue({ messageId: "<id@gmail.com>" });
+    const service = createService(credentials);
+
+    await service.send({ ...input, html: '<img src="cid:cheers-logo" />' });
+
+    expect(sendMail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachments: [
+          expect.objectContaining({
+            cid: "cheers-logo",
+            contentType: "image/png",
+          }),
+        ],
+      }),
+    );
+  });
+
   it("sends from MAIL_FROM_ADDRESS while authenticating as MAIL_USER", async () => {
     sendMail.mockResolvedValue({ messageId: "<id@gmail.com>" });
     const service = createService({
