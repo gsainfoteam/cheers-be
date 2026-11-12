@@ -54,7 +54,7 @@ export function renderMailLayout(input: MailLayoutInput): string {
           <td style="padding: 16px 20px; border-bottom: 1px solid ${COLOR.border};">
             <table role="presentation" cellpadding="0" cellspacing="0" border="0">
               <tr>
-                <td style="vertical-align: middle; padding-right: 8px;"><img src="cid:${CHEERS_LOGO_CID}" width="36" height="31" alt="" style="display: block; border: 0;" /></td>
+                <td style="vertical-align: middle; padding-right: 8px;"><img src="cid:${CHEERS_LOGO_CID}" width="36" height="28" alt="" style="display: block; border: 0;" /></td>
                 <td style="vertical-align: middle; font-size: 20px; font-weight: 700; color: ${COLOR.title};">취얼스</td>
               </tr>
             </table>
