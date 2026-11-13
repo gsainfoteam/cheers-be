@@ -107,9 +107,12 @@ export class AdminGraduatedRepository {
   async findForUpdate(
     graduatedPk: string,
     tx: TxType,
-  ): Promise<{ verifiedAt: Date | null } | null> {
+  ): Promise<{ verifiedAt: Date | null; hasBusinessCard: boolean } | null> {
     const result = await tx
-      .select({ verifiedAt: graduated.verifiedAt })
+      .select({
+        verifiedAt: graduated.verifiedAt,
+        hasBusinessCard: sql<boolean>`${graduated.businessCardKey} is not null`,
+      })
       .from(graduated)
       .innerJoin(users, eq(users.pk, graduated.userPk))
       .where(and(eq(graduated.pk, graduatedPk), isManageable))

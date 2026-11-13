@@ -18,6 +18,7 @@ participant "DevUserController" as Controller
 participant "DevUserService" as Service
 participant "AdminDevUserRepository" as AdminDevUserRepository
 participant "AdminAccessLogRepository" as AdminAccessLogRepository
+participant "AdminAuditLogRepository" as AdminAuditLogRepository
 database PostgreSQL
 participant "FileService" as FileService
 participant "S3"
@@ -37,7 +38,7 @@ Controller -> Service: delete(userPk, manager)
 
 group transaction (DatabaseService.db.transaction)
   Service -> AdminDevUserRepository: hardDelete(userPk, tx)
-  AdminDevUserRepository -> PostgreSQL: SELECT pk FROM users WHERE pk = ? FOR UPDATE
+  AdminDevUserRepository -> PostgreSQL: SELECT pk, type, status, name, email, ... FROM users WHERE pk = ? FOR UPDATE
   note right
     로그인 · 탈퇴 요청 · 탈퇴 만료 처리와 같은 유저 행 잠금으로 직렬화
   end note
@@ -63,12 +64,18 @@ group transaction (DatabaseService.db.transaction)
     FK가 모두 NO ACTION이라 자식 테이블부터 지움.
     user_oauth_account가 지워져 같은 Google 계정으로 새로 가입됨
   end note
-  AdminDevUserRepository --> Service: fileKeys\n(명함 key + source = file인 첨부 url)
+  AdminDevUserRepository --> Service: { user (지우기 전 행), studentPks, graduatedPks,\nfileKeys (명함 key + source = file인 첨부 url) }
   Service -> AdminAccessLogRepository: insert({ adminEmail, targetType: "dev_user_hard_delete", targetId: userPk }, tx)
   AdminAccessLogRepository -> PostgreSQL: INSERT admin_access_log
   note right
     admin_access_log는 users로 FK가 없어 지운 유저 pk를 그대로 남길 수 있음.
     기록 저장이 실패하면 삭제도 rollback
+  end note
+  Service -> AdminAuditLogRepository: insert({ adminEmail, action: "dev_user.hard_delete", targetType: "user", targetId: userPk,\nbefore: { type, status, name, email, ..., student_pks, graduated_pks } }, tx)
+  AdminAuditLogRepository -> PostgreSQL: INSERT admin_audit_log
+  note right
+    CRB-81, flow/admin-audit.puml. 개발용 API(prod에는 없음)라 이름 · 이메일까지 지운 행을 그대로 남김.
+    접근 로그는 기존대로 같이 기록. 기록이 실패하면 삭제도 rollback
   end note
 end
 note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답

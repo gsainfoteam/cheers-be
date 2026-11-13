@@ -17,6 +17,7 @@ participant "ValidationPipe" as Pipe
 participant "AdminAccountController" as Controller
 participant "AdminAccountService" as Service
 participant "AdminAccountRepository" as AdminAccountRepository
+participant "AdminAuditLogRepository" as AdminAuditLogRepository
 database PostgreSQL
 
 Client -> Guard: POST /api/manager/v1/admin-account\nAuthorization: Bearer <manager token>\n{ email, role? }
@@ -25,18 +26,23 @@ Guard -> Pipe: 통과
 alt body 검증 실패 (email 형식 · 64자 초과, role이 admin · superadmin이 아님)
   Pipe -[#red]-> Client: 400 (class-validator 메시지)
 end
-Pipe -> Controller: create(req)
-Controller -> Service: create(req)
+Pipe -> Controller: create(req, manager)
+Controller -> Service: create(req, manager)
 Service -> Service: email trim + 소문자 변환
 alt @gm.gist.ac.kr이 아님
   Service -[#red]-> Client: 400 Only gm.gist.ac.kr emails can be registered.
 end
-Service -> AdminAccountRepository: insertIfAbsent({ email, role ?? admin })
-AdminAccountRepository -> PostgreSQL: INSERT admin_account\nON CONFLICT (email) DO NOTHING RETURNING
-note right: 먼저 조회하지 않아 동시 요청이어도 500이 아니라 409
-PostgreSQL --> AdminAccountRepository: row | 0행
-alt 0행 (이미 등록된 이메일)
-  Service -[#red]-> Client: 409 This admin email is already registered.
+group transaction (DatabaseService.db.transaction) — CRB-81, flow/admin-audit.puml
+  Service -> AdminAccountRepository: insertIfAbsent({ email, role ?? admin }, tx)
+  AdminAccountRepository -> PostgreSQL: INSERT admin_account\nON CONFLICT (email) DO NOTHING RETURNING
+  note right: 먼저 조회하지 않아 동시 요청이어도 500이 아니라 409
+  PostgreSQL --> AdminAccountRepository: row | 0행
+  alt 0행 (이미 등록된 이메일)
+    Service -[#red]-> Client: 409 This admin email is already registered.
+  end
+  Service -> AdminAuditLogRepository: insert({ adminEmail, action: "admin_account.create", targetType: "admin_account", targetId: pk,\nafter: { email, role } }, tx)
+  AdminAuditLogRepository -> PostgreSQL: INSERT admin_audit_log
+  note right: 기록이 실패하면 등록도 rollback
 end
 Service --> Controller: AdminAccountDto
 Controller --> Client: 201 { pk, email, role, created_at, updated_at }

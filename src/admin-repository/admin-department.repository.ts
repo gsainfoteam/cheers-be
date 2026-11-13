@@ -30,12 +30,31 @@ export class AdminDepartmentRepository {
   async insertIfAbsent(
     schoolPk: number,
     name: string,
+    tx?: TxType,
   ): Promise<AdminDepartmentRow | null> {
-    const result = await this.dbService.db
+    const result = await (tx ?? this.dbService.db)
       .insert(department)
       .values({ schoolPk, name })
       .onConflictDoNothing({ target: [department.schoolPk, department.name] })
       .returning();
+
+    return result[0] ?? null;
+  }
+
+  /*
+  SELECT * FROM department WHERE pk = ?1 AND school_pk = ?2 FOR UPDATE;
+   */
+  // 변경 전 값을 읽고 같은 트랜잭션에서 바꾸므로 행을 잠금. 없는 학과이거나 다른 학교의 학과면 null
+  async findByPkForUpdate(
+    schoolPk: number,
+    pk: number,
+    tx: TxType,
+  ): Promise<AdminDepartmentRow | null> {
+    const result = await tx
+      .select()
+      .from(department)
+      .where(and(eq(department.pk, pk), eq(department.schoolPk, schoolPk)))
+      .for("update");
 
     return result[0] ?? null;
   }

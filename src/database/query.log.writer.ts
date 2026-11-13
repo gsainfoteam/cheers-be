@@ -2,7 +2,11 @@ import { LogWriter } from "drizzle-orm/logger";
 import { entityKind } from "drizzle-orm";
 import { LoggerService } from "@src/global/logger/logger.service";
 
-const REDACTED_TABLES = ["jwt_signing_key", "admin_access_log"];
+const REDACTED_TABLES = [
+  "jwt_signing_key",
+  "admin_access_log",
+  "admin_audit_log",
+];
 
 export class QueryLogWriter implements LogWriter {
   static [entityKind] = "QueryLogWriter";

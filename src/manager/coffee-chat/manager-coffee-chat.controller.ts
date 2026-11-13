@@ -24,6 +24,8 @@ import {
   NotificationLogListQueryDto,
 } from "@src/manager/coffee-chat/dto/manager-coffee-chat.dto";
 import { ManagerCoffeeChatService } from "@src/manager/coffee-chat/manager-coffee-chat.service";
+import { ManagerContext } from "@src/manager/context/manager-context";
+import { CurrentManager } from "@src/manager/decorator/current-manager.decorator";
 import { ManagerGuard } from "@src/manager/guard/manager.guard";
 
 @ApiTags("어드민 커피챗")
@@ -72,7 +74,8 @@ export class ManagerCoffeeChatController {
   })
   async lookupDelivery(
     @Param("pk", ParseUUIDPipe) pk: string,
+    @CurrentManager() manager: ManagerContext,
   ): Promise<NotificationDeliveryLookupDto> {
-    return this.coffeeChatService.lookupDelivery(pk);
+    return this.coffeeChatService.lookupDelivery(pk, manager);
   }
 }

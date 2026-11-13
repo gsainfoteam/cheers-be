@@ -12,6 +12,8 @@ import {
 import { ApiTags } from "@nestjs/swagger";
 import { BaseResultDto } from "@src/global/dto/base-result.dto";
 import { ApiAuth, ApiErrors } from "@src/global/swagger/api-response.decorator";
+import { ManagerContext } from "@src/manager/context/manager-context";
+import { CurrentManager } from "@src/manager/decorator/current-manager.decorator";
 import { ManagerGuard } from "@src/manager/guard/manager.guard";
 import { AdminInterestService } from "@src/manager/interest/admin-interest.service";
 import {
@@ -42,8 +44,9 @@ export class AdminInterestController {
   })
   async create(
     @Body() req: AdminInterestNameRequestDto,
+    @CurrentManager() manager: ManagerContext,
   ): Promise<AdminInterestDto> {
-    return this.adminInterestService.create(req);
+    return this.adminInterestService.create(req, manager);
   }
 
   /** 관심 분야 정렬 (전체 pk를 원하는 순서로 보냄) */
@@ -54,8 +57,9 @@ export class AdminInterestController {
   })
   async reorder(
     @Body() req: ReorderAdminInterestRequestDto,
+    @CurrentManager() manager: ManagerContext,
   ): Promise<AdminInterestDto[]> {
-    return this.adminInterestService.reorder(req);
+    return this.adminInterestService.reorder(req, manager);
   }
 
   /** 관심 분야 이름 수정 (이미 저장된 재학생 프로필의 값은 바뀌지 않음) */
@@ -68,8 +72,9 @@ export class AdminInterestController {
   async updateName(
     @Param("pk", ParseInterestPkPipe) pk: number,
     @Body() req: AdminInterestNameRequestDto,
+    @CurrentManager() manager: ManagerContext,
   ): Promise<AdminInterestDto> {
-    return this.adminInterestService.updateName(pk, req);
+    return this.adminInterestService.updateName(pk, req, manager);
   }
 
   /** 관심 분야 삭제 (이미 저장된 재학생 프로필의 값은 지워지지 않음) */
@@ -80,8 +85,9 @@ export class AdminInterestController {
   })
   async remove(
     @Param("pk", ParseInterestPkPipe) pk: number,
+    @CurrentManager() manager: ManagerContext,
   ): Promise<BaseResultDto> {
-    await this.adminInterestService.remove(pk);
+    await this.adminInterestService.remove(pk, manager);
     return BaseResultDto.OK;
   }
 }

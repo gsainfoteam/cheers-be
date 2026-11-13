@@ -127,6 +127,13 @@
       "when": 1794112923703,
       "tag": "0017_notification_log_delivery",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794580083270,
+      "tag": "0018_admin_audit_log",
+      "breakpoints": true
     }
   ]
 }

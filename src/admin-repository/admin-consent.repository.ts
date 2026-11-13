@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { DatabaseService } from "@src/database/database.service";
+import { TxType } from "@src/global/types/tx.types";
 import { isLatestConsent } from "@src/database/repository/consent.sql";
 import { consent } from "@drizzle/schema/consent";
 
@@ -58,8 +59,9 @@ export class AdminConsentRepository {
   // 이미 있는 버전이면 null. 최신 버전을 created_at으로 판정하므로 한 번에 한 행만 넣음
   async insertIfAbsent(
     row: Pick<ConsentRow, "type" | "version" | "isRequired" | "url">,
+    tx?: TxType,
   ): Promise<ConsentRow | null> {
-    const result = await this.dbService.db
+    const result = await (tx ?? this.dbService.db)
       .insert(consent)
       .values(row)
       .onConflictDoNothing({ target: [consent.type, consent.version] })

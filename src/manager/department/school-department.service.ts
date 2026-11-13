@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import { AdminAuditLogRepository } from "@src/admin-repository/admin-audit-log.repository";
 import {
   AdminDepartmentRepository,
   AdminDepartmentRow,
@@ -16,6 +17,8 @@ import {
 import { AdminStudentRepository } from "@src/admin-repository/admin-student.repository";
 import { DatabaseService } from "@src/database/database.service";
 import { isUniqueViolation } from "@src/global/exceptions/pg-error";
+import { ManagerContext } from "@src/manager/context/manager-context";
+import { AdminAuditSnapshot } from "@drizzle/schema/admin-audit-log";
 import {
   CreateDepartmentRequestDto,
   DepartmentAdminDto,
@@ -35,6 +38,7 @@ export class SchoolDepartmentService {
     private readonly schoolEmailDomainRepository: AdminSchoolEmailDomainRepository,
     private readonly departmentRepository: AdminDepartmentRepository,
     private readonly studentRepository: AdminStudentRepository,
+    private readonly adminAuditLogRepository: AdminAuditLogRepository,
   ) {}
 
   async listSchools(): Promise<SchoolDto[]> {
@@ -57,18 +61,34 @@ export class SchoolDepartmentService {
     return departments.map((department) => this.toDepartmentDto(department));
   }
 
+  // 쓰기는 감사 로그(CRB-81)를 변경과 같은 트랜잭션에서 남김. 기록이 실패하면 변경도 되돌림
   async createDepartment(
     schoolPk: number,
     req: CreateDepartmentRequestDto,
+    manager: ManagerContext,
   ): Promise<DepartmentAdminDto> {
     await this.findSchool(schoolPk);
-    const department = await this.departmentRepository.insertIfAbsent(
-      schoolPk,
-      req.name,
-    );
-    if (!department) {
-      throw new ConflictException(DEPARTMENT_NAME_EXISTS);
-    }
+    const department = await this.dbService.db.transaction(async (tx) => {
+      const created = await this.departmentRepository.insertIfAbsent(
+        schoolPk,
+        req.name,
+        tx,
+      );
+      if (!created) {
+        throw new ConflictException(DEPARTMENT_NAME_EXISTS);
+      }
+      await this.adminAuditLogRepository.insert(
+        {
+          adminEmail: manager.email,
+          action: "school_department.create",
+          targetType: "school_department",
+          targetId: created.pk,
+          after: this.toDepartmentSnapshot(created),
+        },
+        tx,
+      );
+      return created;
+    });
     return this.toDepartmentDto(department);
   }
 
@@ -77,6 +97,7 @@ export class SchoolDepartmentService {
     schoolPk: number,
     departmentPk: number,
     req: UpdateDepartmentRequestDto,
+    manager: ManagerContext,
   ): Promise<DepartmentAdminDto> {
     if (req.name === undefined && req.is_active === undefined) {
       throw new BadRequestException("Nothing to update.");
@@ -88,6 +109,14 @@ export class SchoolDepartmentService {
         // 같은 학교의 동시 비활성화를 직렬화해서 활성 학과가 0개가 되지 않게 함
         if (req.is_active === false) {
           await this.schoolRepository.findByPkForUpdate(schoolPk, tx);
+        }
+        const before = await this.departmentRepository.findByPkForUpdate(
+          schoolPk,
+          departmentPk,
+          tx,
+        );
+        if (!before) {
+          return null;
         }
         const updated = await this.departmentRepository.update(
           schoolPk,
@@ -106,6 +135,19 @@ export class SchoolDepartmentService {
           // 활성 학과가 없으면 가입 중인 재학생이 프로필 단계를 끝낼 수 없음
           throw new ConflictException(
             "At least one active department is required.",
+          );
+        }
+        if (updated) {
+          await this.adminAuditLogRepository.insert(
+            {
+              adminEmail: manager.email,
+              action: "school_department.update",
+              targetType: "school_department",
+              targetId: departmentPk,
+              before: this.toDepartmentSnapshot(before),
+              after: this.toDepartmentSnapshot(updated),
+            },
+            tx,
           );
         }
         return updated;
@@ -127,6 +169,7 @@ export class SchoolDepartmentService {
   async replaceEmailDomains(
     schoolPk: number,
     req: ReplaceEmailDomainsRequestDto,
+    manager: ManagerContext,
   ): Promise<SchoolDto> {
     const next = req.email_domains;
     try {
@@ -176,10 +219,22 @@ export class SchoolDepartmentService {
           schoolPk,
           tx,
         );
-        return this.toSchoolDto(
-          school,
-          saved.map((row) => row.domain),
-        );
+        const savedDomains = saved.map((row) => row.domain);
+        // 바뀐 게 없으면 남기지 않음
+        if (removed.length > 0 || added.length > 0) {
+          await this.adminAuditLogRepository.insert(
+            {
+              adminEmail: manager.email,
+              action: "school_email_domain.replace",
+              targetType: "school_email_domain",
+              targetId: schoolPk,
+              before: { domains: current },
+              after: { domains: savedDomains },
+            },
+            tx,
+          );
+        }
+        return this.toSchoolDto(school, savedDomains);
       });
     } catch (e) {
       if (isUniqueViolation(e)) {
@@ -202,6 +257,17 @@ export class SchoolDepartmentService {
 
   private toSchoolDto(school: AdminSchoolRow, domains: string[]): SchoolDto {
     return { pk: school.pk, name: school.name, email_domains: domains };
+  }
+
+  // 감사 로그용 스냅샷
+  private toDepartmentSnapshot(
+    department: AdminDepartmentRow,
+  ): AdminAuditSnapshot {
+    return {
+      school_pk: department.schoolPk,
+      name: department.name,
+      is_active: department.isActive,
+    };
   }
 
   private toDepartmentDto(department: AdminDepartmentRow): DepartmentAdminDto {

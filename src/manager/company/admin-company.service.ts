@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import { AdminAuditLogRepository } from "@src/admin-repository/admin-audit-log.repository";
 import {
   AdminCompanyAliasRow,
   AdminCompanyRepository,
@@ -20,6 +21,8 @@ import { UploadUrlResponseDto } from "@src/file/dto/upload-url.dto";
 import { FilePurpose } from "@src/file/file.constants";
 import { FileService } from "@src/file/file.service";
 import { TxType } from "@src/global/types/tx.types";
+import { ManagerContext } from "@src/manager/context/manager-context";
+import { AdminAuditSnapshot } from "@drizzle/schema/admin-audit-log";
 import {
   AdminCompanyDto,
   AdminCompanyListQueryDto,
@@ -37,6 +40,7 @@ export class AdminCompanyService {
     private readonly dbService: DatabaseService,
     private readonly adminCompanyRepository: AdminCompanyRepository,
     private readonly fileService: FileService,
+    private readonly adminAuditLogRepository: AdminAuditLogRepository,
   ) {}
 
   async list(
@@ -56,7 +60,11 @@ export class AdminCompanyService {
   }
 
   // 미리 등록. 어드민이 만든 회사는 바로 확인된 상태
-  async create(req: CreateAdminCompanyRequestDto): Promise<AdminCompanyDto> {
+  // 등록 · 수정 · 표기 추가 · 삭제 · 병합 · 로고 변경은 감사 로그(CRB-81)를 변경과 같은 트랜잭션에서 남김
+  async create(
+    req: CreateAdminCompanyRequestDto,
+    manager: ManagerContext,
+  ): Promise<AdminCompanyDto> {
     const name = toCompanyDisplayName(req.name);
     const names = this.distinctNames([name, ...(req.names ?? [])]);
 
@@ -64,6 +72,16 @@ export class AdminCompanyService {
       await this.assertNamesAvailable(names, tx);
       const alias = await this.adminCompanyRepository.insertAlias(name, tx);
       await this.adminCompanyRepository.insertNames(alias.pk, names, tx);
+      await this.adminAuditLogRepository.insert(
+        {
+          adminEmail: manager.email,
+          action: "company.create",
+          targetType: "company",
+          targetId: alias.pk,
+          after: await this.snapshotOf(alias.pk, tx),
+        },
+        tx,
+      );
       return alias.pk;
     });
     return this.getDto(pk);
@@ -73,9 +91,11 @@ export class AdminCompanyService {
   async update(
     pk: number,
     req: UpdateAdminCompanyRequestDto,
+    manager: ManagerContext,
   ): Promise<AdminCompanyDto> {
     await this.dbService.db.transaction(async (tx) => {
       await this.lockCompany(pk, tx);
+      const before = await this.snapshotOf(pk, tx);
       let name: string | undefined;
       if (req.name !== undefined) {
         name = toCompanyDisplayName(req.name);
@@ -101,21 +121,52 @@ export class AdminCompanyService {
         { name, needsReview: req.needs_review },
         tx,
       );
+      await this.adminAuditLogRepository.insert(
+        {
+          adminEmail: manager.email,
+          action: "company.update",
+          targetType: "company",
+          targetId: pk,
+          before,
+          after: await this.snapshotOf(pk, tx),
+        },
+        tx,
+      );
     });
     return this.getDto(pk);
   }
 
-  async addName(pk: number, rawName: string): Promise<AdminCompanyDto> {
+  async addName(
+    pk: number,
+    rawName: string,
+    manager: ManagerContext,
+  ): Promise<AdminCompanyDto> {
     const names = this.distinctNames([toCompanyDisplayName(rawName)]);
     await this.dbService.db.transaction(async (tx) => {
       await this.lockCompany(pk, tx);
+      const before = await this.namesSnapshotOf(pk, tx);
       await this.assertNamesAvailable(names, tx);
       await this.adminCompanyRepository.insertNames(pk, names, tx);
+      await this.adminAuditLogRepository.insert(
+        {
+          adminEmail: manager.email,
+          action: "company_name.add",
+          targetType: "company_name",
+          targetId: pk,
+          before,
+          after: await this.namesSnapshotOf(pk, tx),
+        },
+        tx,
+      );
     });
     return this.getDto(pk);
   }
 
-  async removeName(pk: number, namePk: number): Promise<AdminCompanyDto> {
+  async removeName(
+    pk: number,
+    namePk: number,
+    manager: ManagerContext,
+  ): Promise<AdminCompanyDto> {
     await this.dbService.db.transaction(async (tx) => {
       const alias = await this.lockCompany(pk, tx);
       const name = await this.adminCompanyRepository.findName(pk, namePk, tx);
@@ -126,13 +177,29 @@ export class AdminCompanyService {
       if (name.normalizedName === normalizeCompanyName(alias.name)) {
         throw new BadRequestException("Cannot delete the company's own name");
       }
+      const before = await this.namesSnapshotOf(pk, tx);
       await this.adminCompanyRepository.deleteName(namePk, tx);
+      await this.adminAuditLogRepository.insert(
+        {
+          adminEmail: manager.email,
+          action: "company_name.remove",
+          targetType: "company_name",
+          targetId: pk,
+          before,
+          after: await this.namesSnapshotOf(pk, tx),
+        },
+        tx,
+      );
     });
     return this.getDto(pk);
   }
 
   // sourcePk의 표기 · 현업자를 targetPk로 옮기고 sourcePk를 지움. target의 needs_review는 그대로
-  async merge(sourcePk: number, targetPk: number): Promise<AdminCompanyDto> {
+  async merge(
+    sourcePk: number,
+    targetPk: number,
+    manager: ManagerContext,
+  ): Promise<AdminCompanyDto> {
     if (sourcePk === targetPk) {
       throw new BadRequestException("Cannot merge a company into itself");
     }
@@ -148,6 +215,13 @@ export class AdminCompanyService {
         throw new NotFoundException(NOT_FOUND);
       }
 
+      const beforeSource = await this.snapshotOf(sourcePk, tx);
+      const beforeTarget = await this.snapshotOf(targetPk, tx);
+      const movedProfiles = await this.adminCompanyRepository.countProfiles(
+        sourcePk,
+        tx,
+      );
+
       await this.adminCompanyRepository.moveNames(sourcePk, targetPk, tx);
       await this.adminCompanyRepository.moveProfiles(sourcePk, targetPk, tx);
       // target에 로고가 없으면 원본 로고를 넘겨받음
@@ -160,6 +234,20 @@ export class AdminCompanyService {
         );
       }
       await this.adminCompanyRepository.deleteAlias(sourcePk, tx);
+      await this.adminAuditLogRepository.insert(
+        {
+          adminEmail: manager.email,
+          action: "company.merge",
+          targetType: "company",
+          targetId: sourcePk,
+          before: { source: beforeSource, target: beforeTarget },
+          after: {
+            target: await this.snapshotOf(targetPk, tx),
+            moved_graduated_count: movedProfiles,
+          },
+        },
+        tx,
+      );
       return inheritLogo ? null : source.logoKey;
     });
 
@@ -171,7 +259,7 @@ export class AdminCompanyService {
   }
 
   // 현업자가 고른 회사는 지울 수 없음 (병합으로 처리)
-  async remove(pk: number): Promise<void> {
+  async remove(pk: number, manager: ManagerContext): Promise<void> {
     const logoKey = await this.dbService.db.transaction(async (tx) => {
       const alias = await this.lockCompany(pk, tx);
       if ((await this.adminCompanyRepository.countProfiles(pk, tx)) > 0) {
@@ -179,7 +267,18 @@ export class AdminCompanyService {
           "Company in use. Merge it into another company instead",
         );
       }
+      const before = await this.snapshotOf(pk, tx);
       await this.adminCompanyRepository.deleteAlias(pk, tx);
+      await this.adminAuditLogRepository.insert(
+        {
+          adminEmail: manager.email,
+          action: "company.delete",
+          targetType: "company",
+          targetId: pk,
+          before,
+        },
+        tx,
+      );
       return alias.logoKey;
     });
 
@@ -207,12 +306,12 @@ export class AdminCompanyService {
   async updateLogo(
     pk: number,
     tempKey: string,
-    managerPk: string,
+    manager: ManagerContext,
   ): Promise<void> {
     // S3 확인 · 이동은 트랜잭션 밖에서 먼저 해서 DB 잠금을 오래 잡지 않음
     // 트랜잭션이 실패해도 확정한 새 파일은 지우지 않음 (커밋 직후 연결이 끊긴 경우 대비). OrphanFileService가 정리
     const key = await this.fileService.confirmUpload(
-      managerPk,
+      manager.pk,
       FilePurpose.COMPANY_LOGO,
       tempKey,
     );
@@ -220,12 +319,48 @@ export class AdminCompanyService {
     const previousKey = await this.dbService.db.transaction(async (tx) => {
       const alias = await this.lockCompany(pk, tx);
       await this.adminCompanyRepository.updateAlias(pk, { logoKey: key }, tx);
+      await this.adminAuditLogRepository.insert(
+        {
+          adminEmail: manager.email,
+          action: "company.logo_update",
+          targetType: "company",
+          targetId: pk,
+          before: { logo_key: alias.logoKey },
+          after: { logo_key: key },
+        },
+        tx,
+      );
       return alias.logoKey;
     });
 
     if (previousKey && previousKey !== key) {
       await this.fileService.deleteFileQuietly(previousKey);
     }
+  }
+
+  // 감사 로그용 스냅샷. 회사 이름 · 검토 필요 여부 · 로고 key · 표기만 남김 (현업자 정보는 넣지 않음)
+  private async snapshotOf(
+    pk: number,
+    tx: TxType,
+  ): Promise<AdminAuditSnapshot> {
+    const row = await this.adminCompanyRepository.findDetail(pk, tx);
+    if (!row) {
+      throw new NotFoundException(NOT_FOUND);
+    }
+    return {
+      name: row.name,
+      needs_review: row.needsReview,
+      logo_key: row.logoKey,
+      names: row.names.map((n) => n.name),
+    };
+  }
+
+  private async namesSnapshotOf(
+    pk: number,
+    tx: TxType,
+  ): Promise<AdminAuditSnapshot> {
+    const { names } = await this.snapshotOf(pk, tx);
+    return { company_id: pk, names };
   }
 
   // 병합 · 삭제 · 동시 수정과 직렬화

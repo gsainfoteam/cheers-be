@@ -17,6 +17,7 @@ participant "ParseUUIDPipe" as Pipe
 participant "BusinessCardController" as Controller
 participant "BusinessCardService" as Service
 participant "AdminGraduatedRepository" as AdminGraduatedRepository
+participant "AdminAuditLogRepository" as AdminAuditLogRepository
 database PostgreSQL
 
 Client -> Guard: POST /api/manager/v1/business-card/{graduatedPk}/cancel-verification\nAuthorization: Bearer <manager token>
@@ -30,7 +31,7 @@ Controller -> Service: cancelVerification(graduatedPk, manager)
 
 group transaction (DatabaseService.db.transaction)
   Service -> AdminGraduatedRepository: findForUpdate(graduatedPk, tx)
-  AdminGraduatedRepository -> PostgreSQL: SELECT g.verified_at FROM graduated g JOIN users u\nWHERE g.pk = ? AND u.is_deleted = false\nFOR UPDATE OF u
+  AdminGraduatedRepository -> PostgreSQL: SELECT g.verified_at, g.business_card_key IS NOT NULL FROM graduated g JOIN users u\nWHERE g.pk = ? AND u.is_deleted = false\nFOR UPDATE OF u
   note right
     명함 등록 · 로그인(유형 변경) · 탈퇴 처리와 같은 유저 행 잠금으로 직렬화.
     잠금 순서도 같음 (users → graduated)
@@ -43,6 +44,9 @@ group transaction (DatabaseService.db.transaction)
   end
   Service -> AdminGraduatedRepository: clearVerification(graduatedPk, tx)
   AdminGraduatedRepository -> PostgreSQL: UPDATE graduated SET verified_at = NULL,\nbusiness_card_key = NULL, updated_at = now() WHERE pk = ?
+  Service -> AdminAuditLogRepository: insert({ adminEmail, action: "business_card.verification_cancel", targetType: "business_card", targetId: graduatedPk,\nbefore: { verified_at, has_business_card }, after: { verified_at: null, has_business_card: false } }, tx)
+  AdminAuditLogRepository -> PostgreSQL: INSERT admin_audit_log
+  note right: CRB-81, flow/admin-audit.puml. 기록이 실패하면 인증 취소도 rollback
 end
 note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
 

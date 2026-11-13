@@ -18,6 +18,7 @@ participant "AdminInterestController" as Controller
 participant "AdminInterestService" as Service
 participant "InterestService" as InterestService
 participant "AdminInterestRepository" as AdminInterestRepository
+participant "AdminAuditLogRepository" as AdminAuditLogRepository
 database PostgreSQL
 
 Client -> Guard: POST /api/manager/v1/interest\nAuthorization: Bearer <manager token>\n{ name }
@@ -26,8 +27,8 @@ Guard -> Pipe: 통과
 alt name이 문자열이 아님, trim 후 비었거나 50자 초과
   Pipe -[#red]-> Client: 400 (class-validator 메시지)
 end
-Pipe -> Controller: create(req)
-Controller -> Service: create(req)
+Pipe -> Controller: create(req, manager)
+Controller -> Service: create(req, manager)
 group transaction (DatabaseService.db.transaction)
   Service -> AdminInterestRepository: lockForWrite(tx)
   AdminInterestRepository -> PostgreSQL: LOCK TABLE interest IN SHARE ROW EXCLUSIVE MODE
@@ -45,6 +46,9 @@ group transaction (DatabaseService.db.transaction)
   AdminInterestRepository -> PostgreSQL: INSERT interest (name, sort_order = MAX(sort_order) + 1) RETURNING
   note right of AdminInterestRepository: pk는 시퀀스로 발급. 삭제한 pk를 다시 쓰지 않아 열려 있는 옛 화면의 요청이 새 항목에 닿지 않음
   PostgreSQL --> AdminInterestRepository: row
+  Service -> AdminAuditLogRepository: insert({ adminEmail, action: "interest.create", targetType: "interest", targetId: pk,\nafter: { name, sort_order } }, tx)
+  AdminAuditLogRepository -> PostgreSQL: INSERT admin_audit_log
+  note right of AdminAuditLogRepository: 변경과 같은 트랜잭션 (flow/admin-audit.puml). 기록이 실패하면 변경도 rollback
 end
 note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
 Service -> InterestService: refresh()

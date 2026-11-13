@@ -3,6 +3,9 @@ import { JwtService } from "@nestjs/jwt";
 import { generateKeyPairSync } from "node:crypto";
 import { JwtKeyService } from "@src/auth/jwt-key.service";
 import { AdminAccountRepository } from "@src/admin-repository/admin-account.repository";
+import { AdminAuditLogRepository } from "@src/admin-repository/admin-audit-log.repository";
+import { DatabaseService } from "@src/database/database.service";
+import { TxType } from "@src/global/types/tx.types";
 import { InfoteamIdpService } from "@src/manager/infoteam-idp.service";
 import { ManagerAuthService } from "@src/manager/manager-auth.service";
 
@@ -19,11 +22,18 @@ describe("ManagerAuthService", () => {
     getEmail: jest.fn(),
   };
   const repository = { findByEmail: jest.fn() };
+  const tx = {} as TxType;
+  const dbService = {
+    db: { transaction: (fn: (tx: TxType) => unknown) => fn(tx) },
+  };
+  const auditLogs = { insert: jest.fn() };
   const service = new ManagerAuthService(
     jwtService,
     { privateKey, publicKey } as unknown as JwtKeyService,
     idp as unknown as InfoteamIdpService,
     repository as unknown as AdminAccountRepository,
+    dbService as unknown as DatabaseService,
+    auditLogs as unknown as AdminAuditLogRepository,
   );
 
   beforeEach(() => {
@@ -34,7 +44,10 @@ describe("ManagerAuthService", () => {
   describe("login", () => {
     it("IdP 이메일을 정규화해 찾고, pk만 담은 1일짜리 토큰을 발급", async () => {
       idp.getEmail.mockResolvedValue(" Admin@GM.gist.ac.kr ");
-      repository.findByEmail.mockResolvedValue({ pk: "admin-pk" });
+      repository.findByEmail.mockResolvedValue({
+        pk: "admin-pk",
+        email: "admin@gm.gist.ac.kr",
+      });
 
       const token = await service.login("code", "uri", "verifier");
 
@@ -54,6 +67,28 @@ describe("ManagerAuthService", () => {
         exp: expect.any(Number),
       });
       expect(decoded.exp - decoded.iat).toBe(24 * 60 * 60);
+      expect(auditLogs.insert).toHaveBeenCalledWith(
+        {
+          adminEmail: "admin@gm.gist.ac.kr",
+          action: "admin_auth.login",
+          targetType: "admin_account",
+          targetId: "admin-pk",
+        },
+        tx,
+      );
+    });
+
+    it("감사 로그 저장이 실패하면 토큰을 발급하지 않음", async () => {
+      idp.getEmail.mockResolvedValue("admin@gm.gist.ac.kr");
+      repository.findByEmail.mockResolvedValue({
+        pk: "admin-pk",
+        email: "admin@gm.gist.ac.kr",
+      });
+      auditLogs.insert.mockRejectedValue(new Error("db down"));
+
+      await expect(service.login("code", "uri", "verifier")).rejects.toThrow(
+        "db down",
+      );
     });
 
     it("허용 목록에 없으면 403", async () => {
@@ -63,6 +98,7 @@ describe("ManagerAuthService", () => {
       await expect(service.login("code", "uri", "verifier")).rejects.toThrow(
         ForbiddenException,
       );
+      expect(auditLogs.insert).not.toHaveBeenCalled();
     });
 
     it("IdP가 이메일을 주지 않으면 조회 없이 403", async () => {

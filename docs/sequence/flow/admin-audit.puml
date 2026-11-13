@@ -1,0 +1,87 @@
+@startuml admin-audit
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title 공통 흐름: 어드민 감사 로그 (admin_audit_log)
+caption CRB-81 · 어드민의 데이터 변경을 변경 전 · 후 값과 함께 남김. 변경과 같은 트랜잭션에서 기록 (개인정보 열람 기록 admin_access_log와는 별개)
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "Controller" as Controller
+participant "Service" as Service
+participant "XxxRepository" as Repository
+participant "AdminAuditLogRepository" as AuditRepository
+database PostgreSQL
+
+Client -> Guard: POST · PUT · PATCH · DELETE /api/manager/v1/...
+Guard -> Controller: 통과 (request.manager = ManagerContext)
+Controller -> Service: 변경 메서드(..., manager)
+note right of Controller
+  컨트롤러가 @CurrentManager로 ManagerContext를 받아 서비스에 넘김.
+  서비스의 adminEmail은 manager.email (요청 시점 값)
+end note
+
+group transaction (DatabaseService.db.transaction)
+  Service -> Repository: 대상 조회 (FOR UPDATE, 기존 잠금 그대로)
+  Repository -> PostgreSQL: SELECT ... FOR UPDATE
+  PostgreSQL --> Repository: before 행
+  alt 검증 실패 (없음 404 · 중복 409 · 권한 403 등)
+    Service -[#red]-> Client: 에러 응답. 아무것도 바뀌지 않았으므로 감사 로그도 없음 (rollback)
+  end
+  Service -> Repository: INSERT · UPDATE · DELETE
+  Repository -> PostgreSQL: 변경 실행
+  PostgreSQL --> Repository: after 행 (삭제면 없음)
+  Service -> Service: before · after를 감사용 스냅샷으로 변환 (toAuditSnapshot)
+  note right of Service
+    스냅샷은 대상 엔티티의 컬럼만 담은 JSON.
+    · 생성: before = null, after = 새 값
+    · 수정: 바뀐 엔티티의 전체 before · after
+    · 삭제: before = 지운 값, after = null
+    · 개인정보(이름 · 이메일 · 연락처 등 사용자 데이터)와 파일 내용은 넣지 않음
+  end note
+  Service -> AuditRepository: insert({ adminEmail, action, targetType, targetId, before, after }, tx)
+  AuditRepository -> PostgreSQL: INSERT admin_audit_log
+  note right of AuditRepository
+    action: "<target_type>.<verb>" (예: admin_account.role_update)
+    target_type: 변경된 엔티티 종류 (예: admin_account)
+    target_id: 엔티티 pk (문자열). 일괄 작업은 null
+  end note
+end
+alt 감사 로그 저장 실패 또는 트랜잭션 안의 예외
+  PostgreSQL -[#red]-> Client: 전체 rollback 후 500. 변경도 반영되지 않음 (감사 없는 변경을 허용하지 않음)
+end
+Service --> Controller: 결과 DTO
+Controller --> Client: 원래 응답 (2xx)
+
+note over Service, PostgreSQL
+  파일 삭제처럼 커밋 뒤에 하는 부수 작업은 기존 순서 그대로 (감사 로그는 DB 커밋 전에 이미 같이 저장됨).
+  admin_audit_log는 insert만 함. 수정 · 삭제 API 없음.
+  FK가 없어 어드민 계정이나 대상 엔티티를 지워도 기록이 남음
+end note
+
+== 기록 대상 (action) ==
+note across
+  admin_auth.login  (로그인 성공 시. 토큰 발급 전에 기록, 실패하면 로그인도 실패)
+  admin_account.create · role_update · delete
+  interest.create · rename · delete · reorder
+  school_department.create · update
+  school_email_domain.replace
+  company.create · update · delete · merge · logo_update · import
+  company_name.add · remove
+  consent.create
+  business_card.verification_cancel
+  notification_log.delivery_lookup  (알리고 조회 결과가 저장돼 값이 바뀐 경우만. 저장은 스케줄러와 같이 쓰는 서비스가
+                                     먼저 커밋하므로 이 기록만 별도 트랜잭션)
+  dev_user.hard_delete  (개발용이라 이름 · 이메일도 그대로 남김. admin_access_log에도 기존대로 기록)
+  ----
+  기록하지 않는 변경 API: 회사 일괄 가져오기 미리보기(저장 없음), 회사 로고 업로드 URL 발급(저장 없음).
+  허용 목록에 없는 이메일의 로그인 시도(403)는 어드민이 아니므로 남기지 않음
+end note
+
+@enduml

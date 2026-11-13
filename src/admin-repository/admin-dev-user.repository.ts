@@ -29,6 +29,26 @@ export type AdminDevUserRow = Pick<
   | "createdAt"
 >;
 
+const devUserColumns = {
+  pk: users.pk,
+  type: users.type,
+  status: users.status,
+  isDeleted: users.isDeleted,
+  withdrawRequestedAt: users.withdrawRequestedAt,
+  name: users.name,
+  email: users.email,
+  createdAt: users.createdAt,
+};
+
+export type AdminDevUserHardDeleted = {
+  // 지우기 전의 유저 행
+  user: AdminDevUserRow;
+  studentPks: string[];
+  graduatedPks: string[];
+  // 커밋 뒤 S3에서 지울 key
+  fileKeys: string[];
+};
+
 export type AdminDevUserPage = {
   rows: AdminDevUserRow[];
   total: number;
@@ -50,16 +70,7 @@ export class AdminDevUserRepository {
     const db = this.dbService.db;
     const [rows, [{ total }]] = await Promise.all([
       db
-        .select({
-          pk: users.pk,
-          type: users.type,
-          status: users.status,
-          isDeleted: users.isDeleted,
-          withdrawRequestedAt: users.withdrawRequestedAt,
-          name: users.name,
-          email: users.email,
-          createdAt: users.createdAt,
-        })
+        .select(devUserColumns)
         .from(users)
         // 같은 값이 있어도 페이지 사이 순서가 흔들리지 않게 pk를 마지막 기준으로
         .orderBy(desc(users.createdAt), users.pk)
@@ -72,7 +83,8 @@ export class AdminDevUserRepository {
   }
 
   /*
-  SELECT pk FROM users WHERE pk = ?1 FOR UPDATE;
+  SELECT pk, type, status, is_deleted, withdraw_requested_at, name, email, created_at
+    FROM users WHERE pk = ?1 FOR UPDATE;
   SELECT pk FROM student WHERE user_pk = ?1;
   SELECT pk FROM graduated WHERE user_pk = ?1;
   DELETE FROM notification_log WHERE coffee_chat_request_pk IN
@@ -88,13 +100,16 @@ export class AdminDevUserRepository {
   DELETE FROM user_consent / user_oauth_account / refresh_token / coffee_chat_contact / student_email_send_log WHERE user_pk = ?1;
   DELETE FROM users WHERE pk = ?1;
    */
-  // FK가 모두 NO ACTION이라 자식 테이블부터 지움. 유저가 없으면 null, 지웠으면 커밋 뒤 S3에서 지울 key.
+  // FK가 모두 NO ACTION이라 자식 테이블부터 지움. 유저가 없으면 null, 지웠으면 지운 유저 행(감사 로그용)과 커밋 뒤 S3에서 지울 key.
   // 이 유저가 보냈거나 받은 커피챗 요청은 상대방 기록에서도 사라짐.
   // 유형을 바꾼 유저는 student · graduated 행이 둘 다 있을 수 있어 type과 상관없이 둘 다 지움
-  async hardDelete(userPk: string, tx: TxType): Promise<string[] | null> {
+  async hardDelete(
+    userPk: string,
+    tx: TxType,
+  ): Promise<AdminDevUserHardDeleted | null> {
     // 로그인 · 탈퇴 요청 · 탈퇴 만료 처리와 같은 유저 행 잠금으로 직렬화
     const [user] = await tx
-      .select({ pk: users.pk })
+      .select(devUserColumns)
       .from(users)
       .where(eq(users.pk, userPk))
       .for("update");
@@ -183,6 +198,6 @@ export class AdminDevUserRepository {
         row.businessCardKey ? [row.businessCardKey] : [],
       ),
     ];
-    return [...new Set(keys)];
+    return { user, studentPks, graduatedPks, fileKeys: [...new Set(keys)] };
   }
 }

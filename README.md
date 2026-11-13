@@ -150,7 +150,7 @@ staging에서는 pod 안에서 `bun run db:seed:dev`를 실행합니다. product
 
 - API(`/api/manager/v1/dev/user`)는 서버 env `DEV_USER_DELETE_ENABLED=true`일 때만 열리고, 아니면 404입니다. production에는 넣지 않습니다.
 - 메뉴는 어드민 빌드 인자 `VITE_DEV_USER_DELETE_ENABLED=true`일 때만 보입니다 (`staging.yml`에서만 켬).
-- 삭제할 때마다 `admin_access_log`에 `dev_user_hard_delete`로 남습니다.
+- 삭제할 때마다 `admin_access_log`에 `dev_user_hard_delete`로, `admin_audit_log`에 `dev_user.hard_delete`(지운 유저 행 포함)로 남습니다.
 
 ## 구조
 

@@ -91,8 +91,9 @@ export class AdminCompanyController {
   })
   async create(
     @Body() req: CreateAdminCompanyRequestDto,
+    @CurrentManager() manager: ManagerContext,
   ): Promise<AdminCompanyDto> {
-    return this.adminCompanyService.create(req);
+    return this.adminCompanyService.create(req, manager);
   }
 
   /** 로고 업로드용 presigned PUT URL 발급 (png · jpeg · webp, 2MB) */
@@ -170,8 +171,9 @@ export class AdminCompanyController {
   )
   async importCompanies(
     @UploadedFile() file: CompanyImportFile,
+    @CurrentManager() manager: ManagerContext,
   ): Promise<CompanyImportResultDto> {
-    return this.companyImportService.commit(file);
+    return this.companyImportService.commit(file, manager);
   }
 
   /** 회사 이름 변경 · 검토 완료 */
@@ -184,8 +186,9 @@ export class AdminCompanyController {
   async update(
     @Param("pk", ParseCompanyPkPipe) pk: number,
     @Body() req: UpdateAdminCompanyRequestDto,
+    @CurrentManager() manager: ManagerContext,
   ): Promise<AdminCompanyDto> {
-    return this.adminCompanyService.update(pk, req);
+    return this.adminCompanyService.update(pk, req, manager);
   }
 
   /** 회사 삭제 (고른 현업자가 없을 때만) */
@@ -197,8 +200,9 @@ export class AdminCompanyController {
   })
   async remove(
     @Param("pk", ParseCompanyPkPipe) pk: number,
+    @CurrentManager() manager: ManagerContext,
   ): Promise<BaseResultDto> {
-    await this.adminCompanyService.remove(pk);
+    await this.adminCompanyService.remove(pk, manager);
     return BaseResultDto.OK;
   }
 
@@ -212,8 +216,9 @@ export class AdminCompanyController {
   async addName(
     @Param("pk", ParseCompanyPkPipe) pk: number,
     @Body() req: AdminCompanyNameRequestDto,
+    @CurrentManager() manager: ManagerContext,
   ): Promise<AdminCompanyDto> {
-    return this.adminCompanyService.addName(pk, req.name);
+    return this.adminCompanyService.addName(pk, req.name, manager);
   }
 
   /** 표기 삭제 (회사 이름 표기는 삭제 불가) */
@@ -225,8 +230,9 @@ export class AdminCompanyController {
   async removeName(
     @Param("pk", ParseCompanyPkPipe) pk: number,
     @Param("namePk", ParseCompanyPkPipe) namePk: number,
+    @CurrentManager() manager: ManagerContext,
   ): Promise<AdminCompanyDto> {
-    return this.adminCompanyService.removeName(pk, namePk);
+    return this.adminCompanyService.removeName(pk, namePk, manager);
   }
 
   /** 회사 병합: 이 회사의 표기 · 현업자를 target_id 회사로 옮기고 이 회사를 삭제 */
@@ -239,8 +245,9 @@ export class AdminCompanyController {
   async merge(
     @Param("pk", ParseCompanyPkPipe) pk: number,
     @Body() req: MergeAdminCompanyRequestDto,
+    @CurrentManager() manager: ManagerContext,
   ): Promise<AdminCompanyDto> {
-    return this.adminCompanyService.merge(pk, req.target_id);
+    return this.adminCompanyService.merge(pk, req.target_id, manager);
   }
 
   /** 업로드한 로고 확정 · 연결 (이전 로고 대체) */
@@ -254,7 +261,7 @@ export class AdminCompanyController {
     @Body() req: UpdateAdminCompanyLogoRequestDto,
     @CurrentManager() manager: ManagerContext,
   ): Promise<BaseResultDto> {
-    await this.adminCompanyService.updateLogo(pk, req.key, manager.pk);
+    await this.adminCompanyService.updateLogo(pk, req.key, manager);
     return BaseResultDto.OK;
   }
 }

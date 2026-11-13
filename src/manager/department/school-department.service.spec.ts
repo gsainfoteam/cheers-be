@@ -3,11 +3,13 @@ import {
   ConflictException,
   NotFoundException,
 } from "@nestjs/common";
+import { AdminAuditLogRepository } from "@src/admin-repository/admin-audit-log.repository";
 import { AdminDepartmentRepository } from "@src/admin-repository/admin-department.repository";
 import { AdminSchoolEmailDomainRepository } from "@src/admin-repository/admin-school-email-domain.repository";
 import { AdminSchoolRepository } from "@src/admin-repository/admin-school.repository";
 import { AdminStudentRepository } from "@src/admin-repository/admin-student.repository";
 import { DatabaseService } from "@src/database/database.service";
+import { ManagerContext } from "@src/manager/context/manager-context";
 import { SchoolDepartmentService } from "@src/manager/department/school-department.service";
 
 const school = { pk: 1, name: "GIST" };
@@ -40,16 +42,20 @@ describe("SchoolDepartmentService", () => {
   const departmentRepository = {
     findBySchoolPk: jest.fn(),
     insertIfAbsent: jest.fn(),
+    findByPkForUpdate: jest.fn(),
     update: jest.fn(),
     existsActiveBySchoolPk: jest.fn(),
   };
   const studentRepository = { existsByEmailDomain: jest.fn() };
+  const auditLogRepository = { insert: jest.fn() };
+  const manager = new ManagerContext("me", "me@gm.gist.ac.kr", "admin");
   const service = new SchoolDepartmentService(
     dbService as unknown as DatabaseService,
     schoolRepository as unknown as AdminSchoolRepository,
     domainRepository as unknown as AdminSchoolEmailDomainRepository,
     departmentRepository as unknown as AdminDepartmentRepository,
     studentRepository as unknown as AdminStudentRepository,
+    auditLogRepository as unknown as AdminAuditLogRepository,
   );
 
   beforeEach(() => {
@@ -57,6 +63,7 @@ describe("SchoolDepartmentService", () => {
     dbService.db.transaction.mockImplementation((fn) => fn(tx));
     schoolRepository.findByPk.mockResolvedValue(school);
     schoolRepository.findByPkForUpdate.mockResolvedValue(school);
+    departmentRepository.findByPkForUpdate.mockResolvedValue(departmentRow);
     domainRepository.findBySchoolPk.mockResolvedValue([
       domainRow("gm.gist.ac.kr"),
     ]);
@@ -88,7 +95,7 @@ describe("SchoolDepartmentService", () => {
         new NotFoundException("School not found."),
       );
       await expect(
-        service.createDepartment(9, { name: "새 학과" }),
+        service.createDepartment(9, { name: "새 학과" }, manager),
       ).rejects.toThrow(new NotFoundException("School not found."));
       expect(departmentRepository.insertIfAbsent).not.toHaveBeenCalled();
     });
@@ -109,14 +116,54 @@ describe("SchoolDepartmentService", () => {
       departmentRepository.insertIfAbsent.mockResolvedValue(null);
 
       await expect(
-        service.createDepartment(1, { name: "AI학과" }),
+        service.createDepartment(1, { name: "AI학과" }, manager),
       ).rejects.toThrow(
         new ConflictException("Department name already exists in this school."),
       );
     });
 
+    it("records the created department in the audit log within the transaction", async () => {
+      departmentRepository.insertIfAbsent.mockResolvedValue(departmentRow);
+
+      await service.createDepartment(1, { name: "AI학과" }, manager);
+
+      expect(departmentRepository.insertIfAbsent).toHaveBeenCalledWith(
+        1,
+        "AI학과",
+        tx,
+      );
+      expect(auditLogRepository.insert).toHaveBeenCalledWith(
+        {
+          adminEmail: "me@gm.gist.ac.kr",
+          action: "school_department.create",
+          targetType: "school_department",
+          targetId: 5,
+          after: { school_pk: 1, name: "AI학과", is_active: true },
+        },
+        tx,
+      );
+    });
+
+    it("does not record a duplicate department", async () => {
+      departmentRepository.insertIfAbsent.mockResolvedValue(null);
+
+      await expect(
+        service.createDepartment(1, { name: "AI학과" }, manager),
+      ).rejects.toThrow(ConflictException);
+      expect(auditLogRepository.insert).not.toHaveBeenCalled();
+    });
+
+    it("fails the create when the audit log cannot be saved", async () => {
+      departmentRepository.insertIfAbsent.mockResolvedValue(departmentRow);
+      auditLogRepository.insert.mockRejectedValue(new Error("db down"));
+
+      await expect(
+        service.createDepartment(1, { name: "AI학과" }, manager),
+      ).rejects.toThrow("db down");
+    });
+
     it("returns 400 when there is nothing to update", async () => {
-      await expect(service.updateDepartment(1, 5, {})).rejects.toThrow(
+      await expect(service.updateDepartment(1, 5, {}, manager)).rejects.toThrow(
         new BadRequestException("Nothing to update."),
       );
       expect(departmentRepository.update).not.toHaveBeenCalled();
@@ -130,7 +177,7 @@ describe("SchoolDepartmentService", () => {
       departmentRepository.existsActiveBySchoolPk.mockResolvedValue(true);
 
       await expect(
-        service.updateDepartment(1, 5, { is_active: false }),
+        service.updateDepartment(1, 5, { is_active: false }, manager),
       ).resolves.toEqual({
         pk: 5,
         school_pk: 1,
@@ -146,6 +193,54 @@ describe("SchoolDepartmentService", () => {
       );
     });
 
+    it("records the before and after values of an update", async () => {
+      departmentRepository.update.mockResolvedValue({
+        ...departmentRow,
+        name: "새 이름",
+      });
+
+      await service.updateDepartment(1, 5, { name: "새 이름" }, manager);
+
+      expect(departmentRepository.findByPkForUpdate).toHaveBeenCalledWith(
+        1,
+        5,
+        tx,
+      );
+      expect(auditLogRepository.insert).toHaveBeenCalledWith(
+        {
+          adminEmail: "me@gm.gist.ac.kr",
+          action: "school_department.update",
+          targetType: "school_department",
+          targetId: 5,
+          before: { school_pk: 1, name: "AI학과", is_active: true },
+          after: { school_pk: 1, name: "새 이름", is_active: true },
+        },
+        tx,
+      );
+    });
+
+    it("fails the update when the audit log cannot be saved", async () => {
+      departmentRepository.update.mockResolvedValue(departmentRow);
+      auditLogRepository.insert.mockRejectedValue(new Error("db down"));
+
+      await expect(
+        service.updateDepartment(1, 5, { name: "새 이름" }, manager),
+      ).rejects.toThrow("db down");
+    });
+
+    it("does not record when deactivating the last active department", async () => {
+      departmentRepository.update.mockResolvedValue({
+        ...departmentRow,
+        isActive: false,
+      });
+      departmentRepository.existsActiveBySchoolPk.mockResolvedValue(false);
+
+      await expect(
+        service.updateDepartment(1, 5, { is_active: false }, manager),
+      ).rejects.toThrow(ConflictException);
+      expect(auditLogRepository.insert).not.toHaveBeenCalled();
+    });
+
     it("returns 409 when deactivating the last active department", async () => {
       departmentRepository.update.mockResolvedValue({
         ...departmentRow,
@@ -154,7 +249,7 @@ describe("SchoolDepartmentService", () => {
       departmentRepository.existsActiveBySchoolPk.mockResolvedValue(false);
 
       await expect(
-        service.updateDepartment(1, 5, { is_active: false }),
+        service.updateDepartment(1, 5, { is_active: false }, manager),
       ).rejects.toThrow(
         new ConflictException("At least one active department is required."),
       );
@@ -163,8 +258,8 @@ describe("SchoolDepartmentService", () => {
     it("does not lock or check active departments for a rename or reactivation", async () => {
       departmentRepository.update.mockResolvedValue(departmentRow);
 
-      await service.updateDepartment(1, 5, { name: "새 이름" });
-      await service.updateDepartment(1, 5, { is_active: true });
+      await service.updateDepartment(1, 5, { name: "새 이름" }, manager);
+      await service.updateDepartment(1, 5, { is_active: true }, manager);
 
       expect(schoolRepository.findByPkForUpdate).not.toHaveBeenCalled();
       expect(
@@ -173,21 +268,22 @@ describe("SchoolDepartmentService", () => {
     });
 
     it("returns 404 when deactivating a department of another school", async () => {
-      departmentRepository.update.mockResolvedValue(null);
+      departmentRepository.findByPkForUpdate.mockResolvedValue(null);
 
       await expect(
-        service.updateDepartment(2, 5, { is_active: false }),
+        service.updateDepartment(2, 5, { is_active: false }, manager),
       ).rejects.toThrow(new NotFoundException("Department not found."));
       expect(
         departmentRepository.existsActiveBySchoolPk,
       ).not.toHaveBeenCalled();
+      expect(auditLogRepository.insert).not.toHaveBeenCalled();
     });
 
     it("returns 404 for a department of another school", async () => {
-      departmentRepository.update.mockResolvedValue(null);
+      departmentRepository.findByPkForUpdate.mockResolvedValue(null);
 
       await expect(
-        service.updateDepartment(2, 5, { name: "새 이름" }),
+        service.updateDepartment(2, 5, { name: "새 이름" }, manager),
       ).rejects.toThrow(new NotFoundException("Department not found."));
     });
 
@@ -195,7 +291,7 @@ describe("SchoolDepartmentService", () => {
       departmentRepository.update.mockRejectedValue(uniqueViolation);
 
       await expect(
-        service.updateDepartment(1, 5, { name: "화학과" }),
+        service.updateDepartment(1, 5, { name: "화학과" }, manager),
       ).rejects.toMatchObject({
         status: 409,
         message: "Department name already exists in this school.",
@@ -206,7 +302,7 @@ describe("SchoolDepartmentService", () => {
       departmentRepository.update.mockRejectedValue(new Error("db down"));
 
       await expect(
-        service.updateDepartment(1, 5, { name: "화학과" }),
+        service.updateDepartment(1, 5, { name: "화학과" }, manager),
       ).rejects.toThrow("db down");
     });
   });
@@ -224,9 +320,11 @@ describe("SchoolDepartmentService", () => {
         ]);
 
       await expect(
-        service.replaceEmailDomains(1, {
-          email_domains: ["keep.ac.kr", "new.ac.kr"],
-        }),
+        service.replaceEmailDomains(
+          1,
+          { email_domains: ["keep.ac.kr", "new.ac.kr"] },
+          manager,
+        ),
       ).resolves.toEqual({
         pk: 1,
         name: "GIST",
@@ -249,24 +347,50 @@ describe("SchoolDepartmentService", () => {
         ["new.ac.kr"],
         tx,
       );
+      expect(auditLogRepository.insert).toHaveBeenCalledWith(
+        {
+          adminEmail: "me@gm.gist.ac.kr",
+          action: "school_email_domain.replace",
+          targetType: "school_email_domain",
+          targetId: 1,
+          before: { domains: ["keep.ac.kr", "old.ac.kr"] },
+          after: { domains: ["keep.ac.kr", "new.ac.kr"] },
+        },
+        tx,
+      );
+    });
+
+    it("fails the replace when the audit log cannot be saved", async () => {
+      auditLogRepository.insert.mockRejectedValue(new Error("db down"));
+
+      await expect(
+        service.replaceEmailDomains(
+          1,
+          { email_domains: ["gm.gist.ac.kr", "new.ac.kr"] },
+          manager,
+        ),
+      ).rejects.toThrow("db down");
     });
 
     it("writes nothing when the list is unchanged", async () => {
-      await service.replaceEmailDomains(1, {
-        email_domains: ["gm.gist.ac.kr"],
-      });
+      await service.replaceEmailDomains(
+        1,
+        { email_domains: ["gm.gist.ac.kr"] },
+        manager,
+      );
 
       expect(
         domainRepository.deleteBySchoolPkAndDomains,
       ).not.toHaveBeenCalled();
       expect(domainRepository.insertMany).not.toHaveBeenCalled();
+      expect(auditLogRepository.insert).not.toHaveBeenCalled();
     });
 
     it("returns 404 for an unknown school", async () => {
       schoolRepository.findByPkForUpdate.mockResolvedValue(null);
 
       await expect(
-        service.replaceEmailDomains(9, { email_domains: ["a.ac.kr"] }),
+        service.replaceEmailDomains(9, { email_domains: ["a.ac.kr"] }, manager),
       ).rejects.toThrow(new NotFoundException("School not found."));
     });
 
@@ -274,7 +398,11 @@ describe("SchoolDepartmentService", () => {
       studentRepository.existsByEmailDomain.mockResolvedValue(true);
 
       await expect(
-        service.replaceEmailDomains(1, { email_domains: ["new.ac.kr"] }),
+        service.replaceEmailDomains(
+          1,
+          { email_domains: ["new.ac.kr"] },
+          manager,
+        ),
       ).rejects.toThrow(
         new ConflictException(
           "Email domain is in use by verified students: gm.gist.ac.kr",
@@ -293,9 +421,11 @@ describe("SchoolDepartmentService", () => {
       domainRepository.insertMany.mockRejectedValue(uniqueViolation);
 
       await expect(
-        service.replaceEmailDomains(1, {
-          email_domains: ["gm.gist.ac.kr", "other.ac.kr"],
-        }),
+        service.replaceEmailDomains(
+          1,
+          { email_domains: ["gm.gist.ac.kr", "other.ac.kr"] },
+          manager,
+        ),
       ).rejects.toMatchObject({
         status: 409,
         message: "Email domain is already used by another school.",

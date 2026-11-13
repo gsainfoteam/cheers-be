@@ -8,6 +8,8 @@ import {
   ConsentVersionParamDto,
   CreateConsentVersionRequestDto,
 } from "@src/manager/consent/dto/manager-consent.dto";
+import { ManagerContext } from "@src/manager/context/manager-context";
+import { CurrentManager } from "@src/manager/decorator/current-manager.decorator";
 import { ManagerConsentService } from "@src/manager/consent/manager-consent.service";
 import { ManagerGuard } from "@src/manager/guard/manager.guard";
 import { SuperAdminGuard } from "@src/manager/guard/super-admin.guard";
@@ -36,8 +38,9 @@ export class ManagerConsentController {
   })
   async create(
     @Body() req: CreateConsentVersionRequestDto,
+    @CurrentManager() manager: ManagerContext,
   ): Promise<ConsentVersionDto> {
-    return this.managerConsentService.create(req);
+    return this.managerConsentService.create(req, manager);
   }
 
   /** 버전별 동의 · 철회 현황 */

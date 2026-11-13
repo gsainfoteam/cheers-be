@@ -18,6 +18,7 @@
 | [flow/k8s-probes.puml](flow/k8s-probes.puml)                                                                                           | K8s probe와 DB 장애 시 동작                                              |
 | [flow/observability.puml](flow/observability.puml)                                                                                     | metrics 수집과 trace 전송                                                |
 | [flow/admin-login.puml](flow/admin-login.puml)                                                                                         | 어드민 화면 로그인 (PKCE)                                                |
+| [flow/admin-audit.puml](flow/admin-audit.puml)                                                                                         | 어드민 감사 로그 기록 (변경 전 · 후 값, 같은 트랜잭션)                   |
 | [flow/manager-guards.puml](flow/manager-guards.puml)                                                                                   | 매니저 가드                                                              |
 | [health/get-health.puml](health/get-health.puml)                                                                                       | `GET /health`                                                            |
 | [health/get-health-ready.puml](health/get-health-ready.puml)                                                                           | `GET /health/ready`                                                      |
@@ -51,6 +52,8 @@
 | [manager/post-admin-account.puml](manager/post-admin-account.puml)                                                                     | `POST /api/manager/v1/admin-account`                                     |
 | [manager/patch-admin-account-pk.puml](manager/patch-admin-account-pk.puml)                                                             | `PATCH /api/manager/v1/admin-account/{pk}`                               |
 | [manager/delete-admin-account-pk.puml](manager/delete-admin-account-pk.puml)                                                           | `DELETE /api/manager/v1/admin-account/{pk}`                              |
+| [manager/get-audit-log.puml](manager/get-audit-log.puml)                                                                               | `GET /api/manager/v1/audit-log`                                          |
+| [manager/get-access-log.puml](manager/get-access-log.puml)                                                                             | `GET /api/manager/v1/access-log`                                         |
 | [manager/get-business-card.puml](manager/get-business-card.puml)                                                                       | `GET /api/manager/v1/business-card`                                      |
 | [manager/get-business-card-graduated-pk.puml](manager/get-business-card-graduated-pk.puml)                                             | `GET /api/manager/v1/business-card/{graduatedPk}`                        |
 | [manager/post-business-card-graduated-pk-cancel-verification.puml](manager/post-business-card-graduated-pk-cancel-verification.puml)   | `POST /api/manager/v1/business-card/{graduatedPk}/cancel-verification`   |

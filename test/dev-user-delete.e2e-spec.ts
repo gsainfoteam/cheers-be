@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { adminAccessLog } from "@drizzle/schema/admin-access-log";
+import { adminAuditLog } from "@drizzle/schema/admin-audit-log";
 import { coffeeChatContact } from "@drizzle/schema/coffee-chat-contact";
 import { coffeeChatRequest } from "@drizzle/schema/coffee-chat-request";
 import { graduated } from "@drizzle/schema/graduated";
@@ -200,6 +201,25 @@ describe("개발용 회원 완전탈퇴 (DEV_USER_DELETE_ENABLED=true)", () => {
         targetId: studentUserPk,
       }),
     ]);
+    // 감사 로그(CRB-81): 지우기 전의 유저 행이 before로 남음
+    expect(
+      await ctx.db
+        .select()
+        .from(adminAuditLog)
+        .where(eq(adminAuditLog.action, "dev_user.hard_delete")),
+    ).toEqual([
+      expect.objectContaining({
+        adminEmail: SUPER,
+        action: "dev_user.hard_delete",
+        targetType: "user",
+        targetId: studentUserPk,
+        before: expect.objectContaining({
+          type: "student",
+          student_pks: [expect.any(String)],
+        }),
+        after: null,
+      }),
+    ]);
 
     // 지운 유저의 access token은 더 쓸 수 없고, 같은 Google 계정으로 처음부터 다시 가입
     await http(ctx)
@@ -351,6 +371,12 @@ describe("개발용 회원 완전탈퇴 (DEV_USER_DELETE_ENABLED=true)", () => {
       .set("Authorization", auth)
       .expect(400);
     expect(await ctx.db.select().from(adminAccessLog)).toHaveLength(0);
+    expect(
+      await ctx.db
+        .select()
+        .from(adminAuditLog)
+        .where(eq(adminAuditLog.action, "dev_user.hard_delete")),
+    ).toHaveLength(0);
   });
 });
 

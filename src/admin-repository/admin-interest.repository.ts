@@ -108,8 +108,8 @@ export class AdminInterestRepository {
   DELETE FROM interest WHERE pk = ?1 RETURNING pk;
    */
   // 지운 행이 없으면 false
-  async deleteByPk(pk: number): Promise<boolean> {
-    const result = await this.dbService.db
+  async deleteByPk(pk: number, tx?: TxType): Promise<boolean> {
+    const result = await (tx ?? this.dbService.db)
       .delete(interest)
       .where(eq(interest.pk, pk))
       .returning({ pk: interest.pk });

@@ -18,6 +18,7 @@ participant "AdminInterestController" as Controller
 participant "AdminInterestService" as Service
 participant "InterestService" as InterestService
 participant "AdminInterestRepository" as AdminInterestRepository
+participant "AdminAuditLogRepository" as AdminAuditLogRepository
 database PostgreSQL
 
 Client -> Guard: PATCH /api/manager/v1/interest/{pk}\nAuthorization: Bearer <manager token>\n{ name }
@@ -28,14 +29,14 @@ alt pk가 1 ~ 2147483647의 정수가 아님
 else name이 문자열이 아님, trim 후 비었거나 50자 초과
   Pipe -[#red]-> Client: 400 (class-validator 메시지)
 end
-Pipe -> Controller: updateName(pk, req)
-Controller -> Service: updateName(pk, req)
+Pipe -> Controller: updateName(pk, req, manager)
+Controller -> Service: updateName(pk, req, manager)
 group transaction (DatabaseService.db.transaction)
   Service -> AdminInterestRepository: lockForWrite(tx)
   AdminInterestRepository -> PostgreSQL: LOCK TABLE interest IN SHARE ROW EXCLUSIVE MODE
   Service -> AdminInterestRepository: findByPk(pk, tx)
   AdminInterestRepository -> PostgreSQL: SELECT interest WHERE pk = ?
-  PostgreSQL --> AdminInterestRepository: row | 없음
+  PostgreSQL --> AdminInterestRepository: row (= before) | 없음
   alt 없는 관심 분야
     Service -[#red]-> Client: 404 Interest not found.
   end
@@ -48,7 +49,10 @@ group transaction (DatabaseService.db.transaction)
   note right of Service: 자기 이름 그대로 보내면 성공 (변경 없음)
   Service -> AdminInterestRepository: updateName(pk, name, tx)
   AdminInterestRepository -> PostgreSQL: UPDATE interest SET name WHERE pk = ? RETURNING
-  PostgreSQL --> AdminInterestRepository: row
+  PostgreSQL --> AdminInterestRepository: row (= after)
+  Service -> AdminAuditLogRepository: insert({ adminEmail, action: "interest.rename", targetType: "interest", targetId: pk,\nbefore: { name, sort_order }, after: { name, sort_order } }, tx)
+  AdminAuditLogRepository -> PostgreSQL: INSERT admin_audit_log
+  note right of AdminAuditLogRepository: 변경과 같은 트랜잭션 (flow/admin-audit.puml). 기록이 실패하면 변경도 rollback
 end
 note over Service, PostgreSQL
   트랜잭션 안의 예외는 전부 rollback 후 응답.

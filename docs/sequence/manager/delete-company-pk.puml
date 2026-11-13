@@ -17,6 +17,7 @@ participant "ParseCompanyPkPipe" as Pipe
 participant "AdminCompanyController" as Controller
 participant "AdminCompanyService" as Service
 participant "AdminCompanyRepository" as AdminCompanyRepository
+participant "AdminAuditLogRepository" as AdminAuditLogRepository
 participant "FileService" as FileService
 database PostgreSQL
 participant "S3"
@@ -27,8 +28,8 @@ Guard -> Pipe: 통과
 alt pk 가 1~2147483647 정수가 아님
   Pipe -[#red]-> Client: 400 pk must be a positive integer.
 end
-Pipe -> Controller: remove(pk)
-Controller -> Service: remove(pk)
+Pipe -> Controller: remove(pk, manager)
+Controller -> Service: remove(pk, manager)
 
 group transaction (DatabaseService.db.transaction)
   Service -> AdminCompanyRepository: findByPkForUpdate(pk, tx)
@@ -48,6 +49,9 @@ group transaction (DatabaseService.db.transaction)
   Service -> AdminCompanyRepository: deleteAlias(pk, tx)
   AdminCompanyRepository -> PostgreSQL: DELETE company_name WHERE alias_pk = ?\nDELETE company_alias WHERE pk = ?
   note right: FK 는 NO ACTION. 표기를 먼저 지움
+  Service -> AdminAuditLogRepository: insert({ adminEmail, action: "company.delete", targetType: "company", targetId: pk,\nbefore: { name, needs_review, logo_key, names } }, tx)
+  AdminAuditLogRepository -> PostgreSQL: INSERT admin_audit_log
+  note right: CRB-81 · flow/admin-audit.puml. 기록이 실패하면 변경도 rollback. 변경 전 · 후 값은 회사 이름 · 표기 · 로고 key만 (현업자 정보 제외)
 end
 note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
 

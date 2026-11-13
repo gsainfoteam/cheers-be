@@ -8,11 +8,14 @@ import {
   AdminCoffeeChatRequestRepository,
   AdminCoffeeChatRequestRow,
 } from "@src/admin-repository/admin-coffee-chat-request.repository";
+import { AdminAuditLogRepository } from "@src/admin-repository/admin-audit-log.repository";
 import {
   AdminNotificationLogRepository,
   AdminNotificationLogRow,
 } from "@src/admin-repository/admin-notification-log.repository";
 import { toOffset, toRequestStatus } from "@src/cheers/cheers.utils";
+import { DatabaseService } from "@src/database/database.service";
+import { ManagerContext } from "@src/manager/context/manager-context";
 import { PageResponseDto } from "@src/cheers/dto/pagination.dto";
 import {
   CoffeeChatRequestDetailDto,
@@ -33,6 +36,8 @@ export class ManagerCoffeeChatService {
     private readonly requestRepository: AdminCoffeeChatRequestRepository,
     private readonly notificationLogRepository: AdminNotificationLogRepository,
     private readonly deliverySyncService: NotificationDeliverySyncService,
+    private readonly dbService: DatabaseService,
+    private readonly adminAuditLogRepository: AdminAuditLogRepository,
   ) {}
 
   async listRequests(
@@ -100,7 +105,10 @@ export class ManagerCoffeeChatService {
   }
 
   // 알리고 접수에 성공한 알림톡의 카카오 결과를 지금 조회 (CRB-77). 결과가 나왔으면 저장
-  async lookupDelivery(pk: string): Promise<NotificationDeliveryLookupDto> {
+  async lookupDelivery(
+    pk: string,
+    manager: ManagerContext,
+  ): Promise<NotificationDeliveryLookupDto> {
     const log = await this.notificationLogRepository.findByPk(pk);
     if (!log) {
       throw new NotFoundException("Notification log not found.");
@@ -126,7 +134,47 @@ export class ManagerCoffeeChatService {
     }
 
     const updated = (await this.notificationLogRepository.findByPk(pk)) ?? log;
+    await this.recordDeliveryLookup(manager, log, updated);
     return { lookup: delivery.status, log: this.toLogItemDto(updated) };
+  }
+
+  // 감사 로그(CRB-81): 조회 결과가 저장돼 카카오 결과 컬럼이 바뀐 경우만 남김.
+  // 저장은 스케줄러와 같이 쓰는 NotificationDeliverySyncService가 먼저 커밋하므로, 이 기록만 별도 트랜잭션 (실패하면 요청이 500)
+  private async recordDeliveryLookup(
+    manager: ManagerContext,
+    before: AdminNotificationLogRow,
+    after: AdminNotificationLogRow,
+  ): Promise<void> {
+    const beforeSnapshot = this.toDeliverySnapshot(before);
+    const afterSnapshot = this.toDeliverySnapshot(after);
+    if (JSON.stringify(beforeSnapshot) === JSON.stringify(afterSnapshot)) {
+      return;
+    }
+    await this.dbService.db.transaction((tx) =>
+      this.adminAuditLogRepository.insert(
+        {
+          adminEmail: manager.email,
+          action: "notification_log.delivery_lookup",
+          targetType: "notification_log",
+          targetId: after.pk,
+          before: beforeSnapshot,
+          after: afterSnapshot,
+        },
+        tx,
+      ),
+    );
+  }
+
+  // 메시지는 응답과 같이 수신자 정보를 가림
+  private toDeliverySnapshot(row: AdminNotificationLogRow) {
+    return {
+      delivery_status: row.deliveryStatus,
+      delivery_code: row.deliveryCode,
+      delivery_message:
+        row.deliveryMessage &&
+        maskPersonalInfo(row.deliveryMessage, row.recipient),
+      delivery_reported_at: row.deliveryReportedAt,
+    };
   }
 
   private toPeriod(query: CreatedPeriodQueryDto): {

@@ -7,6 +7,8 @@ import {
 import { JwtService } from "@nestjs/jwt";
 import { JwtKeyService } from "@src/auth/jwt-key.service";
 import { AdminAccountRepository } from "@src/admin-repository/admin-account.repository";
+import { AdminAuditLogRepository } from "@src/admin-repository/admin-audit-log.repository";
+import { DatabaseService } from "@src/database/database.service";
 import { InfoteamIdpService } from "@src/manager/infoteam-idp.service";
 import { normalizeEmail } from "@src/manager/manager-email";
 
@@ -26,6 +28,8 @@ export class ManagerAuthService {
     private readonly jwtKeyService: JwtKeyService,
     private readonly infoteamIdpService: InfoteamIdpService,
     private readonly adminAccountRepository: AdminAccountRepository,
+    private readonly dbService: DatabaseService,
+    private readonly adminAuditLogRepository: AdminAuditLogRepository,
   ) {}
 
   async login(
@@ -47,6 +51,20 @@ export class ManagerAuthService {
     if (!account) {
       throw new ForbiddenException("This account is not allowed as a manager.");
     }
+
+    // 감사 로그(CRB-81): 토큰을 내주기 전에 남기고, 기록이 실패하면 로그인도 실패.
+    // 허용 목록에 없는 시도는 어드민이 아니라서 남기지 않음 (403은 위에서 이미 던짐)
+    await this.dbService.db.transaction((tx) =>
+      this.adminAuditLogRepository.insert(
+        {
+          adminEmail: account.email,
+          action: "admin_auth.login",
+          targetType: "admin_account",
+          targetId: account.pk,
+        },
+        tx,
+      ),
+    );
 
     const payload: ManagerTokenPayload = { sub: account.pk };
     return this.jwtService.signAsync(payload, {

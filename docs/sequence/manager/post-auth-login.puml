@@ -17,6 +17,7 @@ participant "ManagerAuthController" as Controller
 participant "ManagerAuthService" as Service
 participant "InfoteamIdpService" as IdpService
 participant "AdminAccountRepository" as AdminAccountRepository
+participant "AdminAuditLogRepository" as AdminAuditLogRepository
 database PostgreSQL
 participant "Infoteam IdP" as IdP
 
@@ -60,6 +61,17 @@ PostgreSQL --> AdminAccountRepository: row
 AdminAccountRepository --> Service: account | null
 alt 계정 없음
   Service -[#red]-> Client: 403 This account is not allowed as a manager.
+end
+
+== 감사 로그 (CRB-81, flow/admin-audit.puml) ==
+
+group transaction (DatabaseService.db.transaction)
+  Service -> AdminAuditLogRepository: insert({ adminEmail: account.email, action: "admin_auth.login", targetType: "admin_account", targetId: account.pk }, tx)
+  AdminAuditLogRepository -> PostgreSQL: INSERT admin_audit_log
+  note right
+    토큰을 내주기 전에 기록. 기록이 실패하면 500이고 토큰도 발급하지 않음.
+    허용 목록에 없는 이메일(403)은 어드민이 아니라서 남기지 않음
+  end note
 end
 
 == 매니저 토큰 발급 ==

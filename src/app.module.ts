@@ -16,6 +16,8 @@ import { CheersModule } from "@src/cheers/cheers.module";
 import { CompanyModule } from "@src/company/company.module";
 import { HealthModule } from "@src/health/health.module";
 import { AdminInterestModule } from "@src/manager/interest/admin-interest.module";
+import { AdminAccessLogModule } from "@src/manager/access-log/admin-access-log.module";
+import { AdminAuditModule } from "@src/manager/audit/admin-audit.module";
 import { ManagerModule } from "@src/manager/manager.module";
 import { ManagerCoffeeChatModule } from "@src/manager/coffee-chat/manager-coffee-chat.module";
 import { ManagerConsentModule } from "@src/manager/consent/manager-consent.module";
@@ -60,6 +62,8 @@ import { AdminCompanyModule } from "@src/manager/company/admin-company.module";
     CompanyModule,
     HealthModule,
     ManagerModule,
+    AdminAccessLogModule,
+    AdminAuditModule,
     AdminInterestModule,
     ManagerCoffeeChatModule,
     ManagerConsentModule,

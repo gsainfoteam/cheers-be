@@ -1,0 +1,49 @@
+@startuml get-manager-access-log
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/manager/v1/access-log
+caption CRB-81 · 어드민의 개인정보 열람 · 개발용 회원 완전탈퇴 기록 목록 (superadmin 전용, 읽기 전용). 기록은 기존대로 명함 조회 · 회원 삭제 서비스가 남김
+
+actor Client
+participant "ManagerGuard\n+ SuperAdminGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "AdminAccessLogController" as Controller
+participant "AdminAccessLogService" as Service
+participant "AdminAccessLogRepository" as AccessRepository
+database PostgreSQL
+
+Client -> Guard: GET /api/manager/v1/access-log?admin_email&target_type&created_from&created_to&page&size\nAuthorization: Bearer <manager token>
+ref over Client, Guard: ManagerGuard + SuperAdminGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found\n403 Superadmin privilege is required.
+Guard -> Pipe: 통과
+alt query 검증 실패 (target_type은 business_card · dev_user_hard_delete, 날짜 형식, page · size 범위)
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+Pipe -> Controller: list(query)
+Controller -> Service: list(query)
+alt created_from이 created_to보다 늦음
+  Service -[#red]-> Client: 400 created_from must not be after created_to
+end
+Service -> AccessRepository: findPage(filter, offset, limit)
+par 동시에 조회 — 같은 조건
+  AccessRepository -> PostgreSQL: SELECT admin_access_log\nWHERE admin_email ILIKE ? AND target_type = ? AND created_at 범위\nORDER BY created_at DESC, pk DESC LIMIT OFFSET
+  PostgreSQL --> AccessRepository: rows
+else
+  AccessRepository -> PostgreSQL: SELECT count(*) (같은 조건)
+  PostgreSQL --> AccessRepository: total
+end
+AccessRepository --> Service: { rows, total }
+note right of Service
+  target_id: business_card는 graduated.pk, dev_user_hard_delete는 지운 users.pk.
+  이 조회 자체는 기록하지 않음
+end note
+Service --> Controller: PageResponseDto<AdminAccessLogDto>
+Controller --> Client: 200 { items: [{ pk, admin_email, target_type, target_id, created_at }], page, size, total }
+
+@enduml

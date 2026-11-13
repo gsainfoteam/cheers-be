@@ -20,6 +20,7 @@ participant "AdminNotificationLogRepository" as LogRepository
 participant "NotificationDeliverySyncService" as SyncService
 participant "AlimtalkService" as Alimtalk
 participant "NotificationLogRepository" as NotificationLogRepository
+participant "AdminAuditLogRepository" as AdminAuditLogRepository
 database PostgreSQL
 participant "Aligo"
 
@@ -29,8 +30,8 @@ Guard -> Pipe: 통과
 alt pk가 UUID가 아님
   Pipe -[#red]-> Client: 400 Validation failed (uuid is expected)
 end
-Pipe -> Controller: lookupDelivery(pk)
-Controller -> Service: lookupDelivery(pk)
+Pipe -> Controller: lookupDelivery(pk, manager)
+Controller -> Service: lookupDelivery(pk, manager)
 Service -> LogRepository: findByPk(pk)
 LogRepository -> PostgreSQL: SELECT * FROM notification_log WHERE pk = ?
 PostgreSQL --> LogRepository: row | 없음
@@ -65,6 +66,16 @@ end
 Service -> LogRepository: findByPk(pk)
 LogRepository -> PostgreSQL: SELECT * FROM notification_log WHERE pk = ?
 LogRepository --> Service: 조회 뒤의 log
+opt 카카오 결과 컬럼(delivery_status · code · message · reported_at)이 조회 전과 달라짐 (CRB-81, flow/admin-audit.puml)
+  group transaction (DatabaseService.db.transaction)
+    Service -> AdminAuditLogRepository: insert({ adminEmail, action: "notification_log.delivery_lookup", targetType: "notification_log", targetId: pk,\nbefore: { delivery_* }, after: { delivery_* } }, tx)
+    AdminAuditLogRepository -> PostgreSQL: INSERT admin_audit_log
+  end
+  note right
+    저장은 스케줄러와 같이 쓰는 SyncService가 먼저 커밋하므로 이 기록만 별도 트랜잭션.
+    기록이 실패하면 500이지만 알리고 결과는 이미 저장됨. delivery_message는 수신자 정보를 가림
+  end note
+end
 note right of Service
   recipient는 응답에 넣지 않음.
   error · delivery_message는 이메일 · 전화번호를 가려서 응답 (maskPersonalInfo)

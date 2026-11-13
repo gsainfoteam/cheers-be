@@ -17,6 +17,8 @@ import {
   SchoolDto,
   UpdateDepartmentRequestDto,
 } from "@src/manager/department/dto/school-department.dto";
+import { ManagerContext } from "@src/manager/context/manager-context";
+import { CurrentManager } from "@src/manager/decorator/current-manager.decorator";
 import { ParsePkPipe } from "@src/manager/department/parse-pk.pipe";
 import { SchoolDepartmentService } from "@src/manager/department/school-department.service";
 import { ManagerGuard } from "@src/manager/guard/manager.guard";
@@ -57,8 +59,9 @@ export class SchoolDepartmentController {
   async createDepartment(
     @Param("schoolPk", ParsePkPipe) schoolPk: number,
     @Body() req: CreateDepartmentRequestDto,
+    @CurrentManager() manager: ManagerContext,
   ): Promise<DepartmentAdminDto> {
-    return this.service.createDepartment(schoolPk, req);
+    return this.service.createDepartment(schoolPk, req, manager);
   }
 
   /** 학과 이름 수정 · 비활성화 · 재활성화 */
@@ -72,8 +75,9 @@ export class SchoolDepartmentController {
     @Param("schoolPk", ParsePkPipe) schoolPk: number,
     @Param("departmentPk", ParsePkPipe) departmentPk: number,
     @Body() req: UpdateDepartmentRequestDto,
+    @CurrentManager() manager: ManagerContext,
   ): Promise<DepartmentAdminDto> {
-    return this.service.updateDepartment(schoolPk, departmentPk, req);
+    return this.service.updateDepartment(schoolPk, departmentPk, req, manager);
   }
 
   /** 허용 이메일 도메인 전체 교체 (superadmin 전용) */
@@ -88,7 +92,8 @@ export class SchoolDepartmentController {
   async replaceEmailDomains(
     @Param("schoolPk", ParsePkPipe) schoolPk: number,
     @Body() req: ReplaceEmailDomainsRequestDto,
+    @CurrentManager() manager: ManagerContext,
   ): Promise<SchoolDto> {
-    return this.service.replaceEmailDomains(schoolPk, req);
+    return this.service.replaceEmailDomains(schoolPk, req, manager);
   }
 }

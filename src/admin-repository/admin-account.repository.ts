@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import { and, asc, eq } from "drizzle-orm";
 import { DatabaseService } from "@src/database/database.service";
+import { TxType } from "@src/global/types/tx.types";
 import { adminAccount } from "@drizzle/schema/admin-account";
 
 export type AdminAccountRow = typeof adminAccount.$inferSelect;
@@ -46,14 +47,32 @@ export class AdminAccountRepository {
   }
 
   /*
+  SELECT * FROM admin_account WHERE pk = ?1 FOR UPDATE;
+   */
+  // 변경 전 값을 읽고 같은 트랜잭션에서 바꾸므로 행을 잠금
+  async findByPkForUpdate(
+    pk: string,
+    tx: TxType,
+  ): Promise<AdminAccountRow | null> {
+    const result = await tx
+      .select()
+      .from(adminAccount)
+      .where(eq(adminAccount.pk, pk))
+      .for("update");
+
+    return result[0] ?? null;
+  }
+
+  /*
   INSERT INTO admin_account (pk, email, role) VALUES (?1, ?2, ?3)
   ON CONFLICT (email) DO NOTHING RETURNING *;
    */
   // 이미 등록된 이메일이면 null
   async insertIfAbsent(
     row: Pick<AdminAccountRow, "email" | "role">,
+    tx?: TxType,
   ): Promise<AdminAccountRow | null> {
-    const result = await this.dbService.db
+    const result = await (tx ?? this.dbService.db)
       .insert(adminAccount)
       .values({ pk: randomUUID(), ...row })
       .onConflictDoNothing({ target: adminAccount.email })
@@ -69,8 +88,9 @@ export class AdminAccountRepository {
   async updateRole(
     pk: string,
     role: AdminAccountRole,
+    tx?: TxType,
   ): Promise<AdminAccountRow | null> {
-    const result = await this.dbService.db
+    const result = await (tx ?? this.dbService.db)
       .update(adminAccount)
       .set({ role, updatedAt: new Date() })
       .where(eq(adminAccount.pk, pk))
@@ -83,8 +103,8 @@ export class AdminAccountRepository {
   DELETE FROM admin_account WHERE pk = ?1 AND role = 'admin' RETURNING pk;
    */
   // superadmin은 지우지 않음. 지운 행이 없으면 false
-  async deleteAdminByPk(pk: string): Promise<boolean> {
-    const result = await this.dbService.db
+  async deleteAdminByPk(pk: string, tx?: TxType): Promise<boolean> {
+    const result = await (tx ?? this.dbService.db)
       .delete(adminAccount)
       .where(and(eq(adminAccount.pk, pk), eq(adminAccount.role, "admin")))
       .returning({ pk: adminAccount.pk });
