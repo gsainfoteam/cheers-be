@@ -51,10 +51,11 @@ describe("buildCoffeeChatRequestedMail", () => {
     );
   });
 
-  it("escapes the name in html", () => {
+  it("leaves out the button when there is no link", () => {
     const mail = buildCoffeeChatRequestedMail("a@example.com", "<b>", null);
 
-    expect(mail.html).toContain("&lt;b&gt;님");
-    expect(mail.html).not.toContain("<a ");
+    expect(mail.html).toContain("새로운 커피챗 요청이 도착했어요");
+    expect(mail.html).not.toContain("커피챗 요청 확인하기");
+    expect(mail.html).not.toContain("<b>");
   });
 });

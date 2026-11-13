@@ -359,7 +359,7 @@ describe("CheersStudentService", () => {
 
       const { email } = lastNotified();
       expect(email?.text).not.toContain("/applications/");
-      expect(email?.html).not.toContain("<a ");
+      expect(email?.html).not.toContain("http");
     });
 
     it("uses a fallback name when the graduated has no name", async () => {
