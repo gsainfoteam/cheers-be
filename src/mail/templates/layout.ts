@@ -14,6 +14,9 @@ const COLOR = {
   button: "#FF8A3D",
 };
 
+// 하단 "cheers 문의하기" 링크. 사이트 주소와 상관없이 항상 문의 메일로 연결
+const INQUIRY_MAILTO = "mailto:cheers@gistory.me";
+
 const FONT =
   "-apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif";
 const MONO_FONT = "'SFMono-Regular', Menlo, Consolas, 'Courier New', monospace";
@@ -24,7 +27,7 @@ export type MailLayoutInput = {
   descriptionLines: string[];
   // 설명 아래 본문 (인증번호 상자 또는 버튼). 이미 이스케이프된 html
   contentHtml: string;
-  // 하단의 사이트 주소 · 문의 링크 (WEB_BASE_URL). 없으면 링크 없이 문구만
+  // 하단의 사이트 주소 링크 (WEB_BASE_URL). 없으면 링크 없이 문구만
   siteUrl: string | null;
 };
 
@@ -34,9 +37,7 @@ export function renderMailLayout(input: MailLayoutInput): string {
   const siteLine = siteUrl
     ? `<br /><a href="${siteUrl}" style="color: ${COLOR.muted}; text-decoration: none;">${siteUrl}</a>`
     : "";
-  const inquiry = siteUrl
-    ? `<a href="${siteUrl}" style="color: ${COLOR.muted}; text-decoration: underline;">cheers 문의하기</a>`
-    : "cheers 문의하기";
+  const inquiry = `<a href="${INQUIRY_MAILTO}" style="color: ${COLOR.muted}; text-decoration: underline;">cheers 문의하기</a>`;
 
   return `<!DOCTYPE html>
 <html lang="ko">

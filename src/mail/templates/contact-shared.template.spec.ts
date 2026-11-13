@@ -18,7 +18,7 @@ describe("buildContactSharedMail", () => {
     const mail = buildContactSharedMail("a@b.c", "홍길동", "김철수", null);
 
     expect(mail.text).not.toContain("http");
-    expect(mail.html).not.toContain("<a ");
+    expect(mail.html).not.toContain("http");
     expect(mail.html).not.toContain("연락처 확인하기");
   });
 

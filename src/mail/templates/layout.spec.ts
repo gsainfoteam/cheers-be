@@ -19,7 +19,19 @@ describe("mail layout", () => {
     expect(html).toContain("발신 전용 메일");
   });
 
-  it("drops the footer links without a site url", () => {
+  it("links the inquiry text to the support mailbox", () => {
+    const html = renderMailLayout({
+      title: "제목",
+      descriptionLines: [],
+      contentHtml: "",
+      siteUrl: "https://cheers.example.com",
+    });
+
+    expect(html).toContain('href="mailto:cheers@gistory.me"');
+    expect(html).toMatch(/<a [^>]*>cheers 문의하기<\/a>/);
+  });
+
+  it("drops only the site link without a site url", () => {
     const html = renderMailLayout({
       title: "제목",
       descriptionLines: [],
@@ -27,8 +39,9 @@ describe("mail layout", () => {
       siteUrl: null,
     });
 
-    expect(html).not.toContain("<a ");
-    expect(html).toContain("cheers 문의하기");
+    expect(html).not.toContain("http");
+    // 문의 링크는 사이트 주소와 상관없이 남음
+    expect(html).toContain('href="mailto:cheers@gistory.me"');
   });
 
   it("escapes the button link and renders nothing without one", () => {
