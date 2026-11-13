@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { AdminAccessLogRepository } from "@src/admin-repository/admin-access-log.repository";
+import { AdminAuditLogRepository } from "@src/admin-repository/admin-audit-log.repository";
 import {
   AdminGraduatedRepository,
   AdminGraduatedRow,
@@ -34,6 +35,7 @@ export class BusinessCardService {
     private readonly fileService: FileService,
     private readonly adminGraduatedRepository: AdminGraduatedRepository,
     private readonly adminAccessLogRepository: AdminAccessLogRepository,
+    private readonly adminAuditLogRepository: AdminAuditLogRepository,
   ) {}
 
   async list(
@@ -98,6 +100,20 @@ export class BusinessCardService {
         throw new ConflictException("Business card is not verified");
       }
       await this.adminGraduatedRepository.clearVerification(graduatedPk, tx);
+      await this.adminAuditLogRepository.insert(
+        {
+          adminEmail: manager.email,
+          action: "business_card.verification_cancel",
+          targetType: "business_card",
+          targetId: graduatedPk,
+          before: {
+            verified_at: target.verifiedAt,
+            has_business_card: target.hasBusinessCard,
+          },
+          after: { verified_at: null, has_business_card: false },
+        },
+        tx,
+      );
     });
     this.logger.log(
       `Business card verification canceled: graduated ${graduatedPk}, manager ${manager.pk}`,

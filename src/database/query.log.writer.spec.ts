@@ -28,6 +28,17 @@ describe("QueryLogWriter", () => {
     );
   });
 
+  it("does not log parameters of admin audit log queries", () => {
+    writer.write(
+      'Query: insert into "admin_audit_log" -- params: ["admin@gm.gist.ac.kr", "{\\"name\\":\\"secret-name\\"}"]',
+    );
+
+    expect(loggerService.queryLog).toHaveBeenCalledTimes(1);
+    expect(loggerService.queryLog.mock.calls[0][0]).not.toContain(
+      "secret-name",
+    );
+  });
+
   it("does not log parameters of admin access log queries", () => {
     writer.write(
       'Query: insert into "admin_access_log" -- params: ["admin@gm.gist.ac.kr"]',

@@ -4,7 +4,11 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { AdminCoffeeChatRequestRepository } from "@src/admin-repository/admin-coffee-chat-request.repository";
+import { AdminAuditLogRepository } from "@src/admin-repository/admin-audit-log.repository";
 import { AdminNotificationLogRepository } from "@src/admin-repository/admin-notification-log.repository";
+import { DatabaseService } from "@src/database/database.service";
+import { TxType } from "@src/global/types/tx.types";
+import { ManagerContext } from "@src/manager/context/manager-context";
 import { ManagerCoffeeChatService } from "@src/manager/coffee-chat/manager-coffee-chat.service";
 import { NotificationDeliverySyncService } from "@src/notification/notification-delivery-sync.service";
 
@@ -54,10 +58,18 @@ describe("ManagerCoffeeChatService", () => {
     findByPk: jest.fn(),
   };
   const deliverySync = { refresh: jest.fn() };
+  const tx = {} as TxType;
+  const dbService = {
+    db: { transaction: (fn: (tx: TxType) => unknown) => fn(tx) },
+  };
+  const auditLogs = { insert: jest.fn() };
+  const manager = new ManagerContext("me", "me@gm.gist.ac.kr", "admin");
   const service = new ManagerCoffeeChatService(
     requests as unknown as AdminCoffeeChatRequestRepository,
     logs as unknown as AdminNotificationLogRepository,
     deliverySync as unknown as NotificationDeliverySyncService,
+    dbService as unknown as DatabaseService,
+    auditLogs as unknown as AdminAuditLogRepository,
   );
 
   beforeEach(() => jest.resetAllMocks());
@@ -293,7 +305,7 @@ describe("ManagerCoffeeChatService", () => {
         reportedAt: null,
       });
 
-      const res = await service.lookupDelivery("log");
+      const res = await service.lookupDelivery("log", manager);
 
       expect(deliverySync.refresh).toHaveBeenCalledWith("log", "123456788");
       expect(res.lookup).toBe("failed");
@@ -306,16 +318,39 @@ describe("ManagerCoffeeChatService", () => {
         delivery_message: "메시지가 템플릿과 일치하지않음 010****5678",
       });
       expect(res.log).not.toHaveProperty("recipient");
+      expect(auditLogs.insert).toHaveBeenCalledWith(
+        {
+          adminEmail: "me@gm.gist.ac.kr",
+          action: "notification_log.delivery_lookup",
+          targetType: "notification_log",
+          targetId: "log",
+          before: {
+            delivery_status: "pending",
+            delivery_code: null,
+            delivery_message: null,
+            delivery_reported_at: null,
+          },
+          after: {
+            delivery_status: "failed",
+            delivery_code: "U",
+            delivery_message: "메시지가 템플릿과 일치하지않음 010****5678",
+            delivery_reported_at: null,
+          },
+        },
+        tx,
+      );
     });
 
     it("아직 전송 중이면 pending과 그대로인 로그", async () => {
       logs.findByPk.mockResolvedValue(accepted());
       deliverySync.refresh.mockResolvedValue({ status: "pending" });
 
-      const res = await service.lookupDelivery("log");
+      const res = await service.lookupDelivery("log", manager);
 
       expect(res.lookup).toBe("pending");
       expect(res.log.delivery_status).toBe("pending");
+      // 저장된 값이 그대로면 감사 로그를 남기지 않음
+      expect(auditLogs.insert).not.toHaveBeenCalled();
     });
 
     it("알리고 조회가 실패하면 502, 사유의 전화번호는 가림", async () => {
@@ -325,9 +360,12 @@ describe("ManagerCoffeeChatService", () => {
         error: "-101 인증오류입니다. 01012345678",
       });
 
-      const error = await service.lookupDelivery("log").catch((e) => e);
+      const error = await service
+        .lookupDelivery("log", manager)
+        .catch((e) => e);
 
       expect(error).toBeInstanceOf(BadGatewayException);
+      expect(auditLogs.insert).not.toHaveBeenCalled();
       expect(error.message).toBe(
         "Failed to fetch the result from Aligo: -101 인증오류입니다. 010****5678",
       );
@@ -336,9 +374,9 @@ describe("ManagerCoffeeChatService", () => {
     it("없는 로그는 404", async () => {
       logs.findByPk.mockResolvedValue(null);
 
-      await expect(service.lookupDelivery("log")).rejects.toBeInstanceOf(
-        NotFoundException,
-      );
+      await expect(
+        service.lookupDelivery("log", manager),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
 
     it.each([
@@ -348,9 +386,9 @@ describe("ManagerCoffeeChatService", () => {
     ])("%s은 400이고 알리고를 부르지 않음", async (_, overrides) => {
       logs.findByPk.mockResolvedValue(accepted(overrides));
 
-      await expect(service.lookupDelivery("log")).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
+      await expect(
+        service.lookupDelivery("log", manager),
+      ).rejects.toBeInstanceOf(BadRequestException);
       expect(deliverySync.refresh).not.toHaveBeenCalled();
     });
   });

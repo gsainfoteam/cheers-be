@@ -2,7 +2,9 @@ import { ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { getAccessToken } from "./lib/auth";
 import { DEV_USER_DELETE_ENABLED } from "./lib/dev-user-delete";
+import { AccessLogsPage } from "./pages/AccessLogsPage";
 import { AdminAccountsPage } from "./pages/AdminAccountsPage";
+import { AuditLogsPage } from "./pages/AuditLogsPage";
 import { BusinessCardsPage } from "./pages/BusinessCardsPage";
 import { CallbackPage } from "./pages/CallbackPage";
 import { CoffeeChatRequestDetailPage } from "./pages/CoffeeChatRequestDetailPage";
@@ -58,6 +60,8 @@ export function App() {
         <Route path="business-cards" element={<BusinessCardsPage />} />
         <Route path="companies" element={<CompaniesPage />} />
         <Route path="admin-accounts" element={<AdminAccountsPage />} />
+        <Route path="audit-logs" element={<AuditLogsPage />} />
+        <Route path="access-logs" element={<AccessLogsPage />} />
         {DEV_USER_DELETE_ENABLED && (
           <Route path="dev-users" element={<DevUserDeletePage />} />
         )}

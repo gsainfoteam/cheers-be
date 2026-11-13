@@ -1,0 +1,50 @@
+@startuml get-manager-audit-log
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/manager/v1/audit-log
+caption CRB-81 · 어드민 감사 로그 목록 (superadmin 전용, 읽기 전용). 수정 · 삭제 API는 없음
+
+actor Client
+participant "ManagerGuard\n+ SuperAdminGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "AdminAuditLogController" as Controller
+participant "AdminAuditLogService" as Service
+participant "AdminAuditLogRepository" as AuditRepository
+database PostgreSQL
+
+Client -> Guard: GET /api/manager/v1/audit-log?admin_email&action&target_type&target_id&created_from&created_to&page&size\nAuthorization: Bearer <manager token>
+ref over Client, Guard: ManagerGuard + SuperAdminGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found\n403 Superadmin privilege is required.
+Guard -> Pipe: 통과
+alt query 검증 실패 (action · target_type은 정의된 값, target_id 길이, 날짜 형식, page · size 범위)
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+Pipe -> Controller: list(query)
+Controller -> Service: list(query)
+alt created_from이 created_to보다 늦음
+  Service -[#red]-> Client: 400 created_from must not be after created_to
+end
+Service -> AuditRepository: findPage(filter, offset, limit)
+par 동시에 조회 — 같은 조건
+  AuditRepository -> PostgreSQL: SELECT admin_audit_log\nWHERE admin_email ILIKE ? AND action = ? AND target_type = ? AND target_id = ? AND created_at 범위\nORDER BY created_at DESC, pk DESC LIMIT OFFSET
+  PostgreSQL --> AuditRepository: rows
+else
+  AuditRepository -> PostgreSQL: SELECT count(*) (같은 조건)
+  PostgreSQL --> AuditRepository: total
+end
+AuditRepository --> Service: { rows, total }
+note right of Service
+  admin_email은 기록 시점 이메일이라 어드민 계정을 지워도 그대로 남음.
+  before · after는 JSON 그대로 응답 (생성이면 before = null, 삭제면 after = null).
+  이 조회 자체는 기록하지 않음
+end note
+Service --> Controller: PageResponseDto<AdminAuditLogDto>
+Controller --> Client: 200 { items: [{ pk, admin_email, action, target_type, target_id, before, after, created_at }], page, size, total }
+
+@enduml

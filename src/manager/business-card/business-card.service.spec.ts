@@ -1,5 +1,6 @@
 import { ConflictException, NotFoundException } from "@nestjs/common";
 import { AdminAccessLogRepository } from "@src/admin-repository/admin-access-log.repository";
+import { AdminAuditLogRepository } from "@src/admin-repository/admin-audit-log.repository";
 import { AdminGraduatedRepository } from "@src/admin-repository/admin-graduated.repository";
 import { DatabaseService } from "@src/database/database.service";
 import { FileService } from "@src/file/file.service";
@@ -24,11 +25,13 @@ describe("BusinessCardService", () => {
     clearVerification: jest.fn(),
   };
   const adminAccessLogRepository = { insert: jest.fn() };
+  const adminAuditLogRepository = { insert: jest.fn() };
   const service = new BusinessCardService(
     dbService as unknown as DatabaseService,
     fileService as unknown as FileService,
     adminGraduatedRepository as unknown as AdminGraduatedRepository,
     adminAccessLogRepository as unknown as AdminAccessLogRepository,
+    adminAuditLogRepository as unknown as AdminAuditLogRepository,
   );
   const manager = new ManagerContext("me", "me@gm.gist.ac.kr", "admin");
 
@@ -149,6 +152,7 @@ describe("BusinessCardService", () => {
     it("트랜잭션 안에서 인증을 지우고 S3 파일은 건드리지 않음", async () => {
       adminGraduatedRepository.findForUpdate.mockResolvedValue({
         verifiedAt: NOW,
+        hasBusinessCard: true,
       });
 
       await service.cancelVerification(GRADUATED_PK, manager);
@@ -162,6 +166,29 @@ describe("BusinessCardService", () => {
         tx,
       );
       expect(fileService.deleteFile).not.toHaveBeenCalled();
+      expect(adminAuditLogRepository.insert).toHaveBeenCalledWith(
+        {
+          adminEmail: "me@gm.gist.ac.kr",
+          action: "business_card.verification_cancel",
+          targetType: "business_card",
+          targetId: GRADUATED_PK,
+          before: { verified_at: NOW, has_business_card: true },
+          after: { verified_at: null, has_business_card: false },
+        },
+        tx,
+      );
+    });
+
+    it("감사 로그 저장이 실패하면 취소도 실패", async () => {
+      adminGraduatedRepository.findForUpdate.mockResolvedValue({
+        verifiedAt: NOW,
+        hasBusinessCard: true,
+      });
+      adminAuditLogRepository.insert.mockRejectedValue(new Error("db down"));
+
+      await expect(
+        service.cancelVerification(GRADUATED_PK, manager),
+      ).rejects.toThrow("db down");
     });
 
     it("현업자가 없으면 404", async () => {
@@ -176,6 +203,7 @@ describe("BusinessCardService", () => {
     it("이미 인증 전이면 409", async () => {
       adminGraduatedRepository.findForUpdate.mockResolvedValue({
         verifiedAt: null,
+        hasBusinessCard: false,
       });
 
       await expect(

@@ -43,6 +43,15 @@ comments:
       admin_email: 열람 시점의 어드민 이메일. 어드민 계정을 지워도 남음
       target_type: 열람한 개인정보 종류
       target_id: "target_type = business_card: graduated.pk"
+  - table: admin_audit_log
+    tableComment: 어드민의 데이터 변경 기록 (변경 전 · 후 값). 변경과 같은 트랜잭션에서 insert만 함. 대상이 지워져도 남도록 다른 테이블로 FK를 걸지 않음
+    columnComments:
+      admin_email: 요청 시점의 어드민 이메일. 어드민 계정을 지워도 남음
+      action: '"<target_type>.<verb>" (예: admin_account.role_update). 목록은 drizzle/schema/admin-audit-log.ts의 ADMIN_AUDIT_ACTIONS'
+      target_type: 변경된 엔티티 종류 (admin_account, interest, company 등)
+      target_id: 대상 엔티티 pk (문자열). 일괄 작업은 null
+      before: 변경 전 값 (JSON). 생성이면 null
+      after: 변경 후 값 (JSON). 삭제면 null
   - table: users
     tableComment: 모든 유저의 공통 정보. 유형별 정보는 student / graduated
     columnComments:

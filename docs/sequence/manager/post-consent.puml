@@ -17,6 +17,7 @@ participant "ValidationPipe" as Pipe
 participant "ManagerConsentController" as Controller
 participant "ManagerConsentService" as Service
 participant "AdminConsentRepository" as AdminConsentRepository
+participant "AdminAuditLogRepository" as AdminAuditLogRepository
 database PostgreSQL
 
 note over Client: 어드민 화면은 필수 약관 등록, 필수 → 선택 변경,\n처음 보는 종류, 최신보다 낮은 버전 번호일 때 확인 창을 먼저 띄움.\n서버 쪽 확인 절차는 없음
@@ -26,14 +27,19 @@ Guard -> Pipe: 통과
 alt body 검증 실패 (type · version 형식 · 길이, version이 영문 · 숫자로 시작하지 않음, is_required가 boolean이 아님, url이 http(s)가 아니거나 512자 초과)
   Pipe -[#red]-> Client: 400 (class-validator 메시지)
 end
-Pipe -> Controller: create(req)
-Controller -> Service: create(req)
-Service -> AdminConsentRepository: insertIfAbsent({ type, version, isRequired, url })
-AdminConsentRepository -> PostgreSQL: INSERT consent\nON CONFLICT (type, version) DO NOTHING RETURNING
-note right: 먼저 조회하지 않아 동시 요청이어도 500이 아니라 409.\n요청 하나에 한 행만 넣어 created_at이 겹치지 않음 (최신 버전 판정 기준)
-PostgreSQL --> AdminConsentRepository: row | 0행
-alt 0행 (이미 있는 버전)
-  Service -[#red]-> Client: 409 This consent version already exists.
+Pipe -> Controller: create(req, manager)
+Controller -> Service: create(req, manager)
+group transaction (DatabaseService.db.transaction) — CRB-81, flow/admin-audit.puml
+  Service -> AdminConsentRepository: insertIfAbsent({ type, version, isRequired, url }, tx)
+  AdminConsentRepository -> PostgreSQL: INSERT consent\nON CONFLICT (type, version) DO NOTHING RETURNING
+  note right: 먼저 조회하지 않아 동시 요청이어도 500이 아니라 409.\n요청 하나에 한 행만 넣어 created_at이 겹치지 않음 (최신 버전 판정 기준)
+  PostgreSQL --> AdminConsentRepository: row | 0행
+  alt 0행 (이미 있는 버전)
+    Service -[#red]-> Client: 409 This consent version already exists.
+  end
+  Service -> AdminAuditLogRepository: insert({ adminEmail, action: "consent.create", targetType: "consent", targetId: "<type>:<version>" (64자 초과 시 자름),\nafter: { type, version, is_required, url } }, tx)
+  AdminAuditLogRepository -> PostgreSQL: INSERT admin_audit_log
+  note right of AdminAuditLogRepository: 변경과 같은 트랜잭션 (flow/admin-audit.puml). 기록이 실패하면 변경도 rollback
 end
 Service --> Controller: ConsentVersionDto
 Controller --> Client: 201 { type, version, is_required, url, created_at }

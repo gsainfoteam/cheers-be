@@ -19,6 +19,7 @@ participant "SchoolDepartmentService" as Service
 participant "AdminSchoolRepository" as SchoolRepository
 participant "AdminSchoolEmailDomainRepository" as DomainRepository
 participant "AdminStudentRepository" as StudentRepository
+participant "AdminAuditLogRepository" as AdminAuditLogRepository
 database PostgreSQL
 
 Client -> Guard: PUT /api/manager/v1/school/{schoolPk}/email-domain\nAuthorization: Bearer <manager token>\n{ email_domains }
@@ -34,8 +35,8 @@ note right of Pipe
   형식: 라벨(영문 소문자 · 숫자 · 하이픈, 앞뒤 하이픈 불가)을 점으로 이은 것,
   마지막 라벨은 영문 2자 이상. @ · 와일드카드 · 포트 · 한글 불가
 end note
-Pipe -> Controller: replaceEmailDomains(schoolPk, req)
-Controller -> Service: replaceEmailDomains(schoolPk, req)
+Pipe -> Controller: replaceEmailDomains(schoolPk, req, manager)
+Controller -> Service: replaceEmailDomains(schoolPk, req, manager)
 
 group transaction (DatabaseService.db.transaction)
   Service -> SchoolRepository: findByPkForUpdate(schoolPk, tx)
@@ -81,6 +82,15 @@ group transaction (DatabaseService.db.transaction)
     alt UNIQUE (domain) 위반 (다른 학교의 도메인)
       Service -[#red]-> Client: 409 Email domain is already used by another school.
     end
+  end
+
+  Service -> DomainRepository: findBySchoolPk(schoolPk, tx)
+  DomainRepository -> PostgreSQL: SELECT school_email_domain WHERE school_pk = ? ORDER BY pk
+  PostgreSQL --> DomainRepository: rows (= after)
+  opt 뺄 도메인 또는 더할 도메인이 있음 (바뀐 게 없으면 기록하지 않음)
+    Service -> AdminAuditLogRepository: insert({ adminEmail, action: "school_email_domain.replace", targetType: "school_email_domain", targetId: schoolPk,\nbefore: { domains }, after: { domains } }, tx)
+    AdminAuditLogRepository -> PostgreSQL: INSERT admin_audit_log
+    note right of AdminAuditLogRepository: 변경과 같은 트랜잭션 (flow/admin-audit.puml). 기록이 실패하면 변경도 rollback
   end
 end
 note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답

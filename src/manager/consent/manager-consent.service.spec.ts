@@ -1,5 +1,9 @@
 import { ConflictException, NotFoundException } from "@nestjs/common";
+import { AdminAuditLogRepository } from "@src/admin-repository/admin-audit-log.repository";
 import { AdminConsentRepository } from "@src/admin-repository/admin-consent.repository";
+import { DatabaseService } from "@src/database/database.service";
+import { TxType } from "@src/global/types/tx.types";
+import { ManagerContext } from "@src/manager/context/manager-context";
 import { ManagerConsentService } from "@src/manager/consent/manager-consent.service";
 
 const NOW = new Date("2026-10-31T00:00:00Z");
@@ -13,6 +17,12 @@ const row = (type: string, version: string, isLatest = false) => ({
 });
 
 describe("ManagerConsentService", () => {
+  const tx = {} as TxType;
+  const dbService = {
+    db: { transaction: (fn: (tx: TxType) => unknown) => fn(tx) },
+  };
+  const auditLogRepository = { insert: jest.fn() };
+  const manager = new ManagerContext("me", "me@gm.gist.ac.kr", "superadmin");
   const repository = {
     findAllVersions: jest.fn(),
     exists: jest.fn(),
@@ -20,7 +30,9 @@ describe("ManagerConsentService", () => {
     countStatus: jest.fn(),
   };
   const service = new ManagerConsentService(
+    dbService as unknown as DatabaseService,
     repository as unknown as AdminConsentRepository,
+    auditLogRepository as unknown as AdminAuditLogRepository,
   );
 
   beforeEach(() => jest.resetAllMocks());
@@ -71,24 +83,70 @@ describe("ManagerConsentService", () => {
         createdAt: NOW,
       });
 
-      await expect(service.create(req)).resolves.toEqual({
+      await expect(service.create(req, manager)).resolves.toEqual({
         type: "tos",
         version: "2",
         is_required: false,
         url: req.url,
         created_at: NOW,
       });
-      expect(repository.insertIfAbsent).toHaveBeenCalledWith({
+      expect(repository.insertIfAbsent).toHaveBeenCalledWith(
+        { type: "tos", version: "2", isRequired: false, url: req.url },
+        tx,
+      );
+      expect(auditLogRepository.insert).toHaveBeenCalledWith(
+        {
+          adminEmail: "me@gm.gist.ac.kr",
+          action: "consent.create",
+          targetType: "consent",
+          targetId: "tos:2",
+          after: {
+            type: "tos",
+            version: "2",
+            is_required: false,
+            url: req.url,
+          },
+        },
+        tx,
+      );
+    });
+
+    it("target_id가 64자를 넘으면 자르고 전체 값은 after에 남김", async () => {
+      const type = "t".repeat(64);
+      repository.insertIfAbsent.mockResolvedValue({
+        type,
+        version: "2",
+        isRequired: true,
+        url: req.url,
+        createdAt: NOW,
+      });
+
+      await service.create({ ...req, type }, manager);
+
+      const [entry] = auditLogRepository.insert.mock.calls[0];
+      expect(entry.targetId).toHaveLength(64);
+      expect(entry.after).toMatchObject({ type, version: "2" });
+    });
+
+    it("감사 로그 저장이 실패하면 등록도 실패", async () => {
+      repository.insertIfAbsent.mockResolvedValue({
         type: "tos",
         version: "2",
         isRequired: false,
         url: req.url,
+        createdAt: NOW,
       });
+      auditLogRepository.insert.mockRejectedValue(new Error("db down"));
+
+      await expect(service.create(req, manager)).rejects.toThrow("db down");
     });
 
     it("이미 있는 버전은 409", async () => {
       repository.insertIfAbsent.mockResolvedValue(null);
-      await expect(service.create(req)).rejects.toThrow(ConflictException);
+      await expect(service.create(req, manager)).rejects.toThrow(
+        ConflictException,
+      );
+      expect(auditLogRepository.insert).not.toHaveBeenCalled();
     });
   });
 

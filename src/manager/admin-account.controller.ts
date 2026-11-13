@@ -46,8 +46,9 @@ export class AdminAccountController {
   })
   async create(
     @Body() req: CreateAdminAccountRequestDto,
+    @CurrentManager() manager: ManagerContext,
   ): Promise<AdminAccountDto> {
-    return this.adminAccountService.create(req);
+    return this.adminAccountService.create(req, manager);
   }
 
   /** 어드민 권한 변경 (superadmin 전용, 자기 자신은 불가) */

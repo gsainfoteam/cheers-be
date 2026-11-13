@@ -3,11 +3,14 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import { AdminAuditLogRepository } from "@src/admin-repository/admin-audit-log.repository";
 import {
   AdminInterestRepository,
   AdminInterestRow,
 } from "@src/admin-repository/admin-interest.repository";
 import { DatabaseService } from "@src/database/database.service";
+import { ManagerContext } from "@src/manager/context/manager-context";
+import { AdminAuditSnapshot } from "@drizzle/schema/admin-audit-log";
 import {
   AdminInterestDto,
   AdminInterestNameRequestDto,
@@ -26,6 +29,7 @@ export class AdminInterestService {
     private readonly dbService: DatabaseService,
     private readonly adminInterestRepository: AdminInterestRepository,
     private readonly interestService: InterestService,
+    private readonly adminAuditLogRepository: AdminAuditLogRepository,
   ) {}
 
   async list(): Promise<AdminInterestDto[]> {
@@ -33,7 +37,11 @@ export class AdminInterestService {
     return rows.map((row) => this.toDto(row));
   }
 
-  async create(req: AdminInterestNameRequestDto): Promise<AdminInterestDto> {
+  // 쓰기는 감사 로그(CRB-81)를 변경과 같은 트랜잭션에서 남김. 기록이 실패하면 변경도 되돌림
+  async create(
+    req: AdminInterestNameRequestDto,
+    manager: ManagerContext,
+  ): Promise<AdminInterestDto> {
     const row = await this.dbService.db.transaction(async (tx) => {
       await this.adminInterestRepository.lockForWrite(tx);
       const existing = await this.adminInterestRepository.findByName(
@@ -43,7 +51,18 @@ export class AdminInterestService {
       if (existing) {
         throw new ConflictException(DUPLICATE_NAME);
       }
-      return this.adminInterestRepository.insert(req.name, tx);
+      const created = await this.adminInterestRepository.insert(req.name, tx);
+      await this.adminAuditLogRepository.insert(
+        {
+          adminEmail: manager.email,
+          action: "interest.create",
+          targetType: "interest",
+          targetId: created.pk,
+          after: this.toSnapshot(created),
+        },
+        tx,
+      );
+      return created;
     });
 
     await this.interestService.refresh();
@@ -53,6 +72,7 @@ export class AdminInterestService {
   async updateName(
     pk: number,
     req: AdminInterestNameRequestDto,
+    manager: ManagerContext,
   ): Promise<AdminInterestDto> {
     const row = await this.dbService.db.transaction(async (tx) => {
       await this.adminInterestRepository.lockForWrite(tx);
@@ -67,24 +87,58 @@ export class AdminInterestService {
       if (existing && existing.pk !== pk) {
         throw new ConflictException(DUPLICATE_NAME);
       }
-      return this.adminInterestRepository.updateName(pk, req.name, tx);
+      const updated = await this.adminInterestRepository.updateName(
+        pk,
+        req.name,
+        tx,
+      );
+      await this.adminAuditLogRepository.insert(
+        {
+          adminEmail: manager.email,
+          action: "interest.rename",
+          targetType: "interest",
+          targetId: pk,
+          before: this.toSnapshot(target),
+          after: this.toSnapshot(updated),
+        },
+        tx,
+      );
+      return updated;
     });
 
     await this.interestService.refresh();
     return this.toDto(row);
   }
 
-  async remove(pk: number): Promise<void> {
-    const deleted = await this.adminInterestRepository.deleteByPk(pk);
-    if (!deleted) {
-      throw new NotFoundException(NOT_FOUND);
-    }
+  async remove(pk: number, manager: ManagerContext): Promise<void> {
+    await this.dbService.db.transaction(async (tx) => {
+      await this.adminInterestRepository.lockForWrite(tx);
+      const target = await this.adminInterestRepository.findByPk(pk, tx);
+      if (!target) {
+        throw new NotFoundException(NOT_FOUND);
+      }
+      const deleted = await this.adminInterestRepository.deleteByPk(pk, tx);
+      if (!deleted) {
+        throw new NotFoundException(NOT_FOUND);
+      }
+      await this.adminAuditLogRepository.insert(
+        {
+          adminEmail: manager.email,
+          action: "interest.delete",
+          targetType: "interest",
+          targetId: pk,
+          before: this.toSnapshot(target),
+        },
+        tx,
+      );
+    });
 
     await this.interestService.refresh();
   }
 
   async reorder(
     req: ReorderAdminInterestRequestDto,
+    manager: ManagerContext,
   ): Promise<AdminInterestDto[]> {
     const rows = await this.dbService.db.transaction(async (tx) => {
       await this.adminInterestRepository.lockForWrite(tx);
@@ -103,11 +157,31 @@ export class AdminInterestService {
       for (const [index, pk] of req.pks.entries()) {
         await this.adminInterestRepository.updateSortOrder(pk, index + 1, tx);
       }
-      return this.adminInterestRepository.findAll(tx);
+      const reordered = await this.adminInterestRepository.findAll(tx);
+      await this.adminAuditLogRepository.insert(
+        {
+          adminEmail: manager.email,
+          action: "interest.reorder",
+          targetType: "interest",
+          before: { order: current.map((row) => this.toOrderItem(row)) },
+          after: { order: reordered.map((row) => this.toOrderItem(row)) },
+        },
+        tx,
+      );
+      return reordered;
     });
 
     await this.interestService.refresh();
     return rows.map((row) => this.toDto(row));
+  }
+
+  // 감사 로그용 스냅샷
+  private toSnapshot(row: AdminInterestRow): AdminAuditSnapshot {
+    return { name: row.name, sort_order: row.sortOrder };
+  }
+
+  private toOrderItem(row: AdminInterestRow): { pk: number; name: string } {
+    return { pk: row.pk, name: row.name };
   }
 
   private toDto(row: AdminInterestRow): AdminInterestDto {

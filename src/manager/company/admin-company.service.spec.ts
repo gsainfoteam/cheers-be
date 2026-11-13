@@ -3,6 +3,7 @@ import {
   ConflictException,
   NotFoundException,
 } from "@nestjs/common";
+import { AdminAuditLogRepository } from "@src/admin-repository/admin-audit-log.repository";
 import {
   AdminCompanyAliasRow,
   AdminCompanyRepository,
@@ -12,9 +13,11 @@ import { DatabaseService } from "@src/database/database.service";
 import { FilePurpose } from "@src/file/file.constants";
 import { FileService } from "@src/file/file.service";
 import { TxType } from "@src/global/types/tx.types";
+import { ManagerContext } from "@src/manager/context/manager-context";
 import { AdminCompanyService } from "./admin-company.service";
 
 const MANAGER_PK = "aaaaaaaa-0000-4000-8000-000000000001";
+const manager = new ManagerContext(MANAGER_PK, "me@gm.gist.ac.kr", "admin");
 const CREATED_AT = new Date("2026-11-01T00:00:00.000Z");
 
 const aliasRow = (
@@ -60,6 +63,7 @@ describe("AdminCompanyService", () => {
     deleteName: jest.fn(),
     deleteAlias: jest.fn(),
   };
+  const auditLogRepository = { insert: jest.fn() };
   const fileService = {
     getPresignedUrls: jest.fn(),
     deleteFileQuietly: jest.fn(),
@@ -70,10 +74,12 @@ describe("AdminCompanyService", () => {
     dbService as unknown as DatabaseService,
     repository as unknown as AdminCompanyRepository,
     fileService as unknown as FileService,
+    auditLogRepository as unknown as AdminAuditLogRepository,
   );
 
   beforeEach(() => {
     jest.clearAllMocks();
+    auditLogRepository.insert.mockReset();
     repository.findDetail.mockResolvedValue(detailRow());
     repository.findByPkForUpdate.mockResolvedValue(aliasRow());
     repository.findNamesByNormalized.mockResolvedValue([]);
@@ -129,10 +135,13 @@ describe("AdminCompanyService", () => {
 
   describe("create", () => {
     it("registers the company name and other names once per normalized name", async () => {
-      await service.create({
-        name: "Microsoft",
-        names: ["마이크로소프트", "MICROSOFT", "마소"],
-      });
+      await service.create(
+        {
+          name: "Microsoft",
+          names: ["마이크로소프트", "MICROSOFT", "마소"],
+        },
+        manager,
+      );
 
       expect(repository.lockNames).toHaveBeenCalledWith(
         ["microsoft", "마이크로소프트", "마소"],
@@ -150,13 +159,41 @@ describe("AdminCompanyService", () => {
       );
     });
 
+    it("records an audit log in the same transaction", async () => {
+      await service.create({ name: "Microsoft" }, manager);
+
+      expect(auditLogRepository.insert).toHaveBeenCalledWith(
+        {
+          adminEmail: "me@gm.gist.ac.kr",
+          action: "company.create",
+          targetType: "company",
+          targetId: 1,
+          after: {
+            name: "Microsoft",
+            needs_review: false,
+            logo_key: null,
+            names: ["Microsoft"],
+          },
+        },
+        tx,
+      );
+    });
+
+    it("fails when the audit log cannot be saved", async () => {
+      auditLogRepository.insert.mockRejectedValue(new Error("db down"));
+
+      await expect(
+        service.create({ name: "Microsoft" }, manager),
+      ).rejects.toThrow("db down");
+    });
+
     it("throws 409 when a name already belongs to a company", async () => {
       repository.findNamesByNormalized.mockResolvedValue([
         { pk: 5, aliasPk: 2, name: "마소", aliasName: "MS Korea" },
       ]);
 
       await expect(
-        service.create({ name: "Microsoft", names: ["마소"] }),
+        service.create({ name: "Microsoft", names: ["마소"] }, manager),
       ).rejects.toThrow(
         new ConflictException(
           "Company name already registered: 마소 (MS Korea)",
@@ -168,7 +205,7 @@ describe("AdminCompanyService", () => {
 
   describe("update", () => {
     it("approves a company under review", async () => {
-      await service.update(1, { needs_review: false });
+      await service.update(1, { needs_review: false }, manager);
 
       expect(repository.updateAlias).toHaveBeenCalledWith(
         1,
@@ -178,8 +215,39 @@ describe("AdminCompanyService", () => {
       expect(repository.insertNames).not.toHaveBeenCalled();
     });
 
+    it("records before and after in the audit log", async () => {
+      repository.findDetail
+        .mockResolvedValueOnce(detailRow({ needsReview: true }))
+        .mockResolvedValueOnce(detailRow({ needsReview: false }));
+
+      await service.update(1, { needs_review: false }, manager);
+
+      expect(auditLogRepository.insert).toHaveBeenCalledWith(
+        {
+          adminEmail: "me@gm.gist.ac.kr",
+          action: "company.update",
+          targetType: "company",
+          targetId: 1,
+          before: expect.objectContaining({ needs_review: true }),
+          after: expect.objectContaining({ needs_review: false }),
+        },
+        tx,
+      );
+    });
+
+    it("does not record an audit log when the update is rejected", async () => {
+      repository.findNamesByNormalized.mockResolvedValue([
+        { pk: 20, aliasPk: 2, name: "Google", aliasName: "Google" },
+      ]);
+
+      await expect(
+        service.update(1, { name: "google" }, manager),
+      ).rejects.toThrow(ConflictException);
+      expect(auditLogRepository.insert).not.toHaveBeenCalled();
+    });
+
     it("adds the new name as a searchable name when renaming", async () => {
-      await service.update(1, { name: "Microsoft Korea" });
+      await service.update(1, { name: "Microsoft Korea" }, manager);
 
       expect(repository.insertNames).toHaveBeenCalledWith(
         1,
@@ -198,7 +266,7 @@ describe("AdminCompanyService", () => {
         { pk: 10, aliasPk: 1, name: "microsoft", aliasName: "Microsoft" },
       ]);
 
-      await service.update(1, { name: "MICROSOFT" });
+      await service.update(1, { name: "MICROSOFT" }, manager);
 
       expect(repository.insertNames).not.toHaveBeenCalled();
       expect(repository.updateAlias).toHaveBeenCalled();
@@ -209,17 +277,59 @@ describe("AdminCompanyService", () => {
         { pk: 20, aliasPk: 2, name: "Google", aliasName: "Google" },
       ]);
 
-      await expect(service.update(1, { name: "google" })).rejects.toThrow(
-        ConflictException,
-      );
+      await expect(
+        service.update(1, { name: "google" }, manager),
+      ).rejects.toThrow(ConflictException);
       expect(repository.updateAlias).not.toHaveBeenCalled();
     });
 
     it("throws 404 for an unknown company", async () => {
       repository.findByPkForUpdate.mockResolvedValue(null);
 
-      await expect(service.update(1, { needs_review: false })).rejects.toThrow(
-        NotFoundException,
+      await expect(
+        service.update(1, { needs_review: false }, manager),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe("addName", () => {
+    it("records the names before and after", async () => {
+      repository.findDetail
+        .mockResolvedValueOnce(detailRow())
+        .mockResolvedValueOnce(
+          detailRow({
+            names: [
+              { pk: 10, name: "Microsoft" },
+              { pk: 11, name: "마소" },
+            ],
+          }),
+        );
+
+      await service.addName(1, "마소", manager);
+
+      expect(repository.insertNames).toHaveBeenCalledWith(
+        1,
+        [{ name: "마소", normalizedName: "마소" }],
+        tx,
+      );
+      expect(auditLogRepository.insert).toHaveBeenCalledWith(
+        {
+          adminEmail: "me@gm.gist.ac.kr",
+          action: "company_name.add",
+          targetType: "company_name",
+          targetId: 1,
+          before: { company_id: 1, names: ["Microsoft"] },
+          after: { company_id: 1, names: ["Microsoft", "마소"] },
+        },
+        tx,
+      );
+    });
+
+    it("fails when the audit log cannot be saved", async () => {
+      auditLogRepository.insert.mockRejectedValue(new Error("db down"));
+
+      await expect(service.addName(1, "마소", manager)).rejects.toThrow(
+        "db down",
       );
     });
   });
@@ -234,10 +344,18 @@ describe("AdminCompanyService", () => {
         createdAt: CREATED_AT,
       });
 
-      await service.removeName(1, 11);
+      await service.removeName(1, 11, manager);
 
       expect(repository.findName).toHaveBeenCalledWith(1, 11, tx);
       expect(repository.deleteName).toHaveBeenCalledWith(11, tx);
+      expect(auditLogRepository.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "company_name.remove",
+          targetType: "company_name",
+          targetId: 1,
+        }),
+        tx,
+      );
     });
 
     it("refuses to delete the company's own name", async () => {
@@ -249,16 +367,17 @@ describe("AdminCompanyService", () => {
         createdAt: CREATED_AT,
       });
 
-      await expect(service.removeName(1, 10)).rejects.toThrow(
+      await expect(service.removeName(1, 10, manager)).rejects.toThrow(
         BadRequestException,
       );
       expect(repository.deleteName).not.toHaveBeenCalled();
+      expect(auditLogRepository.insert).not.toHaveBeenCalled();
     });
 
     it("throws 404 for a name of another company", async () => {
       repository.findName.mockResolvedValue(null);
 
-      await expect(service.removeName(1, 99)).rejects.toThrow(
+      await expect(service.removeName(1, 99, manager)).rejects.toThrow(
         new NotFoundException("Company name not found"),
       );
     });
@@ -275,7 +394,7 @@ describe("AdminCompanyService", () => {
     it("moves names and profiles to the target and deletes the source", async () => {
       repository.findByPksForUpdate.mockResolvedValue([target, source]);
 
-      await service.merge(2, 1);
+      await service.merge(2, 1, manager);
 
       expect(repository.findByPksForUpdate).toHaveBeenCalledWith([2, 1], tx);
       expect(repository.moveNames).toHaveBeenCalledWith(2, 1, tx);
@@ -285,13 +404,70 @@ describe("AdminCompanyService", () => {
       expect(fileService.deleteFileQuietly).not.toHaveBeenCalled();
     });
 
+    it("records source and target before and the moved profile count", async () => {
+      repository.findByPksForUpdate.mockResolvedValue([target, source]);
+      repository.countProfiles.mockResolvedValue(3);
+      repository.findDetail
+        .mockResolvedValueOnce(
+          detailRow({
+            pk: 2,
+            name: "마이크로소프트",
+            names: [{ pk: 20, name: "마이크로소프트" }],
+          }),
+        )
+        .mockResolvedValueOnce(detailRow())
+        .mockResolvedValueOnce(
+          detailRow({
+            names: [
+              { pk: 10, name: "Microsoft" },
+              { pk: 20, name: "마이크로소프트" },
+            ],
+          }),
+        );
+
+      await service.merge(2, 1, manager);
+
+      expect(auditLogRepository.insert).toHaveBeenCalledWith(
+        {
+          adminEmail: "me@gm.gist.ac.kr",
+          action: "company.merge",
+          targetType: "company",
+          targetId: 2,
+          before: {
+            source: {
+              name: "마이크로소프트",
+              needs_review: false,
+              logo_key: null,
+              names: ["마이크로소프트"],
+            },
+            target: {
+              name: "Microsoft",
+              needs_review: false,
+              logo_key: null,
+              names: ["Microsoft"],
+            },
+          },
+          after: {
+            target: {
+              name: "Microsoft",
+              needs_review: false,
+              logo_key: null,
+              names: ["Microsoft", "마이크로소프트"],
+            },
+            moved_graduated_count: 3,
+          },
+        },
+        tx,
+      );
+    });
+
     it("gives the source logo to a target without one", async () => {
       repository.findByPksForUpdate.mockResolvedValue([
         target,
         { ...source, logoKey: "company-logo/a/src.png" },
       ]);
 
-      await service.merge(2, 1);
+      await service.merge(2, 1, manager);
 
       expect(repository.updateAlias).toHaveBeenCalledWith(
         1,
@@ -307,7 +483,7 @@ describe("AdminCompanyService", () => {
         { ...source, logoKey: "company-logo/a/src.png" },
       ]);
 
-      await service.merge(2, 1);
+      await service.merge(2, 1, manager);
 
       expect(repository.updateAlias).not.toHaveBeenCalled();
       expect(fileService.deleteFileQuietly).toHaveBeenCalledWith(
@@ -316,14 +492,18 @@ describe("AdminCompanyService", () => {
     });
 
     it("rejects merging into itself", async () => {
-      await expect(service.merge(1, 1)).rejects.toThrow(BadRequestException);
+      await expect(service.merge(1, 1, manager)).rejects.toThrow(
+        BadRequestException,
+      );
       expect(dbService.db.transaction).not.toHaveBeenCalled();
     });
 
     it("throws 404 when either company is gone", async () => {
       repository.findByPksForUpdate.mockResolvedValue([target]);
 
-      await expect(service.merge(2, 1)).rejects.toThrow(NotFoundException);
+      await expect(service.merge(2, 1, manager)).rejects.toThrow(
+        NotFoundException,
+      );
       expect(repository.moveNames).not.toHaveBeenCalled();
     });
   });
@@ -335,18 +515,41 @@ describe("AdminCompanyService", () => {
       );
       repository.countProfiles.mockResolvedValue(0);
 
-      await service.remove(1);
+      await service.remove(1, manager);
 
       expect(repository.deleteAlias).toHaveBeenCalledWith(1, tx);
       expect(fileService.deleteFileQuietly).toHaveBeenCalledWith(
         "company-logo/a/l.png",
       );
+      expect(auditLogRepository.insert).toHaveBeenCalledWith(
+        {
+          adminEmail: "me@gm.gist.ac.kr",
+          action: "company.delete",
+          targetType: "company",
+          targetId: 1,
+          before: expect.objectContaining({ name: "Microsoft" }),
+        },
+        tx,
+      );
+    });
+
+    it("keeps the logo file when the audit log cannot be saved", async () => {
+      repository.findByPkForUpdate.mockResolvedValue(
+        aliasRow({ logoKey: "company-logo/a/l.png" }),
+      );
+      repository.countProfiles.mockResolvedValue(0);
+      auditLogRepository.insert.mockRejectedValue(new Error("db down"));
+
+      await expect(service.remove(1, manager)).rejects.toThrow("db down");
+      expect(fileService.deleteFileQuietly).not.toHaveBeenCalled();
     });
 
     it("throws 409 for a company picked by graduates", async () => {
       repository.countProfiles.mockResolvedValue(2);
 
-      await expect(service.remove(1)).rejects.toThrow(ConflictException);
+      await expect(service.remove(1, manager)).rejects.toThrow(
+        ConflictException,
+      );
       expect(repository.deleteAlias).not.toHaveBeenCalled();
     });
   });
@@ -383,7 +586,7 @@ describe("AdminCompanyService", () => {
         aliasRow({ logoKey: "company-logo/a/old.png" }),
       );
 
-      await service.updateLogo(1, "tmp/company-logo/a/new.png", MANAGER_PK);
+      await service.updateLogo(1, "tmp/company-logo/a/new.png", manager);
 
       expect(fileService.confirmUpload).toHaveBeenCalledWith(
         MANAGER_PK,
@@ -398,6 +601,17 @@ describe("AdminCompanyService", () => {
       expect(fileService.deleteFileQuietly).toHaveBeenCalledWith(
         "company-logo/a/old.png",
       );
+      expect(auditLogRepository.insert).toHaveBeenCalledWith(
+        {
+          adminEmail: "me@gm.gist.ac.kr",
+          action: "company.logo_update",
+          targetType: "company",
+          targetId: 1,
+          before: { logo_key: "company-logo/a/old.png" },
+          after: { logo_key: "company-logo/a/new.png" },
+        },
+        tx,
+      );
     });
 
     it("keeps the confirmed file when the company is gone", async () => {
@@ -405,7 +619,7 @@ describe("AdminCompanyService", () => {
       repository.findByPkForUpdate.mockResolvedValue(null);
 
       await expect(
-        service.updateLogo(1, "tmp/company-logo/a/new.png", MANAGER_PK),
+        service.updateLogo(1, "tmp/company-logo/a/new.png", manager),
       ).rejects.toThrow(NotFoundException);
       expect(fileService.deleteFileQuietly).not.toHaveBeenCalled();
     });

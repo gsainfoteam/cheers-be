@@ -429,3 +429,20 @@ select {
   color: var(--danger);
   background: #fff0f0;
 }
+
+.diff-table {
+  width: 100%;
+  font-size: 13px;
+}
+
+.diff-table pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.diff-changed td {
+  background: rgba(255, 196, 0, 0.14);
+}

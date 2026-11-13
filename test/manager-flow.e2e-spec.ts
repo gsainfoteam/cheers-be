@@ -1,5 +1,6 @@
 import { like, notInArray } from "drizzle-orm";
 import { adminAccessLog } from "@drizzle/schema/admin-access-log";
+import { adminAuditLog } from "@drizzle/schema/admin-audit-log";
 import { consent } from "@drizzle/schema/consent";
 import { department } from "@drizzle/schema/department";
 import { interest } from "@drizzle/schema/interest";
@@ -277,7 +278,113 @@ describe("어드민 종합 시나리오", () => {
     await as(superAuth)
       .patch(`/admin-account/${account.body.pk}`, { role: "admin" })
       .expect(200);
+    await as(adminAuth).get("/audit-log").expect(403);
+    await as(adminAuth).get("/access-log").expect(403);
     await as(superAuth).delete(`/admin-account/${account.body.pk}`).expect(200);
     await as(adminAuth).get("/auth/me").expect(401);
+
+    // 8. 감사 로그 (CRB-81): 성공한 변경만 변경 전 · 후 값과 함께 남고, 막힌 요청 · 조회는 남지 않음.
+    // 어드민 계정을 지워도 기록은 남음
+    const audit = await as(superAuth)
+      .get("/audit-log")
+      .query({ size: 50 })
+      .expect(200);
+    const rows = audit.body.items as {
+      admin_email: string;
+      action: string;
+      target_type: string;
+      target_id: string | null;
+      before: unknown;
+      after: unknown;
+    }[];
+    const byAction = (action: string) =>
+      rows.filter((row) => row.action === action);
+
+    expect(byAction("admin_auth.login").map((r) => r.admin_email)).toEqual(
+      expect.arrayContaining([SUPER, NEW_ADMIN]),
+    );
+    // 최근 기록 순이라 순서에 기대지 않고 항목만 확인
+    const creates = byAction("admin_account.create");
+    expect(creates).toHaveLength(2);
+    expect(creates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          admin_email: SUPER,
+          before: null,
+          after: { email: NEW_ADMIN, role: "admin" },
+        }),
+        expect.objectContaining({
+          admin_email: NEW_ADMIN,
+          after: { email: "third@gm.gist.ac.kr", role: "admin" },
+        }),
+      ]),
+    );
+    const roleUpdates = byAction("admin_account.role_update");
+    expect(roleUpdates).toHaveLength(2);
+    expect(roleUpdates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          admin_email: SUPER,
+          target_id: account.body.pk,
+          before: { email: NEW_ADMIN, role: "admin" },
+          after: { email: NEW_ADMIN, role: "superadmin" },
+        }),
+        expect.objectContaining({
+          before: { email: NEW_ADMIN, role: "superadmin" },
+          after: { email: NEW_ADMIN, role: "admin" },
+        }),
+      ]),
+    );
+    expect(byAction("admin_account.delete")).toEqual([
+      expect.objectContaining({
+        admin_email: SUPER,
+        target_id: account.body.pk,
+        before: { email: NEW_ADMIN, role: "admin" },
+        after: null,
+      }),
+    ]);
+    expect(byAction("school_department.create")).toEqual([
+      expect.objectContaining({
+        admin_email: NEW_ADMIN,
+        target_type: "school_department",
+        before: null,
+        after: expect.objectContaining({ name: "시나리오학과" }),
+      }),
+    ]);
+    expect(byAction("interest.create")).toHaveLength(1);
+    expect(byAction("company.create")).toHaveLength(1);
+    // admin의 약관 등록은 403이라 superadmin의 것만 남음
+    expect(byAction("consent.create")).toEqual([
+      expect.objectContaining({ admin_email: SUPER }),
+    ]);
+    // 명함 열람은 감사 로그가 아니라 접근 로그
+    expect(rows.some((row) => row.target_type === "business_card")).toBe(false);
+
+    // 필터
+    const filtered = await as(superAuth)
+      .get("/audit-log")
+      .query({ action: "admin_account.create", admin_email: "SUPER" })
+      .expect(200);
+    expect(filtered.body).toMatchObject({ total: 1 });
+    await as(superAuth).get("/audit-log").query({ action: "nope" }).expect(400);
+
+    // 9. 접근 로그 조회: 명함 열람이 남아 있음. 이 조회들은 기록되지 않음
+    const access = await as(superAuth).get("/access-log").expect(200);
+    expect(access.body).toMatchObject({ total: 1 });
+    expect(access.body.items[0]).toEqual({
+      pk: expect.any(String),
+      admin_email: NEW_ADMIN,
+      target_type: "business_card",
+      target_id: graduatedPk,
+      created_at: expect.any(String),
+    });
+    expect(
+      await as(superAuth)
+        .get("/access-log")
+        .query({ target_type: "dev_user_hard_delete" })
+        .expect(200)
+        .then((res) => res.body.total),
+    ).toBe(0);
+    expect(await ctx.db.select().from(adminAuditLog)).toHaveLength(rows.length);
   });
 });

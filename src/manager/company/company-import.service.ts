@@ -3,9 +3,11 @@ import {
   ConflictException,
   Injectable,
 } from "@nestjs/common";
+import { AdminAuditLogRepository } from "@src/admin-repository/admin-audit-log.repository";
 import { AdminCompanyRepository } from "@src/admin-repository/admin-company.repository";
 import { normalizeCompanyName } from "@src/company/company.utils";
 import { DatabaseService } from "@src/database/database.service";
+import { ManagerContext } from "@src/manager/context/manager-context";
 import {
   parseCompanyImport,
   CompanyImportFile,
@@ -19,6 +21,7 @@ export class CompanyImportService {
   constructor(
     private readonly dbService: DatabaseService,
     private readonly repository: AdminCompanyRepository,
+    private readonly adminAuditLogRepository: AdminAuditLogRepository,
   ) {}
 
   async preview(file: CompanyImportFile): Promise<CompanyImportResultDto> {
@@ -34,7 +37,11 @@ export class CompanyImportService {
     );
   }
 
-  async commit(file: CompanyImportFile): Promise<CompanyImportResultDto> {
+  // 감사 로그(CRB-81)는 저장과 같은 트랜잭션에서 요약만 남김 (파일 내용은 넣지 않음). 재시도하면 커밋된 시도의 것만 남음
+  async commit(
+    file: CompanyImportFile,
+    manager: ManagerContext,
+  ): Promise<CompanyImportResultDto> {
     const rows = await parseCompanyImport(file);
     const normalized = this.normalizedNames(rows);
     // 관리자의 수정 · 병합이나 현업자의 직접 입력과 경합하면 최신 상태로 전체를 재검증.
@@ -78,6 +85,20 @@ export class CompanyImportService {
                 tx,
               );
             }
+            await this.adminAuditLogRepository.insert(
+              {
+                adminEmail: manager.email,
+                action: "company.import",
+                targetType: "company",
+                after: {
+                  created_companies: result.created_companies,
+                  updated_companies: result.updated_companies,
+                  added_names: result.added_names,
+                  skipped_rows: result.skipped_rows,
+                },
+              },
+              tx,
+            );
             return result;
           },
           { isolationLevel: "serializable" },

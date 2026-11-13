@@ -3,6 +3,7 @@ import { JwtModule } from "@nestjs/jwt";
 import { AdminRepositoryModule } from "@src/admin-repository/admin-repository.module";
 import { AuthModule } from "@src/auth/auth.module";
 import { ConfigModule } from "@src/config/config.module";
+import { DatabaseModule } from "@src/database/database.module";
 import { AdminAccountController } from "@src/manager/admin-account.controller";
 import { AdminAccountService } from "@src/manager/admin-account.service";
 import { ManagerGuard } from "@src/manager/guard/manager.guard";
@@ -17,6 +18,7 @@ const guards = [ManagerGuard, SuperAdminGuard];
 @Module({
   imports: [
     ConfigModule,
+    DatabaseModule,
     AdminRepositoryModule,
     AuthModule,
     JwtModule.register({}),

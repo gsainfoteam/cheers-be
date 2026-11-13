@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AdminAccessLogRepository } from "@src/admin-repository/admin-access-log.repository";
+import { AdminAuditLogRepository } from "@src/admin-repository/admin-audit-log.repository";
 import { AdminAccountRepository } from "@src/admin-repository/admin-account.repository";
 import { AdminDevUserRepository } from "@src/admin-repository/admin-dev-user.repository";
 import { AdminCoffeeChatRequestRepository } from "@src/admin-repository/admin-coffee-chat-request.repository";
@@ -20,6 +21,7 @@ const repositories = [
   AdminDevUserRepository,
   AdminNotificationLogRepository,
   AdminAccessLogRepository,
+  AdminAuditLogRepository,
   AdminConsentRepository,
   AdminGraduatedRepository,
   AdminDepartmentRepository,

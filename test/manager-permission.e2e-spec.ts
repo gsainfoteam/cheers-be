@@ -1,9 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { RequestMethod } from "@nestjs/common";
-import { METHOD_METADATA, PATH_METADATA } from "@nestjs/common/constants";
-import { ModulesContainer } from "@nestjs/core";
 import { createE2eApp, E2eContext } from "./support/app";
 import { bearer, http, loginManager, signupStudent } from "./support/flows";
+import { listManagerRoutes } from "./support/manager-routes";
 
 const PREFIX = "/api/manager/v1";
 
@@ -28,6 +26,9 @@ const ROUTES: Route[] = [
   route("POST", "/admin-account", true),
   route("PATCH", "/admin-account/:pk", true),
   route("DELETE", "/admin-account/:pk", true),
+
+  route("GET", "/audit-log", true),
+  route("GET", "/access-log", true),
 
   route("GET", "/interest"),
   route("POST", "/interest"),
@@ -133,30 +134,7 @@ describe("어드민 API 권한", () => {
   });
 
   it("앱에 등록된 어드민 라우트가 표(ROUTES · EXCLUDED)와 정확히 같음", () => {
-    const registered: string[] = [];
-    for (const module of ctx.app.get(ModulesContainer).values()) {
-      for (const wrapper of module.controllers.values()) {
-        const controller = wrapper.metatype as (new () => object) | null;
-        if (!controller) continue;
-        const base = Reflect.getMetadata(PATH_METADATA, controller) as string;
-        const proto = controller.prototype as Record<string, unknown>;
-        for (const name of Object.getOwnPropertyNames(proto)) {
-          const handler = proto[name];
-          if (name === "constructor" || typeof handler !== "function") continue;
-          const sub = Reflect.getMetadata(PATH_METADATA, handler) as
-            | string
-            | undefined;
-          if (sub === undefined) continue;
-          const method = RequestMethod[
-            Reflect.getMetadata(METHOD_METADATA, handler) as RequestMethod
-          ] as Route["method"];
-          const path = `/${base}/${sub}`
-            .replace(/\/+/g, "/")
-            .replace(/\/$/, "");
-          if (path.startsWith(PREFIX)) registered.push(key({ method, path }));
-        }
-      }
-    }
+    const registered = listManagerRoutes(ctx.app).map(key);
 
     expect(registered.sort()).toEqual([...ROUTES, ...EXCLUDED].map(key).sort());
   });

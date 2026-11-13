@@ -17,6 +17,7 @@ participant "ParseUUIDPipe" as Pipe
 participant "AdminAccountController" as Controller
 participant "AdminAccountService" as Service
 participant "AdminAccountRepository" as AdminAccountRepository
+participant "AdminAuditLogRepository" as AdminAuditLogRepository
 database PostgreSQL
 
 Client -> Guard: DELETE /api/manager/v1/admin-account/{pk}\nAuthorization: Bearer <manager token>
@@ -27,23 +28,28 @@ alt pk가 UUID가 아님
 end
 Pipe -> Controller: remove(pk, manager)
 Controller -> Service: remove(pk, manager)
-Service -> AdminAccountRepository: findByPk(pk)
-AdminAccountRepository -> PostgreSQL: SELECT admin_account WHERE pk = ?
-PostgreSQL --> AdminAccountRepository: row
-alt 계정 없음
-  Service -[#red]-> Client: 404 Admin account not found.
-end
-alt 대상이 나 자신
-  Service -[#red]-> Client: 403 You cannot remove yourself.
-else 대상이 superadmin
-  Service -[#red]-> Client: 403 Superadmin accounts cannot be removed. Demote to admin first.
-end
-Service -> AdminAccountRepository: deleteAdminByPk(pk)
-AdminAccountRepository -> PostgreSQL: DELETE admin_account\nWHERE pk = ? AND role = 'admin' RETURNING
-note right: 확인과 삭제 사이에 superadmin으로 승격돼도 지우지 않음
-PostgreSQL --> AdminAccountRepository: row | 0행
-alt 0행 (그 사이 승격 또는 삭제됨)
-  Service -[#red]-> Client: 403 Superadmin accounts cannot be removed. Demote to admin first.
+group transaction (DatabaseService.db.transaction) — CRB-81, flow/admin-audit.puml
+  Service -> AdminAccountRepository: findByPk(pk, tx)
+  AdminAccountRepository -> PostgreSQL: SELECT admin_account WHERE pk = ? FOR UPDATE
+  PostgreSQL --> AdminAccountRepository: row (= before)
+  alt 계정 없음
+    Service -[#red]-> Client: 404 Admin account not found.
+  end
+  alt 대상이 나 자신
+    Service -[#red]-> Client: 403 You cannot remove yourself.
+  else 대상이 superadmin
+    Service -[#red]-> Client: 403 Superadmin accounts cannot be removed. Demote to admin first.
+  end
+  Service -> AdminAccountRepository: deleteAdminByPk(pk, tx)
+  AdminAccountRepository -> PostgreSQL: DELETE admin_account\nWHERE pk = ? AND role = 'admin' RETURNING
+  note right: 행을 잠근 채로 확인하지만 삭제 쿼리에도 role 조건을 둠
+  PostgreSQL --> AdminAccountRepository: row | 0행
+  alt 0행
+    Service -[#red]-> Client: 403 Superadmin accounts cannot be removed. Demote to admin first.
+  end
+  Service -> AdminAuditLogRepository: insert({ adminEmail, action: "admin_account.delete", targetType: "admin_account", targetId: pk,\nbefore: { email, role } }, tx)
+  AdminAuditLogRepository -> PostgreSQL: INSERT admin_audit_log
+  note right: 기록이 실패하면 삭제도 rollback
 end
 note right of Service
   대상이 가진 토큰은 다음 요청부터 401 Manager not found.

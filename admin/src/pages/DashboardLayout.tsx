@@ -21,6 +21,8 @@ const NAV_ITEMS = [
   { to: "/companies", label: "회사", end: false },
   { to: "/departments", label: "학과", end: false },
   { to: "/admin-accounts", label: "어드민 계정", end: false },
+  { to: "/audit-logs", label: "감사 로그", end: false },
+  { to: "/access-logs", label: "접근 로그", end: false },
   ...(DEV_USER_DELETE_ENABLED
     ? [{ to: "/dev-users", label: "완전탈퇴 (개발용)", end: false }]
     : []),

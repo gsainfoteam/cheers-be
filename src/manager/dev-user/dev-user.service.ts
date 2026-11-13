@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { AdminAccessLogRepository } from "@src/admin-repository/admin-access-log.repository";
+import { AdminAuditLogRepository } from "@src/admin-repository/admin-audit-log.repository";
 import {
   AdminDevUserRepository,
   AdminDevUserRow,
@@ -25,6 +26,7 @@ export class DevUserService {
     private readonly fileService: FileService,
     private readonly adminDevUserRepository: AdminDevUserRepository,
     private readonly adminAccessLogRepository: AdminAccessLogRepository,
+    private readonly adminAuditLogRepository: AdminAuditLogRepository,
   ) {}
 
   async list(query: PaginationQueryDto): Promise<PageResponseDto<DevUserDto>> {
@@ -40,12 +42,12 @@ export class DevUserService {
     };
   }
 
-  // 삭제와 기록을 한 트랜잭션에서 처리 (기록 저장이 실패하면 지우지 않음).
+  // 삭제와 접근 로그 · 감사 로그를 한 트랜잭션에서 처리 (기록 저장이 실패하면 지우지 않음).
   // S3 파일은 탈퇴 만료 처리(WithdrawalService)처럼 커밋 뒤에 지우고, 실패해도 DB에 참조가 없어 고아 파일 정리가 지움
   async delete(userPk: string, manager: ManagerContext): Promise<void> {
     const fileKeys = await this.dbService.db.transaction(async (tx) => {
-      const keys = await this.adminDevUserRepository.hardDelete(userPk, tx);
-      if (!keys) {
+      const deleted = await this.adminDevUserRepository.hardDelete(userPk, tx);
+      if (!deleted) {
         throw new NotFoundException("User not found");
       }
       await this.adminAccessLogRepository.insert(
@@ -56,7 +58,28 @@ export class DevUserService {
         },
         tx,
       );
-      return keys;
+      // 감사 로그(CRB-81): 개발용 API라 이름 · 이메일까지 지운 유저 행을 그대로 남김
+      await this.adminAuditLogRepository.insert(
+        {
+          adminEmail: manager.email,
+          action: "dev_user.hard_delete",
+          targetType: "user",
+          targetId: userPk,
+          before: {
+            type: deleted.user.type,
+            status: deleted.user.status,
+            is_deleted: deleted.user.isDeleted,
+            withdraw_requested_at: deleted.user.withdrawRequestedAt,
+            name: deleted.user.name,
+            email: deleted.user.email,
+            created_at: deleted.user.createdAt,
+            student_pks: deleted.studentPks,
+            graduated_pks: deleted.graduatedPks,
+          },
+        },
+        tx,
+      );
+      return deleted.fileKeys;
     });
 
     await Promise.all(

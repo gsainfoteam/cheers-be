@@ -1,5 +1,6 @@
 import { NotFoundException } from "@nestjs/common";
 import { AdminAccessLogRepository } from "@src/admin-repository/admin-access-log.repository";
+import { AdminAuditLogRepository } from "@src/admin-repository/admin-audit-log.repository";
 import { AdminDevUserRepository } from "@src/admin-repository/admin-dev-user.repository";
 import { DatabaseService } from "@src/database/database.service";
 import { FileService } from "@src/file/file.service";
@@ -26,11 +27,28 @@ describe("DevUserService", () => {
   const fileService = { deleteFileQuietly: jest.fn() };
   const adminDevUserRepository = { findPage: jest.fn(), hardDelete: jest.fn() };
   const adminAccessLogRepository = { insert: jest.fn() };
+  const adminAuditLogRepository = { insert: jest.fn() };
+  const hardDeleted = (fileKeys: string[]) => ({
+    user: {
+      pk: USER_PK,
+      type: "student",
+      status: "active",
+      isDeleted: false,
+      withdrawRequestedAt: null,
+      name: "김재학",
+      email: "student@gm.gist.ac.kr",
+      createdAt: new Date("2026-10-01T00:00:00Z"),
+    },
+    studentPks: ["s1"],
+    graduatedPks: [],
+    fileKeys,
+  });
   const service = new DevUserService(
     dbService as unknown as DatabaseService,
     fileService as unknown as FileService,
     adminDevUserRepository as unknown as AdminDevUserRepository,
     adminAccessLogRepository as unknown as AdminAccessLogRepository,
+    adminAuditLogRepository as unknown as AdminAuditLogRepository,
   );
   const manager = new ManagerContext("me", "me@gm.gist.ac.kr", "superadmin");
 
@@ -96,7 +114,7 @@ describe("DevUserService", () => {
     it("한 트랜잭션에서 지우고 기록한 뒤, 커밋 뒤에 파일을 지움", async () => {
       adminDevUserRepository.hardDelete.mockImplementation(async () => {
         events.push("hardDelete");
-        return ["business-card/a.jpg", "attachment/b.pdf"];
+        return hardDeleted(["business-card/a.jpg", "attachment/b.pdf"]);
       });
       adminAccessLogRepository.insert.mockImplementation(async () => {
         events.push("accessLog");
@@ -119,6 +137,26 @@ describe("DevUserService", () => {
         },
         tx,
       );
+      expect(adminAuditLogRepository.insert).toHaveBeenCalledWith(
+        {
+          adminEmail: "me@gm.gist.ac.kr",
+          action: "dev_user.hard_delete",
+          targetType: "user",
+          targetId: USER_PK,
+          before: {
+            type: "student",
+            status: "active",
+            is_deleted: false,
+            withdraw_requested_at: null,
+            name: "김재학",
+            email: "student@gm.gist.ac.kr",
+            created_at: new Date("2026-10-01T00:00:00Z"),
+            student_pks: ["s1"],
+            graduated_pks: [],
+          },
+        },
+        tx,
+      );
       expect(events).toEqual([
         "hardDelete",
         "accessLog",
@@ -135,12 +173,22 @@ describe("DevUserService", () => {
         new NotFoundException("User not found"),
       );
       expect(adminAccessLogRepository.insert).not.toHaveBeenCalled();
+      expect(adminAuditLogRepository.insert).not.toHaveBeenCalled();
       expect(fileService.deleteFileQuietly).not.toHaveBeenCalled();
     });
 
     it("기록 저장이 실패하면 예외가 올라가고 파일을 지우지 않음 (삭제도 rollback)", async () => {
-      adminDevUserRepository.hardDelete.mockResolvedValue(["a"]);
+      adminDevUserRepository.hardDelete.mockResolvedValue(hardDeleted(["a"]));
       adminAccessLogRepository.insert.mockRejectedValue(new Error("db down"));
+
+      await expect(service.delete(USER_PK, manager)).rejects.toThrow("db down");
+      expect(events).not.toContain("commit");
+      expect(fileService.deleteFileQuietly).not.toHaveBeenCalled();
+    });
+
+    it("감사 로그 저장이 실패해도 예외가 올라가고 파일을 지우지 않음 (삭제도 rollback)", async () => {
+      adminDevUserRepository.hardDelete.mockResolvedValue(hardDeleted(["a"]));
+      adminAuditLogRepository.insert.mockRejectedValue(new Error("db down"));
 
       await expect(service.delete(USER_PK, manager)).rejects.toThrow("db down");
       expect(events).not.toContain("commit");
