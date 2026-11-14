@@ -10,7 +10,7 @@
 | ---- | ---- | ------- | -------- | -------- | ------- | ------- |
 | graduated_pk | uuid |  | false |  | [public.graduated](public.graduated.md) |  |
 | nickname | varchar(32) |  | false |  |  | 가입 후 수정 불가 |
-| department | varchar(128) |  | false |  |  | 회사 부서 (비공개) |
+| department | varchar(128) |  | true |  |  | 회사 부서 (비공개) |
 | job | varchar(128) |  | false |  |  | 직무 |
 | created_at | timestamp with time zone | now() | false |  |  |  |
 | updated_at | timestamp with time zone | now() | false |  |  |  |
