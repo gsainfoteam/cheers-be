@@ -15,7 +15,7 @@ import {
   ValidateNested,
 } from "class-validator";
 import { COMPANY_PK_MAX } from "@src/company/company.utils";
-import { trim } from "@src/global/dto/transforms";
+import { trim, trimToUndefined } from "@src/global/dto/transforms";
 import { ContactRequestDto } from "@src/user/dto/contact-request.dto";
 
 export class GraduatedInfoRequestDto {
@@ -53,11 +53,12 @@ export class GraduatedInfoRequestDto {
   @MaxLength(128)
   company_name?: string;
 
-  /** 비공개 (다른 회원에게 보이지 않음) */
+  /** 비공개 (다른 회원에게 보이지 않음). 선택 입력, 안 보내거나 빈 값이면 null 로 저장 */
+  @IsOptional()
+  @Transform(trimToUndefined)
   @IsString()
-  @IsNotEmpty()
   @MaxLength(128)
-  department: string;
+  department?: string;
 
   @IsString()
   @IsNotEmpty()

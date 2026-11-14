@@ -236,6 +236,15 @@ describe("GraduatedService", () => {
   });
 
   describe("saveInfo", () => {
+    it("saves a null department when it is omitted", async () => {
+      await service.saveInfo(USER_PK, infoRequest({ department: undefined }));
+
+      expect(graduatedProfileRepository.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ department: null }),
+        tx,
+      );
+    });
+
     it("completes signup for a pending user and issues new tokens", async () => {
       await expect(service.saveInfo(USER_PK, infoRequest())).resolves.toEqual({
         result: "OK",

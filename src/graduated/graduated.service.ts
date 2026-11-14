@@ -122,7 +122,7 @@ export class GraduatedService {
           graduatedPk: found.graduated.pk,
           nickname,
           companyAliasPk: company.pk,
-          department: req.department,
+          department: req.department ?? null,
           job: req.job,
           hashtags: req.hashtags ?? [],
           links: req.links ?? [],

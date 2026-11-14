@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title POST /api/v1/user/graduated/info
-caption CRB-32 · 현업자 추가 정보 저장 · 수정 (전체 교체, 닉네임 · 이름은 가입 후 변경 불가), 연락 설정, 가입 완료 시 토큰 재발급\nCRB-68 · 회사는 검색 결과 선택(company_id) 또는 직접 입력(company_name) → company_alias pk 로 저장
+caption CRB-32 · 현업자 추가 정보 저장 · 수정 (전체 교체, 닉네임 · 이름은 가입 후 변경 불가), 연락 설정, 가입 완료 시 토큰 재발급\nCRB-68 · 회사는 검색 결과 선택(company_id) 또는 직접 입력(company_name) → company_alias pk 로 저장\n부서(department)는 선택 항목 · 안 보내거나 빈 값이면 null 로 저장 (graduated_profile.department NULL 허용)
 
 actor Client
 participant "SignupStepGuard\nUserTypeGuard" as Guard
@@ -24,7 +24,7 @@ participant "CoffeeChatContactRepository" as ContactRepository
 participant "CompanyRepository" as CompanyRepository
 database PostgreSQL
 
-Client -> Guard: POST /api/v1/user/graduated/info\nAuthorization: Bearer <access token>\n{ name?, nickname?, company_id? | company_name?, department, job, hashtags?, links?, contact }
+Client -> Guard: POST /api/v1/user/graduated/info\nAuthorization: Bearer <access token>\n{ name?, nickname?, company_id? | company_name?, department?, job, hashtags?, links?, contact }
 ref over Client, Guard
   SignupStepGuard → UserTypeGuard — flow/auth-guards.puml
   @SignupStep({ step: "profile", allowActive: true })
@@ -39,7 +39,7 @@ alt body 검증 실패
 end
 note right of Pipe
   name · nickname 은 앞뒤 공백 제거 후 검사
-  name 1~64자 / nickname ^[가-힣A-Za-z0-9_]{2,10}$ / department · job 1~128자
+  name 1~64자 / nickname ^[가-힣A-Za-z0-9_]{2,10}$ / job 1~128자 / department 는 선택 (보내면 앞뒤 공백 제거 후 1~128자, 빈 문자열은 null)
   company_id 1~2147483647 정수 / company_name 앞뒤 공백 제거 후 1~128자 (둘 다 선택 항목)
   hashtags 최대 5개, 각 1~20자, "#" 불가, 중복 불가
   links 최대 5개, http(s) URL 2048자 이하
@@ -122,7 +122,7 @@ group transaction (DatabaseService.db.transaction)
     end note
   end
 
-  Service -> ProfileRepository: upsert({ graduatedPk, nickname, companyAliasPk,\ndepartment, job, hashtags, links }, tx)
+  Service -> ProfileRepository: upsert({ graduatedPk, nickname, companyAliasPk,\ndepartment | null, job, hashtags, links }, tx)
   ProfileRepository -> PostgreSQL: INSERT graduated_profile ...\nON CONFLICT (graduated_pk) DO UPDATE SET company_alias_pk, department, job,\nhashtags, links, updated_at = now()
   note right
     nickname 은 첫 저장(INSERT)에만 들어가고 이후 갱신하지 않음
