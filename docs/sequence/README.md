@@ -93,26 +93,22 @@
 GitHub은 PlantUML을 렌더링하지 않으므로 리뷰는 `.puml` 텍스트 diff로 하고, 그림은 로컬에서 확인합니다.
 
 - IntelliJ: PlantUML Integration 플러그인 (Graphviz 필요 없음)
-- Docker: `docs/sequence/out/`에 PNG 생성 (`out/`은 커밋하지 않음)
+- Docker: `docs/sequence/out/`에 PNG 생성 (`out/`은 커밋하지 않음). 공식 `plantuml/plantuml` 이미지에는 한글 폰트가 없어 그대로 쓰면 한글이 네모로 깨지므로, [Dockerfile](Dockerfile)로 Noto Sans CJK를 넣은 이미지를 한 번 빌드해서 사용 (macOS · Linux 공통, 폰트 파일 복사 불필요)
 
 ```bash
-docker run --rm -v "$PWD/docs/sequence:/data" plantuml/plantuml -tpng -o /data/out "/data/**/*.puml"
-```
-
-- 이미지에 한글 폰트가 없어 한글이 네모로 나오면 폰트 파일을 마운트 (macOS는 `/System/Library/Fonts`를 Docker에 바로 공유할 수 없어 복사해서 씀)
-
-```bash
-mkdir -p /tmp/plantuml-fonts && cp /System/Library/Fonts/AppleSDGothicNeo.ttc /tmp/plantuml-fonts/
+docker build -t cheers-plantuml docs/sequence
 ```
 
 ```bash
-docker run --rm -v "$PWD/docs/sequence:/data" -v /tmp/plantuml-fonts:/usr/share/fonts/extra:ro plantuml/plantuml -tpng -o /data/out "/data/**/*.puml"
+docker run --rm -v "$PWD/docs/sequence:/data" cheers-plantuml -tpng -o /data/out "/data/**/*.puml"
 ```
+
+- 머리말의 `skinparam defaultFontName`은 `"Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif` 순서라 IntelliJ(macOS)에서는 Apple SD Gothic Neo, 위 Docker 이미지에서는 Noto Sans CJK KR로 그려짐. 파일을 바꿀 필요 없음
 
 - 문법 검사만
 
 ```bash
-docker run --rm -v "$PWD/docs/sequence:/data" plantuml/plantuml -checkonly "/data/**/*.puml"
+docker run --rm -v "$PWD/docs/sequence:/data" cheers-plantuml -checkonly "/data/**/*.puml"
 ```
 
 ## PR 규칙
