@@ -17,6 +17,7 @@ import { DevUserDeletePage } from "./pages/DevUserDeletePage";
 import { HomePage } from "./pages/HomePage";
 import { InterestsPage } from "./pages/InterestsPage";
 import { LoginPage } from "./pages/LoginPage";
+import { AligoStatusPage } from "./pages/AligoStatusPage";
 import { NotificationLogsPage } from "./pages/NotificationLogsPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 
@@ -57,6 +58,7 @@ export function App() {
           element={<CoffeeChatRequestDetailPage />}
         />
         <Route path="notification-logs" element={<NotificationLogsPage />} />
+        <Route path="aligo-status" element={<AligoStatusPage />} />
         <Route path="business-cards" element={<BusinessCardsPage />} />
         <Route path="companies" element={<CompaniesPage />} />
         <Route path="admin-accounts" element={<AdminAccountsPage />} />

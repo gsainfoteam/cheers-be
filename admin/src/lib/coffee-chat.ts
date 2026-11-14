@@ -113,3 +113,35 @@ export function dayStart(date: string, addDays = 0): string {
   const start = new Date(year, month - 1, day + addDays);
   return Number.isNaN(start.getTime()) ? date : start.toISOString();
 }
+
+// GET {ALIGO_STATUS_PATH} 응답 (CRB-78)
+export const ALIGO_STATUS_PATH = "/api/manager/v1/coffee-chat/aligo-status";
+
+export type AligoStatus = {
+  configured: boolean;
+  balance: { amount: number | null; counts: Record<string, number> } | null;
+  month: {
+    since: string;
+    accepted: number;
+    delivered: number;
+    failed: number;
+    pending: number;
+    unknown: number;
+  };
+  low_balance_threshold: number | null;
+  fetched_at: string;
+};
+
+export const ALIMTALK_TEMPLATE_PATH =
+  "/api/manager/v1/coffee-chat/alimtalk-template";
+
+export type AlimtalkTemplate = {
+  event: string;
+  tpl_code: string;
+  title: string;
+  message: string;
+  button_name: string;
+  updated_at: string;
+};
+
+export type AlimtalkTemplateList = { items: AlimtalkTemplate[] };
