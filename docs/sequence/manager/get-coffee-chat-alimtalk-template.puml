@@ -1,0 +1,33 @@
+@startuml get-manager-coffee-chat-alimtalk-template
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/manager/v1/coffee-chat/alimtalk-template
+caption CRB-78 · 알림톡 템플릿 목록 (이벤트당 1건, DB 저장본)
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ManagerCoffeeChatController" as Controller
+participant "ManagerCoffeeChatService" as Service
+participant "AdminAlimtalkTemplateRepository" as Repository
+database PostgreSQL
+
+Client -> Guard: GET /api/manager/v1/coffee-chat/alimtalk-template\nAuthorization: Bearer <manager token>
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Controller: 통과
+Controller -> Service: listAlimtalkTemplates()
+Service -> Repository: findAll()
+Repository -> PostgreSQL: SELECT * FROM alimtalk_template ORDER BY event
+PostgreSQL --> Repository: rows
+Repository --> Service: templates
+note right of Service: 행은 마이그레이션이 현재 하드코딩된 2건(coffee_chat_requested, contact_shared)으로 채워 둠
+Service --> Controller: AlimtalkTemplateDto[]
+Controller --> Client: 200 { items: [{ event, tpl_code, title, message, button_name, updated_at }] }
+
+@enduml

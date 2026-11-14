@@ -1,0 +1,59 @@
+@startuml aligo-low-balance-alert
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title 스케줄러: 알리고 잔여량 부족 Slack 알림
+caption CRB-78 · src/notification/aligo-balance-alert.scheduler.ts · 매시 정각 (Asia/Seoul)
+
+participant "AligoBalanceAlertScheduler" as Scheduler
+participant "AligoBalanceAlertService" as Service
+participant "AlimtalkService" as Alimtalk
+participant "AligoAlertStateRepository" as StateRepository
+database PostgreSQL
+participant "Aligo"
+participant "Slack"
+
+Scheduler -> Scheduler: running이면 건너뜀
+Scheduler -> Service: check(now)
+Service -> Alimtalk: fetchBalance()
+alt 알리고 키 미설정
+  Alimtalk --> Service: not_configured
+  note right of Service: 아무것도 하지 않음 (로컬 · 키 미설정)
+else error (HTTP 오류 · JSON 아님 · code != 0 · 타임아웃)
+  Alimtalk --> Service: error
+  note right of Service: 경고 로그만 남김. 다음 정각에 다시 확인 (조회 실패를 부족으로 보지 않음)
+else ok
+  Alimtalk -> Aligo: POST https://kakaoapi.aligo.in/akv10/heartinfo/ (apikey, userid)
+  Aligo --> Alimtalk: { code, message, list: { 잔여 충전금액, 유형별 잔여 건수 } }
+  Alimtalk --> Service: balance
+  alt 잔여량 > 기준값 (ALIGO_LOW_BALANCE_THRESHOLD)
+    Service -> StateRepository: clear()
+    StateRepository -> PostgreSQL: UPDATE aligo_alert_state SET alerted_at = NULL WHERE pk = 1
+    note right: 충전되어 회복되면 다음 부족 때 바로 다시 알릴 수 있게 초기화
+  else 잔여량 <= 기준값
+    Service -> StateRepository: claimAlert(now, now - 24시간)
+    StateRepository -> PostgreSQL: UPDATE aligo_alert_state SET alerted_at = now\nWHERE pk = 1 AND (alerted_at IS NULL OR alerted_at <= now - 24시간) RETURNING pk
+    note right
+      한 문장 조건부 UPDATE라 서버가 여러 대여도 한 인스턴스만 잡음.
+      부족한 동안에는 24시간에 한 번만 알림 (매시간 반복 방지)
+    end note
+    opt 잡음
+      Service ->> Slack: [ALIGO LOW BALANCE] 잔여 충전금액, 알림톡 잔여 건수, 기준값
+      note right: Slack 전송 실패는 에러 로그만 남김. 이미 잡은 상태라 이번 24시간은 다시 알리지 않음
+    end
+  end
+end
+note right of Scheduler: 실행 중 예외는 에러 로그만 남김 (다음 정각에 다시 실행)
+
+note over Service, PostgreSQL
+  기준값은 환경변수. 비교 대상(금액 · 알림톡 건수)은 알리고 heartinfo 실제 응답 필드를 확인한 뒤 구현에서 확정
+  aligo_alert_state: 1행 고정 테이블 (pk = 1, alerted_at). 마이그레이션이 행을 만들어 둠
+end note
+
+@enduml
