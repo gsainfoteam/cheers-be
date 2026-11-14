@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
+import { adminAuditLog } from "@drizzle/schema/admin-audit-log";
+import { alimtalkTemplate } from "@drizzle/schema/alimtalk-template";
 import { coffeeChatRequest } from "@drizzle/schema/coffee-chat-request";
 import { notificationLog } from "@drizzle/schema/notification-log";
 import { student } from "@drizzle/schema/student";
@@ -17,6 +19,8 @@ import {
 
 const REQUESTS = "/api/manager/v1/coffee-chat/request";
 const LOGS = "/api/manager/v1/coffee-chat/notification-log";
+const ALIGO_STATUS = "/api/manager/v1/coffee-chat/aligo-status";
+const TEMPLATES = "/api/manager/v1/coffee-chat/alimtalk-template";
 
 const ADMIN = "admin@gm.gist.ac.kr";
 const SUPER = "super@gm.gist.ac.kr";
@@ -748,5 +752,170 @@ describe("어드민 커피챗 요청 관리", () => {
       .from(coffeeChatRequest)
       .where(eq(coffeeChatRequest.pk, pk));
     expect(stored.graduatedViewedAt).toBeNull();
+  });
+
+  describe("알리고 현황 (CRB-78)", () => {
+    it("잔여량과 이번 달 접수 건수를 결과별로 내려줌", async () => {
+      await signupGraduatedWithPhone("현황현업");
+      const studentSession = await signupStudent(ctx);
+      const pk = await sendRequest(
+        studentSession,
+        await graduatedIdOf(studentSession, "현황현업"),
+      );
+      const alimtalk = {
+        channel: "kakao_alimtalk",
+        recipient: CONTACT_PHONE,
+        providerMessageId: "3001",
+      } as const;
+      await seedLog(pk, { ...alimtalk, deliveryStatus: "delivered" });
+      await seedLog(pk, { ...alimtalk, deliveryStatus: "failed" });
+      await seedLog(pk, { ...alimtalk, deliveryStatus: "pending" });
+      // 접수 실패 · 이메일 · 지난달은 세지 않음
+      await seedLog(pk, { channel: "kakao_alimtalk", status: "failed" });
+      await seedLog(pk);
+      await seedLog(pk, {
+        ...alimtalk,
+        deliveryStatus: "delivered",
+        createdAt: new Date("2020-01-01T00:00:00Z"),
+      });
+      ctx.alimtalk.balanceResult = {
+        status: "ok",
+        amount: 12500,
+        counts: { alt_cnt: 340 },
+      };
+
+      const res = await http(ctx)
+        .get(ALIGO_STATUS)
+        .set("Authorization", auth)
+        .expect(200);
+
+      expect(res.body).toMatchObject({
+        configured: true,
+        balance: { amount: 12500, counts: { alt_cnt: 340 } },
+        month: { accepted: 3, delivered: 1, failed: 1, pending: 1, unknown: 0 },
+        low_balance_threshold: null,
+      });
+      expect(JSON.stringify(res.body)).not.toContain(CONTACT_PHONE);
+    });
+
+    it("키가 없으면 balance는 null, 알리고가 실패하면 502", async () => {
+      const notConfigured = await http(ctx)
+        .get(ALIGO_STATUS)
+        .set("Authorization", auth)
+        .expect(200);
+      expect(notConfigured.body).toMatchObject({
+        configured: false,
+        balance: null,
+      });
+
+      ctx.alimtalk.balanceResult = {
+        status: "error",
+        error: "-101 인증오류입니다.",
+      };
+      const error = await http(ctx)
+        .get(ALIGO_STATUS)
+        .set("Authorization", auth)
+        .expect(502);
+      expect(error.body.message).toBe(
+        "Failed to fetch the balance from Aligo: -101 인증오류입니다.",
+      );
+    });
+  });
+
+  describe("알림톡 템플릿 (CRB-78)", () => {
+    const patch = (event: string, body: object) =>
+      http(ctx)
+        .patch(`${TEMPLATES}/${event}`)
+        .set("Authorization", auth)
+        .send(body);
+
+    // 다른 테스트가 보는 기준 데이터라 마이그레이션이 만든 값으로 되돌림
+    const restore = async () => {
+      await ctx.db
+        .update(alimtalkTemplate)
+        .set({
+          tplCode: "",
+          title: "☕️ 연락처 공유 안내",
+          message:
+            "회원님의 커피챗 요청에 대해 선배가 연락처를 공유했어요\n연락처를 확인하고 커피챗 일정을 잡아볼까요?",
+          buttonName: "Cheers에서 확인하기",
+        })
+        .where(eq(alimtalkTemplate.event, "contact_shared"));
+    };
+    beforeEach(restore);
+    afterAll(restore);
+
+    it("목록은 이벤트마다 한 건", async () => {
+      const res = await http(ctx)
+        .get(TEMPLATES)
+        .set("Authorization", auth)
+        .expect(200);
+
+      expect(
+        res.body.items.map((item: { event: string }) => item.event),
+      ).toEqual(["coffee_chat_requested", "contact_shared"]);
+      expect(res.body.items[0]).toEqual({
+        event: "coffee_chat_requested",
+        tpl_code: "",
+        title: "☕️ 커피챗 요청 안내",
+        message: expect.stringContaining("커피챗 요청이 도착했어요"),
+        button_name: "Cheers에서 확인하기",
+        updated_at: expect.any(String),
+      });
+    });
+
+    it("보낸 필드만 수정하고 감사 로그를 남김", async () => {
+      const res = await patch("contact_shared", {
+        tpl_code: " TPL-NEW ",
+        title: "바뀐 제목",
+      }).expect(200);
+
+      expect(res.body).toMatchObject({
+        event: "contact_shared",
+        tpl_code: "TPL-NEW",
+        title: "바뀐 제목",
+        button_name: "Cheers에서 확인하기",
+      });
+      const [saved] = await ctx.db
+        .select()
+        .from(alimtalkTemplate)
+        .where(eq(alimtalkTemplate.event, "contact_shared"));
+      expect(saved).toMatchObject({ tplCode: "TPL-NEW", title: "바뀐 제목" });
+
+      const logs = await ctx.db
+        .select()
+        .from(adminAuditLog)
+        .where(eq(adminAuditLog.action, "alimtalk_template.update"));
+      expect(logs).toHaveLength(1);
+      expect(logs[0]).toMatchObject({
+        adminEmail: ADMIN,
+        targetType: "alimtalk_template",
+        targetId: "contact_shared",
+        before: expect.objectContaining({
+          tpl_code: "",
+          title: "☕️ 연락처 공유 안내",
+        }),
+        after: expect.objectContaining({
+          tpl_code: "TPL-NEW",
+          title: "바뀐 제목",
+        }),
+      });
+    });
+
+    it("잘못된 요청은 400이고 기록하지 않음", async () => {
+      await patch("e2e_none", { title: "x" }).expect(400);
+      await patch("contact_shared", {}).expect(400);
+      await patch("contact_shared", { title: "  " }).expect(400);
+      await patch("contact_shared", {
+        button_name: "열다섯글자를넘는버튼이름입니다",
+      }).expect(400);
+      await patch("contact_shared", { message: "a".repeat(1001) }).expect(400);
+
+      const logs = await ctx.db
+        .select()
+        .from(adminAuditLog)
+        .where(eq(adminAuditLog.action, "alimtalk_template.update"));
+      expect(logs).toEqual([]);
+    });
   });
 });

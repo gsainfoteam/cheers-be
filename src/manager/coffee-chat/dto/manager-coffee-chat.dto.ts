@@ -217,3 +217,92 @@ export class CoffeeChatRequestDetailDto extends CoffeeChatRequestDto {
   /** 이 요청의 알림 발송 결과 (최근 순) */
   notifications: NotificationLogDto[];
 }
+
+// 알리고 현황 (CRB-78)
+export class AligoBalanceDto {
+  /** 잔여 충전금액. 알리고 응답에서 찾지 못하면 null */
+  amount: number | null;
+  /** 유형별 잔여 건수. 키는 알리고 응답의 필드명(소문자) */
+  @ApiProperty({ type: "object", additionalProperties: { type: "number" } })
+  counts: Record<string, number>;
+}
+
+export class AligoMonthDto {
+  /** 집계 시작 시각 (이번 달 1일 00:00 KST) */
+  since: Date;
+  /** 이번 달 알리고에 접수된 알림톡 수 (재시도로 다시 접수된 건도 각각) */
+  accepted: number;
+  delivered: number;
+  failed: number;
+  pending: number;
+  unknown: number;
+}
+
+export class AligoStatusDto {
+  /** 알리고 키가 설정되어 있는지. false면 balance는 null */
+  configured: boolean;
+  balance: AligoBalanceDto | null;
+  month: AligoMonthDto;
+  /** 잔여량 부족 Slack 알림 기준값. 설정되지 않았으면 null (알림 꺼짐) */
+  low_balance_threshold: number | null;
+  fetched_at: Date;
+}
+
+// 알림톡 템플릿 (CRB-78)
+export class AlimtalkTemplateDto {
+  @ApiProperty({ enum: notificationEvent.enumValues })
+  event: NotificationEvent;
+  /** 알리고 템플릿 코드. 비어 있으면 그 이벤트의 알림톡은 보내지 않음 */
+  tpl_code: string;
+  /** 강조표기형 타이틀 */
+  title: string;
+  message: string;
+  button_name: string;
+  updated_at: Date;
+}
+
+export class AlimtalkTemplateListDto {
+  items: AlimtalkTemplateDto[];
+}
+
+const toTrimmed = ({ value }: { value: unknown }) =>
+  typeof value === "string" ? value.replaceAll("\0", "").trim() : value;
+// 문구는 줄바꿈까지 알리고 템플릿과 같아야 하므로 앞뒤 공백은 지우지 않고 줄바꿈 표기만 맞춤
+const toMessage = ({ value }: { value: unknown }) =>
+  typeof value === "string"
+    ? value.replaceAll("\0", "").replaceAll("\r\n", "\n")
+    : value;
+
+export class UpdateAlimtalkTemplateRequestDto {
+  @ApiPropertyOptional({ maxLength: 64 })
+  @IsOptional()
+  @Transform(toTrimmed)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(64)
+  tpl_code?: string;
+
+  @ApiPropertyOptional({ maxLength: 50 })
+  @IsOptional()
+  @Transform(toTrimmed)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(50)
+  title?: string;
+
+  @ApiPropertyOptional({ maxLength: 1000 })
+  @IsOptional()
+  @Transform(toMessage)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(1000)
+  message?: string;
+
+  @ApiPropertyOptional({ maxLength: 14 })
+  @IsOptional()
+  @Transform(toTrimmed)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(14)
+  button_name?: string;
+}

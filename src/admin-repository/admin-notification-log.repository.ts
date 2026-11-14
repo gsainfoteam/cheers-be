@@ -87,4 +87,33 @@ export class AdminNotificationLogRepository {
       .where(eq(notificationLog.pk, pk));
     return rows[0] ?? null;
   }
+
+  /*
+  SELECT delivery_status, COUNT(*) FROM notification_log
+  WHERE channel = 'kakao_alimtalk' AND status = 'sent' AND created_at >= ?1
+  GROUP BY delivery_status;
+   */
+  // since 이후 알리고에 접수된 알림톡 수 (CRB-78). 카카오 결과(delivery_status)별로 나눔. 결과 조회 대상이 아니면 null
+  async countAlimtalkAcceptedSince(since: Date): Promise<
+    {
+      deliveryStatus: AdminNotificationLogRow["deliveryStatus"];
+      total: number;
+    }[]
+  > {
+    const rows = await this.dbService.db
+      .select({
+        deliveryStatus: notificationLog.deliveryStatus,
+        total: count(),
+      })
+      .from(notificationLog)
+      .where(
+        and(
+          eq(notificationLog.channel, "kakao_alimtalk"),
+          eq(notificationLog.status, "sent"),
+          gte(notificationLog.createdAt, since),
+        ),
+      )
+      .groupBy(notificationLog.deliveryStatus);
+    return rows;
+  }
 }

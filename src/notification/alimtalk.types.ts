@@ -50,3 +50,17 @@ export type AlimtalkDeliveryResult =
     }
   // 조회 자체가 실패함 (인증 · 네트워크 · 응답 형식). 다음 실행에서 다시 조회
   | { status: "error"; error: string };
+
+// 알리고 잔여 충전금액 · 건수 조회 결과 (CRB-78). throw하지 않음
+export type AligoBalanceResult =
+  // 키가 설정되지 않음 (로컬)
+  | { status: "not_configured" }
+  | {
+      status: "ok";
+      // 잔여 충전금액. 응답에서 찾지 못하면 null
+      amount: number | null;
+      // 유형별 잔여 건수. 키는 알리고 응답의 필드명(소문자)
+      counts: Record<string, number>;
+    }
+  // 조회 자체가 실패함 (인증 · 네트워크 · 응답 형식)
+  | { status: "error"; error: string };

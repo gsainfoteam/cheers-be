@@ -27,3 +27,22 @@ export function maskPersonalInfo(text: string, recipient: string): string {
     .replace(EMAIL_PATTERN, (email) => maskRecipient(email))
     .replace(PHONE_PATTERN, (phone) => maskRecipient(phone.replace(/\D/g, "")));
 }
+
+/**
+ * 알리고 잔여량 중 부족 여부를 비교할 값. 알림톡 건수(키가 alt로 시작)가 있으면 그것, 없으면 잔여 충전금액 (CRB-78).
+ * 실제 응답 필드명을 확인하면 이 규칙을 맞춰야 함
+ */
+export function pickRemaining(balance: {
+  amount: number | null;
+  counts: Record<string, number>;
+}): { label: string; value: number } | null {
+  const altKey = Object.keys(balance.counts).find((key) =>
+    key.startsWith("alt"),
+  );
+  if (altKey !== undefined) {
+    return { label: altKey, value: balance.counts[altKey] };
+  }
+  return balance.amount === null
+    ? null
+    : { label: "amount", value: balance.amount };
+}

@@ -1,6 +1,8 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { AlimtalkTemplateCache } from "./alimtalk-template.cache";
 import {
+  AligoBalanceResult,
   AlimtalkDeliveryResult,
   AlimtalkResult,
   SendAlimtalkInput,
@@ -11,39 +13,18 @@ import { maskRecipient } from "./notification.utils";
 const ALIGO_SEND_URL = "https://kakaoapi.aligo.in/akv10/alimtalk/send/";
 const ALIGO_HISTORY_DETAIL_URL =
   "https://kakaoapi.aligo.in/akv10/history/detail/";
+const ALIGO_HEART_INFO_URL = "https://kakaoapi.aligo.in/akv10/heartinfo/";
 
 // 전송결과의 rslt가 이 값이면 카카오톡으로 도달한 것
 // 알리고 문서에는 성공 값이 적혀 있지 않음. 실패 예시는 "U" (메시지가 템플릿과 일치하지않음)
 const ALIGO_DELIVERED_RSLT = "0";
 
-interface AlimtalkTemplate {
-  // 강조표기형 타이틀 (emtitle_1). 관리용 제목(subject_1)에도 같은 값을 씀
-  title: string;
-  message: string;
-  buttonName: string;
-  // WEB_BASE_URL 뒤에 붙는 버튼 링크 경로. cheers-fe의 신청 상세(/applications/{id})는 학생 · 현업자 공용
-  path: (coffeeChatRequestPk: string) => string;
-}
-
-// title, message, 버튼은 알리고에 등록한 템플릿과 글자 하나까지 같아야 함 (다르면 전송되지 않음)
-// 버튼 링크는 템플릿에 https://#{cheers_url}로 등록되어 있어서 WEB_BASE_URL은 https://로 시작해야 함
-const TEMPLATES: Record<NotificationEvent, AlimtalkTemplate> = {
-  coffee_chat_requested: {
-    title: "☕️ 커피챗 요청 안내",
-    message:
-      "재학생 회원으로부터 새로운 커피챗 요청이 도착했어요\n" +
-      "요청 내용을 확인하고 커피챗 가능 여부를 알려주세요 :)",
-    buttonName: "Cheers에서 확인하기",
-    path: (pk) => `/applications/${encodeURIComponent(pk)}`,
-  },
-  contact_shared: {
-    title: "☕️ 연락처 공유 안내",
-    message:
-      "회원님의 커피챗 요청에 대해 선배가 연락처를 공유했어요\n" +
-      "연락처를 확인하고 커피챗 일정을 잡아볼까요?",
-    buttonName: "Cheers에서 확인하기",
-    path: (pk) => `/applications/${encodeURIComponent(pk)}`,
-  },
+// 템플릿 문구 · 코드 · 버튼 이름은 DB(alimtalk_template)에 있고 어드민에서 수정함 (CRB-78).
+// 알리고에 등록한 템플릿과 글자 하나까지 같아야 전송됨. 버튼 링크는 템플릿에 https://#{cheers_url}로 등록되어 있어서 WEB_BASE_URL은 https://로 시작해야 함
+// 버튼 링크 경로는 코드에 둠. cheers-fe의 신청 상세(/applications/{id})는 학생 · 현업자 공용
+const BUTTON_PATHS: Record<NotificationEvent, (pk: string) => string> = {
+  coffee_chat_requested: (pk) => `/applications/${encodeURIComponent(pk)}`,
+  contact_shared: (pk) => `/applications/${encodeURIComponent(pk)}`,
 };
 
 interface AligoConfig {
@@ -52,7 +33,6 @@ interface AligoConfig {
   senderKey: string;
   sender: string;
   webBaseUrl: string;
-  templateCodes: Record<NotificationEvent, string>;
 }
 
 interface AligoSendResponse {
@@ -80,6 +60,20 @@ interface AligoHistoryDetailResponse {
   }[];
 }
 
+// POST /akv10/heartinfo/ 응답. list의 필드명은 문서에 예시가 적어 확인되지 않았음 (숫자도 문자열로 올 수 있음)
+interface AligoHeartInfoResponse {
+  code?: number | string;
+  message?: string;
+  list?: Record<string, unknown> | Record<string, unknown>[];
+}
+
+function toNumber(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string" || value.trim() === "") return null;
+  const parsed = Number(value.replace(/,/g, ""));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function parseJson<T>(text: string): T | null {
   try {
     return JSON.parse(text) as T;
@@ -103,7 +97,10 @@ export class AlimtalkService {
   private readonly logger = new Logger(AlimtalkService.name);
   private readonly config: AligoConfig | null;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly templateCache: AlimtalkTemplateCache,
+  ) {
     const apiKey = this.configService.get<string>("ALIGO_API_KEY");
     const userId = this.configService.get<string>("ALIGO_USER_ID");
     const senderKey = this.configService.get<string>("ALIGO_SENDER_KEY");
@@ -112,25 +109,11 @@ export class AlimtalkService {
       .get<string>("WEB_BASE_URL")
       ?.trim()
       .replace(/\/+$/, "");
-    const coffeeChatRequested = this.configService.get<string>(
-      "KAKAO_TEMPLATE_COFFEE_CHAT_REQUESTED",
-    );
-    const contactShared = this.configService.get<string>(
-      "KAKAO_TEMPLATE_CONTACT_SHARED",
-    );
 
-    if (
-      !apiKey ||
-      !userId ||
-      !senderKey ||
-      !sender ||
-      !webBaseUrl ||
-      !coffeeChatRequested ||
-      !contactShared
-    ) {
+    if (!apiKey || !userId || !senderKey || !sender || !webBaseUrl) {
       // 비즈 채널 · 템플릿 심사 전에도 배포할 수 있게 production에서도 막지 않음
       this.logger.warn(
-        "Aligo or Kakao alimtalk config is not set. Alimtalk will be logged instead of sent.",
+        "Aligo config is not set. Alimtalk will be logged instead of sent.",
       );
       this.config = null;
       return;
@@ -151,10 +134,6 @@ export class AlimtalkService {
       senderKey,
       sender,
       webBaseUrl,
-      templateCodes: {
-        coffee_chat_requested: coffeeChatRequested,
-        contact_shared: contactShared,
-      },
     };
   }
 
@@ -172,8 +151,21 @@ export class AlimtalkService {
       return { success: true, skipped: true };
     }
 
-    const template = TEMPLATES[input.event];
-    const link = `${this.config.webBaseUrl}${template.path(input.variables.coffeeChatRequestPk)}`;
+    const template = await this.templateCache.get(input.event);
+    if (!template) {
+      return { success: false, error: "template not found" };
+    }
+    if (!template.tplCode) {
+      // 어드민에서 템플릿 코드를 넣기 전에도 배포할 수 있게 막지 않음
+      this.logger.warn(
+        `Alimtalk template code is empty. Alimtalk will be logged instead of sent. event=${input.event}`,
+      );
+      this.logger.log(
+        `[ALIMTALK SKIPPED] to=${maskRecipient(input.to)} event=${input.event}`,
+      );
+      return { success: true, skipped: true };
+    }
+    const link = `${this.config.webBaseUrl}${BUTTON_PATHS[input.event](input.variables.coffeeChatRequestPk)}`;
 
     try {
       const response = await fetch(ALIGO_SEND_URL, {
@@ -182,7 +174,7 @@ export class AlimtalkService {
           apikey: this.config.apiKey,
           userid: this.config.userId,
           senderkey: this.config.senderKey,
-          tpl_code: this.config.templateCodes[input.event],
+          tpl_code: template.tplCode,
           sender: this.config.sender,
           receiver_1: input.to,
           recvname_1: input.variables.recipientName,
@@ -311,6 +303,73 @@ export class AlimtalkService {
         message: item.rslt_message?.trim() || null,
         reportedAt: parseAligoDate(item.rsltdate),
       };
+    } catch (error) {
+      return {
+        status: "error",
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  /**
+   * 알리고 잔여 충전금액 · 건수를 heartinfo로 조회합니다. throw하지 않습니다 (CRB-78).
+   * list의 숫자 값은 키를 소문자로 바꿔 counts에 그대로 담고, 금액은 cash · point · balance · amount로 시작하는 키에서 찾습니다.
+   * 실제 응답 필드명은 문서에 없어 운영 키로 한 번 호출해 확인한 뒤 맞춰야 합니다.
+   */
+  async fetchBalance(): Promise<AligoBalanceResult> {
+    if (!this.config) {
+      return { status: "not_configured" };
+    }
+
+    try {
+      const response = await fetch(ALIGO_HEART_INFO_URL, {
+        method: "POST",
+        body: new URLSearchParams({
+          apikey: this.config.apiKey,
+          userid: this.config.userId,
+        }),
+        signal: AbortSignal.timeout(10_000),
+      });
+
+      const body = parseJson<AligoHeartInfoResponse>(await response.text());
+
+      if (!response.ok) {
+        return {
+          status: "error",
+          error:
+            `${response.status} ${body?.code ?? ""} ${body?.message ?? ""}`.trim(),
+        };
+      }
+
+      if (!body) {
+        return {
+          status: "error",
+          error: `${response.status} invalid response body`,
+        };
+      }
+
+      if (Number(body.code) !== 0) {
+        return {
+          status: "error",
+          error: `${body.code ?? ""} ${body.message ?? ""}`.trim(),
+        };
+      }
+
+      const list = Array.isArray(body.list) ? body.list[0] : body.list;
+      let amount: number | null = null;
+      const counts: Record<string, number> = {};
+      for (const [key, value] of Object.entries(list ?? {})) {
+        const parsed = toNumber(value);
+        if (parsed === null) continue;
+        const name = key.toLowerCase();
+        if (amount === null && /^(cash|point|balance|amount)/.test(name)) {
+          amount = parsed;
+        } else {
+          counts[name] = parsed;
+        }
+      }
+
+      return { status: "ok", amount, counts };
     } catch (error) {
       return {
         status: "error",

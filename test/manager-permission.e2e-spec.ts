@@ -54,6 +54,9 @@ const ROUTES: Route[] = [
   route("GET", "/coffee-chat/request/:pk"),
   route("GET", "/coffee-chat/notification-log"),
   route("POST", "/coffee-chat/notification-log/:pk/delivery-lookup"),
+  route("GET", "/coffee-chat/aligo-status"),
+  route("GET", "/coffee-chat/alimtalk-template"),
+  route("PATCH", "/coffee-chat/alimtalk-template/:event"),
 
   route("GET", "/company"),
   route("GET", "/company/search"),
@@ -86,6 +89,8 @@ const PARAMS: Record<string, string> = {
   namePk: "999",
   type: "e2e_none",
   version: "e2e-none",
+  // notification_event가 아닌 값이라 가드를 통과해도 400으로 끝나 데이터가 바뀌지 않음
+  event: "e2e_none",
 };
 const UUID_PARAMS: Record<string, string[]> = {
   pk: [
