@@ -25,6 +25,7 @@ export const ADMIN_AUDIT_ACTIONS = [
   "consent.create",
   "business_card.verification_cancel",
   "notification_log.delivery_lookup",
+  "alimtalk_template.update",
   "dev_user.hard_delete",
 ] as const;
 export type AdminAuditAction = (typeof ADMIN_AUDIT_ACTIONS)[number];
@@ -40,6 +41,7 @@ export const ADMIN_AUDIT_TARGET_TYPES = [
   "consent",
   "business_card",
   "notification_log",
+  "alimtalk_template",
   "user",
 ] as const;
 export type AdminAuditTargetType = (typeof ADMIN_AUDIT_TARGET_TYPES)[number];
