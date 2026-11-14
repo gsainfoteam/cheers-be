@@ -9,10 +9,10 @@ autonumber
 hide footbox
 
 title POST /api/v1/file/attachment/upload-url
-caption CRB-6 · 이력서 · 포트폴리오 PDF를 S3에 직접 올릴 presigned PUT URL 발급 (가입을 마친 재학생만)
+caption CRB-6 · 이력서 · 포트폴리오 PDF를 S3에 직접 올릴 presigned PUT URL 발급 (가입 중인 재학생도 호출 — CRB-85)
 
 actor Client
-participant "UserGuard\n+ UserTypeGuard" as Guard
+participant "AnyStatusGuard\n+ UserTypeGuard" as Guard
 participant "ValidationPipe" as Pipe
 participant "FileController" as Controller
 participant "FileService" as Service
@@ -20,10 +20,10 @@ participant "S3"
 
 Client -> Guard: POST /api/v1/file/attachment/upload-url\nAuthorization: Bearer <access token>\n{ content_type, size }
 ref over Client, Guard
-  UserGuard, UserTypeGuard — flow/auth-guards.puml
-  @UserTypes(["student"])
+  AnyStatusGuard, UserTypeGuard — flow/auth-guards.puml
+  @UserTypes(["student"]). 가입 중(pending)에도 통과 (재학생 추가 정보 입력 단계에서 호출)
   401 Missing access token / Token expired / Invalid token
-  403 Signup is not completed (pending) / User type not allowed (현업자)
+  403 User type not allowed (현업자)
 end ref
 Guard -> Pipe: 통과
 alt body 검증 실패 (content_type 빈 문자열, size가 양의 정수가 아님)
