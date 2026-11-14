@@ -125,7 +125,10 @@ describe("GraduatedService", () => {
     findByUserPkWithProfile: jest.fn(),
     updateBusinessCard: jest.fn(),
   };
-  const graduatedProfileRepository = { upsert: jest.fn() };
+  const graduatedProfileRepository = {
+    upsert: jest.fn(),
+    existsByNickname: jest.fn(),
+  };
   const coffeeChatContactRepository = { upsert: jest.fn() };
   const companyRepository = {
     findByPkForKeyShare: jest.fn(),
@@ -160,6 +163,27 @@ describe("GraduatedService", () => {
     authService.issueTokens.mockResolvedValue({
       accessToken: "access",
       refreshToken: "refresh",
+    });
+  });
+
+  describe("checkNickname", () => {
+    it("is available when no profile uses the nickname", async () => {
+      graduatedProfileRepository.existsByNickname.mockResolvedValue(false);
+
+      await expect(service.checkNickname("철수")).resolves.toEqual({
+        available: true,
+      });
+      expect(graduatedProfileRepository.existsByNickname).toHaveBeenCalledWith(
+        "철수",
+      );
+    });
+
+    it("is unavailable when the nickname is already used", async () => {
+      graduatedProfileRepository.existsByNickname.mockResolvedValue(true);
+
+      await expect(service.checkNickname("철수")).resolves.toEqual({
+        available: false,
+      });
     });
   });
 

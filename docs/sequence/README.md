@@ -38,6 +38,7 @@
 | [file/post-attachment-upload-url.puml](file/post-attachment-upload-url.puml)                                                           | `POST /api/v1/file/attachment/upload-url`                                |
 | [graduated/post-verify-business-card.puml](graduated/post-verify-business-card.puml)                                                   | `POST /api/v1/user/graduated/verify/business-card`                       |
 | [graduated/post-info.puml](graduated/post-info.puml)                                                                                   | `POST /api/v1/user/graduated/info`                                       |
+| [graduated/get-nickname-check.puml](graduated/get-nickname-check.puml)                                                                 | `GET /api/v1/user/graduated/nickname/check`                              |
 | [company/get-company.puml](company/get-company.puml)                                                                                   | `GET /api/v1/company`                                                    |
 | [cheers/get-cheers.puml](cheers/get-cheers.puml)                                                                                       | `GET /api/v1/cheers`                                                     |
 | [cheers/post-cheers-request.puml](cheers/post-cheers-request.puml)                                                                     | `POST /api/v1/cheers/request`                                            |

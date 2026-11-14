@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { DatabaseService } from "@src/database/database.service";
 import { TxType } from "@src/global/types/tx.types";
 import { graduatedProfile } from "@drizzle/schema/graduated-profile";
 
@@ -19,6 +20,21 @@ export type GraduatedProfileInput = Pick<
 // 프로필 조회는 GraduatedRepository.findByUserPkWithProfile (현업자 행과 한 쿼리)
 @Injectable()
 export class GraduatedProfileRepository {
+  constructor(private readonly dbService: DatabaseService) {}
+
+  /*
+  SELECT 1 FROM graduated_profile WHERE lower(nickname) = lower(?1) LIMIT 1;
+   */
+  // 닉네임 사용 여부 (대소문자 무시). 탈퇴 유예 중인 유저의 프로필도 purge 전까지 포함
+  async existsByNickname(nickname: string): Promise<boolean> {
+    const rows = await this.dbService.db
+      .select({ one: sql<number>`1` })
+      .from(graduatedProfile)
+      .where(sql`lower(${graduatedProfile.nickname}) = lower(${nickname})`)
+      .limit(1);
+    return rows.length > 0;
+  }
+
   /*
   INSERT INTO graduated_profile (graduated_pk, nickname, company_alias_pk, department, job, hashtags, links)
   VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)

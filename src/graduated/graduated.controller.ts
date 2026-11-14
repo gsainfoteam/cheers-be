@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Post, Query, UseGuards } from "@nestjs/common";
 import { UserContext } from "@src/auth/context/user-context";
 import { CurrentUser } from "@src/auth/decorator/current-user.decorator";
 import { SignupStep } from "@src/auth/decorator/signup-step.decorator";
@@ -10,6 +10,10 @@ import { BaseResultDto } from "@src/global/dto/base-result.dto";
 import { ApiAuth, ApiErrors } from "@src/global/swagger/api-response.decorator";
 import { SignupCompleteResponseDto } from "@src/user/dto/signup-complete.dto";
 import { GraduatedInfoRequestDto } from "./dto/graduated-info.dto";
+import {
+  NicknameCheckQueryDto,
+  NicknameCheckResponseDto,
+} from "./dto/nickname-check.dto";
 import { VerifyBusinessCardRequestDto } from "./dto/verify-business-card.dto";
 import { GraduatedService } from "./graduated.service";
 
@@ -21,6 +25,19 @@ import { GraduatedService } from "./graduated.service";
 @UserTypes(["graduated"])
 export class GraduatedController {
   constructor(private readonly graduatedService: GraduatedService) {}
+
+  /** 닉네임 중복 확인 (가입 중에만. 조회만 하며 예약하지 않음) */
+  @Get("/nickname/check")
+  @SignupStep({ step: "profile" })
+  @ApiErrors({
+    400: "nickname 형식 오류",
+    403: "현업자가 아님, 가입 중인데 next_step이 profile이 아님",
+  })
+  async checkNickname(
+    @Query() query: NicknameCheckQueryDto,
+  ): Promise<NicknameCheckResponseDto> {
+    return this.graduatedService.checkNickname(query.nickname);
+  }
 
   /** 업로드한 명함 제출 (가입 후에는 교체) */
   @Post("/verify/business-card")
