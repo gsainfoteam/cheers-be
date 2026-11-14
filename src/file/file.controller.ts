@@ -4,7 +4,6 @@ import { UserContext } from "@src/auth/context/user-context";
 import { CurrentUser } from "@src/auth/decorator/current-user.decorator";
 import { UserTypes } from "@src/auth/decorator/user-types.decorator";
 import { AnyStatusGuard } from "@src/auth/guard/any-status.guard";
-import { UserGuard } from "@src/auth/guard/user.guard";
 import { UserTypeGuard } from "@src/auth/guard/user-type.guard";
 import { ApiAuth, ApiErrors } from "@src/global/swagger/api-response.decorator";
 import {
@@ -38,13 +37,13 @@ export class FileController {
   }
 
   /** 이력서 · 포트폴리오 업로드용 presigned PUT URL 발급 */
-  // 이력서 · 포트폴리오는 가입을 마친(active) 재학생만
+  // 이력서 · 포트폴리오는 재학생 가입 단계에서 첨부하므로 가입 중(pending)인 재학생도 호출
   @Post("/attachment/upload-url")
-  @UseGuards(UserGuard, UserTypeGuard)
+  @UseGuards(AnyStatusGuard, UserTypeGuard)
   @UserTypes(["student"])
   @ApiErrors({
     400: "요청 형식 오류, 허용되지 않은 파일 형식",
-    403: "가입을 마치지 않음, 재학생이 아님",
+    403: "재학생이 아님",
     413: "파일 크기 초과",
   })
   async createAttachmentUploadUrl(

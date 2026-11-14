@@ -72,7 +72,7 @@ describe("파일 업로드 오류 (가짜 S3)", () => {
       }).expect(413);
     });
 
-    it("명함은 현업자만, 첨부는 가입을 마친 재학생만 받음 (403)", async () => {
+    it("명함은 현업자만, 첨부는 재학생만 받음 (403), 가입 중인 재학생도 첨부는 받음", async () => {
       const student = await signupStudent(ctx);
       const graduated = await signupGraduated(ctx);
       const pendingStudent = await login(ctx, "student");
@@ -82,7 +82,7 @@ describe("파일 업로드 오류 (가짜 S3)", () => {
       const pdf = { content_type: "application/pdf", size: PDF_BYTES.length };
       await uploadUrl(student, CARD_URL, card).expect(403);
       await uploadUrl(graduated, ATTACHMENT_URL, pdf).expect(403);
-      await uploadUrl(pendingStudent, ATTACHMENT_URL, pdf).expect(403);
+      await uploadUrl(pendingStudent, ATTACHMENT_URL, pdf).expect(201);
       await http(ctx).post(CARD_URL).send(card).expect(401);
     });
   });

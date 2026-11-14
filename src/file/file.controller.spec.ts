@@ -3,7 +3,6 @@ import { Reflector } from "@nestjs/core";
 import { UserContext } from "@src/auth/context/user-context";
 import { UserTypes } from "@src/auth/decorator/user-types.decorator";
 import { AnyStatusGuard } from "@src/auth/guard/any-status.guard";
-import { UserGuard } from "@src/auth/guard/user.guard";
 import { UserTypeGuard } from "@src/auth/guard/user-type.guard";
 import { FilePurpose } from "./file.constants";
 import { FileController } from "./file.controller";
@@ -23,10 +22,10 @@ describe("FileController", () => {
     expect(userTypesOf(handler)).toEqual(["graduated"]);
   });
 
-  it("lets only active students request a CV · portfolio upload URL", () => {
+  it("lets pending students request a CV · portfolio upload URL", () => {
     const handler = handlers.createAttachmentUploadUrl;
 
-    expect(guardsOf(handler)).toEqual([UserGuard, UserTypeGuard]);
+    expect(guardsOf(handler)).toEqual([AnyStatusGuard, UserTypeGuard]);
     expect(userTypesOf(handler)).toEqual(["student"]);
   });
 
@@ -39,7 +38,7 @@ describe("FileController", () => {
     [
       "createAttachmentUploadUrl",
       FilePurpose.ATTACHMENT,
-      new UserContext("student-pk", "student", "active"),
+      new UserContext("student-pk", "student", "pending"),
     ],
   ] as const)(
     "%s issues the URL for its own purpose",
