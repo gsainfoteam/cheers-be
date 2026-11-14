@@ -29,6 +29,7 @@ import {
 import { TxType } from "@src/global/types/tx.types";
 import { SignupCompleteResponseDto } from "@src/user/dto/signup-complete.dto";
 import { GraduatedInfoRequestDto } from "./dto/graduated-info.dto";
+import { NicknameCheckResponseDto } from "./dto/nickname-check.dto";
 
 @Injectable()
 export class GraduatedService {
@@ -42,6 +43,13 @@ export class GraduatedService {
     private readonly coffeeChatContactRepository: CoffeeChatContactRepository,
     private readonly companyRepository: CompanyRepository,
   ) {}
+
+  // 닉네임 사용 가능 여부. 조회만 하며 예약하지 않음
+  async checkNickname(nickname: string): Promise<NicknameCheckResponseDto> {
+    const exists =
+      await this.graduatedProfileRepository.existsByNickname(nickname);
+    return { available: !exists };
+  }
 
   // 명함 등록 = 즉시 인증. 다시 등록하면 이전 명함을 대체
   async verifyBusinessCard(

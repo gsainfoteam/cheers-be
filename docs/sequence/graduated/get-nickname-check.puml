@@ -1,0 +1,57 @@
+@startuml get-graduated-nickname-check
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/v1/user/graduated/nickname/check
+caption CRB-84 · 현업자 가입 시 닉네임 중복 확인 (조회만 하며 예약하지 않음, 최종 저장은 POST /api/v1/user/graduated/info)
+
+actor Client
+participant "SignupStepGuard\nUserTypeGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "GraduatedController" as Controller
+participant "GraduatedService" as Service
+participant "GraduatedProfileRepository" as ProfileRepository
+database PostgreSQL
+
+Client -> Guard: GET /api/v1/user/graduated/nickname/check?nickname=철수\nAuthorization: Bearer <access token>
+ref over Client, Guard
+  SignupStepGuard → UserTypeGuard — flow/auth-guards.puml
+  @SignupStep({ step: "profile" })  (allowActive 아님)
+  pending: next_step = profile 일 때만 통과 (닉네임은 가입 후 변경 불가라 가입 완료 뒤에는 호출할 일이 없음)
+  @UserTypes("graduated")
+  401 Missing access token / Token expired / Invalid token / User not found
+  403 Signup step mismatch / User type not allowed
+end ref
+Guard -> Pipe: 통과
+alt query 검증 실패
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+note right of Pipe
+  nickname 은 앞뒤 공백 제거 후 검사 (필수)
+  ^[가-힣A-Za-z0-9_]{2,10}$ — POST /graduated/info 의 nickname 규칙과 동일
+end note
+Pipe -> Controller: checkNickname(query)
+Controller -> Service: checkNickname(nickname)
+
+Service -> ProfileRepository: existsByNickname(nickname)
+ProfileRepository -> PostgreSQL: SELECT 1 FROM graduated_profile\nWHERE lower(nickname) = lower(?) LIMIT 1
+note right
+  대소문자 구분 없이 비교 (철수 / Chulsoo · chulsoo 구분)
+  탈퇴 요청 후 유예기간 중인 유저의 프로필도 purge 전까지 닉네임을 차지함
+end note
+PostgreSQL --> ProfileRepository: row | none
+ProfileRepository --> Service: boolean
+Service --> Controller: { available: !exists }
+Controller --> Client: 200 { "available": true | false }
+
+note over Client, PostgreSQL
+  조회만 하므로 확인 직후 다른 사람이 같은 닉네임으로 먼저 저장할 수 있음.
+  현재 graduated_profile.nickname 에는 UNIQUE 제약이 없고 POST /graduated/info 도 중복을 막지 않음 (범위 결정 필요)
+end note
+@enduml
