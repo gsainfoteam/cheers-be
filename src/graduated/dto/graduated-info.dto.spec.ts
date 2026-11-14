@@ -31,6 +31,28 @@ describe("GraduatedInfoRequestDto", () => {
     expect(dto.contact.phone).toBe("01000000000");
   });
 
+  it("accepts a body without department", async () => {
+    const { dto, errors } = await errorsOf(body({ department: undefined }));
+
+    expect(errors).toHaveLength(0);
+    expect(dto.department).toBeUndefined();
+  });
+
+  it.each(["", "   "])("treats blank department %j as omitted", async (v) => {
+    const { dto, errors } = await errorsOf(body({ department: v }));
+
+    expect(errors).toHaveLength(0);
+    expect(dto.department).toBeUndefined();
+  });
+
+  it("trims department and rejects one over 128 chars", async () => {
+    const ok = await errorsOf(body({ department: "  플랫폼개발팀  " }));
+    expect(ok.dto.department).toBe("플랫폼개발팀");
+
+    const { errors } = await errorsOf(body({ department: "가".repeat(129) }));
+    expect(errors.map((e) => e.property)).toContain("department");
+  });
+
   it("accepts a body without optional fields", async () => {
     const { errors } = await errorsOf(
       body({ nickname: undefined, hashtags: undefined, links: undefined }),

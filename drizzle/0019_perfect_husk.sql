@@ -1,0 +1,1 @@
+ALTER TABLE "graduated_profile" ALTER COLUMN "department" DROP NOT NULL;

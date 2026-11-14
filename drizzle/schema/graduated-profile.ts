@@ -16,7 +16,7 @@ CREATE TABLE "graduated_profile" (
     "graduated_pk" uuid                     NOT NULL REFERENCES "graduated" ("pk"),
     "nickname"     varchar(32)              NOT NULL,
     "company_alias_pk" integer              NOT NULL REFERENCES "company_alias" ("pk"),
-    "department"   varchar(128)             NOT NULL,
+    "department"   varchar(128)             NULL,
     "job"          varchar(128)             NOT NULL,
     "created_at"   timestamp with time zone NOT NULL DEFAULT NOW(),
     "updated_at"   timestamp with time zone NOT NULL DEFAULT NOW(),
@@ -39,8 +39,8 @@ export const graduatedProfile = pgTable(
     companyAliasPk: integer("company_alias_pk")
       .notNull()
       .references(() => companyAlias.pk),
-    // 회사 부서 (비공개)
-    department: varchar("department", { length: 128 }).notNull(),
+    // 회사 부서 (비공개, 선택 입력)
+    department: varchar("department", { length: 128 }),
     // 직무
     job: varchar("job", { length: 128 }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
