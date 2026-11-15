@@ -17,8 +17,8 @@
 | last_active_at | timestamp with time zone | now() | false |  |  | 로그인 · 토큰 갱신 · 내 정보 조회 때 갱신 |
 | name | varchar(64) |  | true |  |  | 추가 정보 입력에서 한 번 받음 (OAuth 이름은 쓰지 않음). 이후 수정 불가 |
 | email | varchar(255) |  | true |  |  |  |
-| picture_url | varchar(2048) |  | true |  |  | 구글 로그인 때 받은 프로필 이미지 URL (구글 URL 그대로). 재로그인 때 받으면 갱신, 탈퇴 purge 때 제거 |
 | withdraw_requested_at | timestamp with time zone |  | true |  |  | 탈퇴 요청 시각. 유예기간(active는 WITHDRAWAL_GRACE_DAYS, pending은 1일) 안에 다시 로그인하면 null로 되돌림 |
+| picture_url | varchar(2048) |  | true |  |  |  |
 
 ## Constraints
 
@@ -57,8 +57,8 @@ erDiagram
   timestamp_with_time_zone last_active_at
   varchar_64_ name
   varchar_255_ email
-  varchar_2048_ picture_url
   timestamp_with_time_zone withdraw_requested_at
+  varchar_2048_ picture_url
 }
 "public.coffee_chat_contact" {
   uuid user_pk FK

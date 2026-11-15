@@ -275,6 +275,7 @@ erDiagram
   varchar_64_ name
   varchar_255_ email
   timestamp_with_time_zone withdraw_requested_at
+  varchar_2048_ picture_url
 }
 "public.jwt_signing_key" {
   smallint id
