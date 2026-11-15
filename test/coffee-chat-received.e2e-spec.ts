@@ -58,6 +58,11 @@ describe("현업자 받은 요청 → 열람 → 연락처 공유", () => {
   const detail = (graduated: Session, id: string) =>
     http(ctx).get(`${RECEIVED}/${id}`).set("Authorization", bearer(graduated));
 
+  const accept = (graduated: Session, id: string) =>
+    http(ctx)
+      .post(`${RECEIVED}/${id}/accept`)
+      .set("Authorization", bearer(graduated));
+
   const share = (graduated: Session, id: string) =>
     http(ctx)
       .post(`${RECEIVED}/${id}/share-contact`)
@@ -113,14 +118,15 @@ describe("현업자 받은 요청 → 열람 → 연락처 공유", () => {
       id,
       message: "질문 있습니다",
       status: "viewed",
+      accepted_at: null,
       contact_shared_at: null,
       student: {
         name: STUDENT_NAME,
         interests: [expect.any(String)],
         activities: [],
         attachments: [],
-        // 재학생은 메일만 골랐으므로 phone은 null
-        email: STUDENT_EMAIL,
+        // 수락 전에는 재학생 연락처를 숨김
+        email: null,
         phone: null,
       },
     });
@@ -156,6 +162,7 @@ describe("현업자 받은 요청 → 열람 → 연락처 공유", () => {
     ctx.mail.sent.length = 0;
     ctx.alimtalk.sent.length = 0;
 
+    await accept(graduated, id).expect(200);
     const shared = await share(graduated, id).expect(200);
     expect(shared.body).toEqual({
       contact_shared_at: expect.any(String),
@@ -199,6 +206,7 @@ describe("현업자 받은 요청 → 열람 → 연락처 공유", () => {
     const student = await signupStudent(ctx);
     const id = await sendRequest(student, graduated);
 
+    await accept(graduated, id).expect(200);
     const first = await share(graduated, id).expect(200);
     await waitUntil(() => ctx.mail.sent.some((m) => m.to === STUDENT_EMAIL));
     const mailCount = ctx.mail.sent.length;
@@ -219,6 +227,56 @@ describe("현업자 받은 요청 → 열람 → 연락처 공유", () => {
     expect(ctx.mail.sent).toHaveLength(mailCount);
   });
 
+  it("수락 전에는 연락처가 숨겨지고 공유도 409. 수락하면 연락처가 보이며 재학생에게 알림은 가지 않음", async () => {
+    const graduated = await signupGraduated(ctx);
+    const student = await signupStudent(ctx, undefined, {
+      contact: {
+        email_enabled: true,
+        kakao_enabled: true,
+        email: STUDENT_EMAIL,
+        phone: "010-9876-5432",
+      },
+    });
+    const id = await sendRequest(student, graduated);
+    ctx.mail.sent.length = 0;
+    ctx.alimtalk.sent.length = 0;
+
+    // 수락 전: 상세에 연락처가 없고 공유할 수 없음
+    const before = await detail(graduated, id).expect(200);
+    expect(before.body.student).toMatchObject({ email: null, phone: null });
+    await share(graduated, id).expect(409);
+    expect((await requestRow(id)).contactSharedAt).toBeNull();
+
+    const accepted = await accept(graduated, id).expect(200);
+    expect(accepted.body).toEqual({
+      accepted_at: expect.any(String),
+      student: { email: STUDENT_EMAIL, phone: STUDENT_PHONE },
+    });
+    const row = await requestRow(id);
+    expect(row.acceptedAt).not.toBeNull();
+    expect(row.graduatedViewedAt).not.toBeNull();
+
+    // 수락 뒤: 상세 · 목록에 반영. 재학생에게는 수락이 보이지 않음
+    const after = await detail(graduated, id).expect(200);
+    expect(after.body).toMatchObject({
+      status: "accepted",
+      accepted_at: accepted.body.accepted_at,
+      student: { email: STUDENT_EMAIL, phone: STUDENT_PHONE },
+    });
+    expect((await receivedList(graduated)).items[0].status).toBe("accepted");
+    expect((await sentDetail(student, id)).status).toBe("viewed");
+
+    // 다시 수락해도 처음 결과 그대로
+    const again = await accept(graduated, id).expect(200);
+    expect(again.body).toEqual(accepted.body);
+    expect((await requestRow(id)).acceptedAt).toEqual(row.acceptedAt);
+
+    // 알림 없음 (비동기로 나갈 틈을 준 뒤에도)
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(ctx.mail.sent).toHaveLength(0);
+    expect(ctx.alimtalk.sent).toHaveLength(0);
+  });
+
   it("연락 희망을 끈 현업자는 공유할 연락처가 없어 409이고 상태가 그대로", async () => {
     const graduated = await signupGraduated(ctx);
     const student = await signupStudent(ctx);
@@ -230,6 +288,7 @@ describe("현업자 받은 요청 → 열람 → 연락처 공유", () => {
       .set({ emailEnabled: false, email: null })
       .where(eq(coffeeChatContact.userPk, graduatedUserPk));
 
+    await accept(graduated, id).expect(200);
     await share(graduated, id).expect(409);
     expect((await requestRow(id)).contactSharedAt).toBeNull();
     expect((await sentDetail(student, id)).shared_contact).toBeNull();
@@ -242,11 +301,14 @@ describe("현업자 받은 요청 → 열람 → 연락처 공유", () => {
     const id = await sendRequest(student, graduated);
 
     await detail(other, id).expect(404);
+    await accept(other, id).expect(404);
+    expect((await requestRow(id)).acceptedAt).toBeNull();
     await share(other, id).expect(404);
     expect((await receivedList(other)).total).toBe(0);
     expect((await requestRow(id)).graduatedViewedAt).toBeNull();
 
     await detail(graduated, "not-a-uuid").expect(400);
+    await accept(graduated, "not-a-uuid").expect(400);
     await share(graduated, "not-a-uuid").expect(400);
 
     await http(ctx)
@@ -254,6 +316,7 @@ describe("현업자 받은 요청 → 열람 → 연락처 공유", () => {
       .set("Authorization", bearer(student))
       .expect(403);
     await detail(student, id).expect(403);
+    await accept(student, id).expect(403);
     await share(student, id).expect(403);
   });
 
@@ -263,6 +326,7 @@ describe("현업자 받은 요청 → 열람 → 연락처 공유", () => {
     const pendingStudent = await signupStudent(ctx);
     const sharedId = await sendRequest(sharedStudent, graduated);
     const pendingId = await sendRequest(pendingStudent, graduated);
+    await accept(graduated, sharedId).expect(200);
     const first = await share(graduated, sharedId).expect(200);
 
     await withdraw(sharedStudent);
@@ -278,13 +342,17 @@ describe("현업자 받은 요청 → 열람 → 연락처 공유", () => {
     }
 
     await detail(graduated, pendingId).expect(410);
-    await share(graduated, pendingId).expect(410);
+    await accept(graduated, pendingId).expect(410);
+    await share(graduated, pendingId).expect(409);
     expect(await requestRow(pendingId)).toMatchObject({
       graduatedViewedAt: null,
+      acceptedAt: null,
       contactSharedAt: null,
     });
 
     await detail(graduated, sharedId).expect(410);
+    // 이미 수락 · 공유한 요청은 재학생이 탈퇴해도 처음 결과를 그대로 줌
+    await accept(graduated, sharedId).expect(200);
     expect((await share(graduated, sharedId).expect(200)).body).toEqual(
       first.body,
     );

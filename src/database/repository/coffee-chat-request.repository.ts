@@ -52,7 +52,7 @@ export type SentRequestPage = {
 
 export type ReceivedRequestRow = Pick<
   CoffeeChatRequestRow,
-  "pk" | "createdAt" | "graduatedViewedAt" | "contactSharedAt"
+  "pk" | "createdAt" | "graduatedViewedAt" | "acceptedAt" | "contactSharedAt"
 > & {
   // 재학생 이름 (탈퇴 처리 후에는 null)
   studentName: string | null;
@@ -87,9 +87,17 @@ export type ReceivedRequestDetailRow = ReceivedRequestRow &
 
 export type ReceivedRequestForShareRow = Pick<
   CoffeeChatRequestRow,
-  "pk" | "contactSharedAt" | "sharedEmail" | "sharedPhone"
+  "pk" | "acceptedAt" | "contactSharedAt" | "sharedEmail" | "sharedPhone"
 > & {
   studentName: string | null;
+  studentActive: boolean;
+  studentContact: StudentContact | null;
+};
+
+export type ReceivedRequestForAcceptRow = Pick<
+  CoffeeChatRequestRow,
+  "pk" | "acceptedAt"
+> & {
   studentActive: boolean;
   studentContact: StudentContact | null;
 };
@@ -122,6 +130,7 @@ const receivedRequestColumns = {
   pk: coffeeChatRequest.pk,
   createdAt: coffeeChatRequest.createdAt,
   graduatedViewedAt: coffeeChatRequest.graduatedViewedAt,
+  acceptedAt: coffeeChatRequest.acceptedAt,
   contactSharedAt: coffeeChatRequest.contactSharedAt,
   studentName: users.name,
   studentActive: sql<boolean>`${isActiveAccount}`,
@@ -387,7 +396,7 @@ export class CoffeeChatRequestRepository {
   }
 
   /*
-  SELECT r.pk, r.contact_shared_at, r.shared_email, r.shared_phone, u.name,
+  SELECT r.pk, r.accepted_at, r.contact_shared_at, r.shared_email, r.shared_phone, u.name,
     (u.is_deleted = false AND u.withdraw_requested_at IS NULL) AS student_active,
     c.kakao_enabled, c.email_enabled, c.phone, c.email
   FROM coffee_chat_request r
@@ -407,6 +416,7 @@ export class CoffeeChatRequestRepository {
     const result = await tx
       .select({
         pk: coffeeChatRequest.pk,
+        acceptedAt: coffeeChatRequest.acceptedAt,
         contactSharedAt: coffeeChatRequest.contactSharedAt,
         sharedEmail: coffeeChatRequest.sharedEmail,
         sharedPhone: coffeeChatRequest.sharedPhone,
@@ -441,6 +451,67 @@ export class CoffeeChatRequestRepository {
           isNull(coffeeChatRequest.graduatedViewedAt),
         ),
       );
+  }
+
+  /*
+  SELECT r.pk, r.accepted_at,
+    (u.is_deleted = false AND u.withdraw_requested_at IS NULL) AS student_active,
+    c.kakao_enabled, c.email_enabled, c.phone, c.email
+  FROM coffee_chat_request r
+  JOIN graduated g ON g.pk = r.graduated_pk AND g.user_pk = ?2
+  JOIN student s ON s.pk = r.student_pk
+  JOIN users u ON u.pk = s.user_pk
+  LEFT JOIN coffee_chat_contact c ON c.user_pk = s.user_pk
+  WHERE r.pk = ?1
+  FOR UPDATE OF r;
+   */
+  // 수락 (CRB-88): 요청 행을 잠가 동시에 두 번 호출해도 accepted_at을 덮어쓰지 않게 함. 다른 현업자의 요청이면 null
+  async findReceivedForAccept(
+    pk: string,
+    graduatedUserPk: string,
+    tx: TxType,
+  ): Promise<ReceivedRequestForAcceptRow | null> {
+    const result = await tx
+      .select({
+        pk: coffeeChatRequest.pk,
+        acceptedAt: coffeeChatRequest.acceptedAt,
+        studentActive: sql<boolean>`${isActiveAccount}`,
+        studentContact: studentContactColumns,
+      })
+      .from(coffeeChatRequest)
+      .innerJoin(graduated, isReceivedBy(graduatedUserPk))
+      .innerJoin(student, eq(student.pk, coffeeChatRequest.studentPk))
+      .innerJoin(users, eq(users.pk, student.userPk))
+      .leftJoin(coffeeChatContact, eq(coffeeChatContact.userPk, student.userPk))
+      .where(eq(coffeeChatRequest.pk, pk))
+      .for("update", { of: coffeeChatRequest });
+
+    return result[0] ?? null;
+  }
+
+  /*
+  UPDATE coffee_chat_request
+  SET accepted_at = now(), graduated_viewed_at = COALESCE(graduated_viewed_at, now()), updated_at = now()
+  WHERE pk = ?1 RETURNING accepted_at;
+   */
+  // 수락 시각 저장. findReceivedForAccept로 행을 잠그고 아직 수락 전임을 확인한 뒤 호출
+  async markAccepted(pk: string, tx: TxType): Promise<Date> {
+    const now = new Date();
+    const result = await tx
+      .update(coffeeChatRequest)
+      .set({
+        acceptedAt: now,
+        graduatedViewedAt: sql`COALESCE(${coffeeChatRequest.graduatedViewedAt}, ${now.toISOString()}::timestamptz)`,
+        updatedAt: now,
+      })
+      .where(eq(coffeeChatRequest.pk, pk))
+      .returning({ acceptedAt: coffeeChatRequest.acceptedAt });
+
+    if (result.length === 0 || !result[0].acceptedAt) {
+      throw new CheersDBError("Failed to mark accepted");
+    }
+
+    return result[0].acceptedAt;
   }
 
   /*
