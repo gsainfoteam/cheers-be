@@ -1,0 +1,73 @@
+@startuml admin-company-logo-preview
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title 공통 흐름: 어드민 회사 로고 수정 후 사원증 미리보기
+caption CRB-89 · admin/ 회사 탭에서 실제 프론트엔드 사원증(EmployeeBadge)과 같은 모양으로 로고를 확인. 새 API 없음
+
+actor Operator
+participant "admin/ (브라우저)\nCompaniesPage" as Admin
+participant "CompanyBadgePreview\n(admin/ 컴포넌트)" as Preview
+participant "AdminCompanyController" as Api
+participant "S3"
+
+== 로고 수정 (기존 흐름, 바뀌지 않음) ==
+
+Operator -> Admin: 회사 행의 [로고] 버튼으로 파일 선택
+Admin -> Api: POST /api/manager/v1/company/logo/upload-url
+ref over Admin, Api: manager/post-company-logo-upload-url.puml
+Admin -> S3: PUT <presigned url> (파일)
+Admin -> Api: PUT /api/manager/v1/company/{pk}/logo { key }
+ref over Admin, Api: manager/put-company-pk-logo.puml
+Admin -> Api: GET /api/manager/v1/company?page=<page>
+ref over Admin, Api: manager/get-company.puml
+Api --> Admin: items[].logo_url (presigned GET URL)
+note right of Admin
+  logo_url 은 프론트엔드의 company_logo_url 과 같은 키
+  (company_alias.logo_key)를 FileService.getPresignedUrls 로 만든 값.
+  같은 이미지를 가리킨다
+end note
+
+== 미리보기 (새 흐름, 화면 안에서만) ==
+
+Operator -> Admin: 회사 행의 [미리보기] 버튼
+Admin -> Preview: 열기 (company.name, company.logo_url)
+note right of Preview
+  API 호출 없음. 목록에 이미 있는 값만 쓴다.
+  사원증 값 = 프론트엔드 badgeDataOf() 와 같은 규칙:
+  - companyLogo: company.logo_url (null → 고양이)
+  - company: company.name
+  - department · nickname · job · hashtags: 고정 더미 현업자
+    (예: "플랫폼개발팀" · "미리보기선배" · "백엔드\n개발자" · #전기전자  #3년차)
+  - hashtags 는 # 을 붙여 두 칸 간격으로 이음 (hashtagText)
+end note
+Preview -> Preview: 같은 카드를 두 폭으로 그림\n모바일 목록 170.5px · 데스크톱 목록 288px\n(카드 폭 220px 기준으로 글자 크기 두 벌)
+
+alt logo_url 있음
+  Preview -> S3: GET <logo_url>
+  alt 이미지 받음
+    S3 --> Preview: 이미지
+    Preview --> Operator: 로고가 든 사원증 (69.858×24.865 칸, object-fit: contain)
+  else 받지 못함 (presigned URL 만료 등)
+    S3 -[#red]-> Preview: 403 / 네트워크 오류
+    Preview --> Operator: 프론트엔드와 같이 고양이로 대체 +\n"로고를 불러오지 못함, 목록을 새로고침" 안내
+  end
+else logo_url 없음
+  Preview --> Operator: 고양이가 든 사원증 (프론트엔드와 같음)
+end
+
+Operator -> Preview: 닫기
+note over Admin, Preview
+  사원증 마크업 · 수치는 cheers-fe src/components/employee-badge.tsx 를
+  Tailwind 없이 CSS 로 옮긴 것. 프론트엔드 카드가 바뀌면 같이 고친다.
+  자산(고양이 · 띠 · 그림자 SVG, 3D 고양이 128px WebP)은 같은 것을 admin/src/assets/badge/ 에 복사해 쓴다.
+  글꼴(Noto Sans KR, Geist, Geist Mono)은 불러오지 않아 시스템 글꼴로 그려진다 (글자 모양만 조금 다름)
+end note
+
+@enduml
