@@ -22,7 +22,7 @@ database PostgreSQL
 Client -> Guard: GET /api/manager/v1/access-log?admin_email&target_type&created_from&created_to&page&size\nAuthorization: Bearer <manager token>
 ref over Client, Guard: ManagerGuard + SuperAdminGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found\n403 Superadmin privilege is required.
 Guard -> Pipe: 통과
-alt query 검증 실패 (target_type은 business_card · dev_user_hard_delete, 날짜 형식, page · size 범위)
+alt query 검증 실패 (target_type은 business_card · user_contact · dev_user_hard_delete, 날짜 형식, page · size 범위)
   Pipe -[#red]-> Client: 400 (class-validator 메시지)
 end
 Pipe -> Controller: list(query)
@@ -40,7 +40,7 @@ else
 end
 AccessRepository --> Service: { rows, total }
 note right of Service
-  target_id: business_card는 graduated.pk, dev_user_hard_delete는 지운 users.pk.
+  target_id: business_card는 graduated.pk, user_contact는 연락처를 본 users.pk, dev_user_hard_delete는 지운 users.pk.
   이 조회 자체는 기록하지 않음
 end note
 Service --> Controller: PageResponseDto<AdminAccessLogDto>

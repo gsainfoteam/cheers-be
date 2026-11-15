@@ -11,7 +11,7 @@ CREATE TYPE "notification_channel" AS ENUM ('email', 'kakao_alimtalk');
 CREATE TYPE "notification_status" AS ENUM ('sent', 'failed');
 CREATE TYPE "notification_delivery_status" AS ENUM ('pending', 'delivered', 'failed', 'unknown');
 CREATE TYPE "admin_account_role" AS ENUM ('admin', 'superadmin');
-CREATE TYPE "admin_access_target_type" AS ENUM ('business_card');
+CREATE TYPE "admin_access_target_type" AS ENUM ('business_card', 'user_contact', 'dev_user_hard_delete');
 */
 
 // 가입 진행 중이면 pending, 추가 정보 입력까지 마치면 active
@@ -61,6 +61,8 @@ export const adminAccountRole = pgEnum("admin_account_role", [
 // 어드민이 열람한 개인정보 종류
 export const adminAccessTargetType = pgEnum("admin_access_target_type", [
   "business_card",
+  // 회원 상세에서 커피챗 연락처(전화번호 · 이메일)를 본 기록 (CRB-91). target_id는 연락처 주인의 users.pk
+  "user_contact",
   // 개발용 회원 완전탈퇴 (CRB-72). 열람이 아니라 삭제 기록
   "dev_user_hard_delete",
 ]);

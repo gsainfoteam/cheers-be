@@ -55,6 +55,10 @@ const ROUTES: Route[] = [
   route("POST", "/consent", true),
   route("GET", "/consent/:type/:version/status"),
 
+  route("GET", "/user"),
+  route("GET", "/user/:pk"),
+  route("GET", "/user/:pk/contact"),
+
   route("GET", "/coffee-chat/request"),
   route("GET", "/coffee-chat/request/:pk"),
   route("GET", "/coffee-chat/notification-log"),

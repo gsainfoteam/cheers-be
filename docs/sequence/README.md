@@ -64,6 +64,9 @@
 | [manager/get-dashboard-demand.puml](manager/get-dashboard-demand.puml)                                                                 | `GET /api/manager/v1/dashboard/demand`                                   |
 | [manager/get-dashboard-todo.puml](manager/get-dashboard-todo.puml)                                                                     | `GET /api/manager/v1/dashboard/todo`                                     |
 | [manager/get-access-log.puml](manager/get-access-log.puml)                                                                             | `GET /api/manager/v1/access-log`                                         |
+| [manager/get-user.puml](manager/get-user.puml)                                                                                         | `GET /api/manager/v1/user`                                               |
+| [manager/get-user-pk.puml](manager/get-user-pk.puml)                                                                                   | `GET /api/manager/v1/user/{pk}`                                          |
+| [manager/get-user-pk-contact.puml](manager/get-user-pk-contact.puml)                                                                   | `GET /api/manager/v1/user/{pk}/contact`                                  |
 | [manager/get-business-card.puml](manager/get-business-card.puml)                                                                       | `GET /api/manager/v1/business-card`                                      |
 | [manager/get-business-card-graduated-pk.puml](manager/get-business-card-graduated-pk.puml)                                             | `GET /api/manager/v1/business-card/{graduatedPk}`                        |
 | [manager/post-business-card-graduated-pk-cancel-verification.puml](manager/post-business-card-graduated-pk-cancel-verification.puml)   | `POST /api/manager/v1/business-card/{graduatedPk}/cancel-verification`   |

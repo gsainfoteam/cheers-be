@@ -8,6 +8,7 @@ export const PLACEHOLDER_MENUS: { path: string; label: string }[] = [];
 
 const NAV_ITEMS = [
   { to: "/", label: "홈", end: true },
+  { to: "/users", label: "회원", end: false },
   { to: "/consents", label: "이용약관", end: false },
   ...PLACEHOLDER_MENUS.map((menu) => ({
     to: `/${menu.path}`,
