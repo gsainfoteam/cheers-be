@@ -1,0 +1,48 @@
+@startuml get-manager-dashboard-member
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/manager/v1/dashboard/member
+caption CRB-92 · 어드민 홈 대시보드 — 회원 현황. 읽기 전용, 기존 테이블만 집계 (신규 테이블 · 컬럼 없음). 개인정보를 내려주지 않아 access-log는 남기지 않음. 탈퇴한 회원(is_deleted)은 집계에서 제외 (커피챗 요청 이력은 탈퇴와 무관하게 그대로 셈)
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "ManagerDashboardController" as Controller
+participant "ManagerDashboardService" as Service
+participant "AdminDashboardRepository" as Repository
+database PostgreSQL
+
+Client -> Guard: GET /api/manager/v1/dashboard/member?range=30d\nAuthorization: Bearer <manager token>
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Pipe: 통과 (admin · superadmin 모두 조회 가능)
+alt range 검증 실패 (7d · 30d · 90d 중 하나, 생략하면 30d)
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+Pipe -> Controller: getMember(query)
+Controller -> Service: getMember(range)
+note right of Service
+  range는 신규 가입에만 적용. 가입자 수 · 활성 사용자 · 탈퇴 유예는 현재 시점 기준
+end note
+Service -> Repository: memberStats(from = now - range)
+par 동시에 조회
+  Repository -> PostgreSQL: SELECT type, status, count(*)\nFROM users WHERE is_deleted = false GROUP BY type, status
+else
+  Repository -> PostgreSQL: 유형별 신규 가입: count(*) WHERE status = 'active' AND created_at >= from
+else
+  Repository -> PostgreSQL: 유형별 활성 사용자: count(*) WHERE last_active_at >= now - 7 days / now - 30 days
+else
+  Repository -> PostgreSQL: 탈퇴 유예 중: count(*) WHERE withdraw_requested_at IS NOT NULL
+end
+PostgreSQL --> Repository: 집계 결과
+Repository --> Service: 원시 집계값
+Service --> Controller: ManagerDashboardMemberDto
+Controller --> Client: 200 {\n  range, generated_at,\n  student: { active, pending, new, active_7d, active_30d },\n  graduated: { active, pending, new, active_7d, active_30d },\n  withdraw_pending\n}
+
+@enduml
