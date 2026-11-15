@@ -10,6 +10,7 @@ import { CoffeeChatContactRepository } from "@src/database/repository/coffee-cha
 import {
   CoffeeChatRequestRepository,
   ReceivedRequestDetailRow,
+  ReceivedRequestForAcceptRow,
   ReceivedRequestForShareRow,
   ReceivedRequestRow,
   StudentContact,
@@ -28,7 +29,18 @@ const userPk = "8f1d2c3b-0000-4000-8000-000000000001";
 const requestPk = "c0ffee00-1234-4abc-8def-001122334455";
 const createdAt = new Date("2026-10-25T12:00:00.000Z");
 const viewedAt = new Date("2026-10-25T13:00:00.000Z");
+const acceptedAt = new Date("2026-10-25T13:10:00.000Z");
 const sharedAt = new Date("2026-10-25T13:30:00.000Z");
+
+const acceptRow = (
+  overrides: Partial<ReceivedRequestForAcceptRow> = {},
+): ReceivedRequestForAcceptRow => ({
+  pk: requestPk,
+  acceptedAt: null,
+  studentActive: true,
+  studentContact: studentContact(),
+  ...overrides,
+});
 
 const studentContact = (
   overrides: Partial<StudentContact> = {},
@@ -57,6 +69,7 @@ const listRow = (
   pk: requestPk,
   createdAt,
   graduatedViewedAt: null,
+  acceptedAt: null,
   contactSharedAt: null,
   studentName: "홍길동",
   studentActive: true,
@@ -80,6 +93,7 @@ const shareRow = (
   overrides: Partial<ReceivedRequestForShareRow> = {},
 ): ReceivedRequestForShareRow => ({
   pk: requestPk,
+  acceptedAt: viewedAt,
   contactSharedAt: null,
   sharedEmail: null,
   sharedPhone: null,
@@ -106,6 +120,8 @@ describe("CheersGraduatedService", () => {
     findReceivedPage: jest.fn(),
     findReceivedByPk: jest.fn(),
     findReceivedForShare: jest.fn(),
+    findReceivedForAccept: jest.fn(),
+    markAccepted: jest.fn(),
     markGraduatedViewed: jest.fn(),
     markContactShared: jest.fn(),
   };
@@ -175,6 +191,9 @@ describe("CheersGraduatedService", () => {
       await expect(
         service.shareContact(userPk, requestPk),
       ).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(service.accept(userPk, requestPk)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
 
       expect(
         coffeeChatRequestRepository.findReceivedPage,
@@ -184,6 +203,9 @@ describe("CheersGraduatedService", () => {
       ).not.toHaveBeenCalled();
       expect(
         coffeeChatRequestRepository.findReceivedForShare,
+      ).not.toHaveBeenCalled();
+      expect(
+        coffeeChatRequestRepository.findReceivedForAccept,
       ).not.toHaveBeenCalled();
     });
   });
@@ -290,6 +312,7 @@ describe("CheersGraduatedService", () => {
         message: "궁금합니다",
         status: "viewed",
         created_at: createdAt.toISOString(),
+        accepted_at: null,
         contact_shared_at: null,
         student: {
           name: "홍길동",
@@ -297,15 +320,35 @@ describe("CheersGraduatedService", () => {
           interests: ["반도체"],
           activities: [],
           attachments: [],
-          email: "gildong@gm.gist.ac.kr",
-          phone: "01011112222",
+          // 수락 전에는 재학생 연락처를 숨김
+          email: null,
+          phone: null,
         },
+      });
+    });
+
+    it("shows the student's contact and answers accepted after accepting", async () => {
+      coffeeChatRequestRepository.findReceivedByPk.mockResolvedValue(
+        detailRow({ graduatedViewedAt: viewedAt, acceptedAt }),
+      );
+
+      const result = await createService().getReceivedDetail(userPk, requestPk);
+
+      expect(result.status).toBe("accepted");
+      expect(result.accepted_at).toBe(acceptedAt.toISOString());
+      expect(result.student).toMatchObject({
+        email: "gildong@gm.gist.ac.kr",
+        phone: "01011112222",
       });
     });
 
     it("does not overwrite an earlier view", async () => {
       coffeeChatRequestRepository.findReceivedByPk.mockResolvedValue(
-        detailRow({ graduatedViewedAt: viewedAt, contactSharedAt: sharedAt }),
+        detailRow({
+          graduatedViewedAt: viewedAt,
+          acceptedAt,
+          contactSharedAt: sharedAt,
+        }),
       );
 
       const result = await createService().getReceivedDetail(userPk, requestPk);
@@ -324,7 +367,7 @@ describe("CheersGraduatedService", () => {
       "shows only the channels the student chose (%j)",
       async (overrides, email, phone) => {
         coffeeChatRequestRepository.findReceivedByPk.mockResolvedValue(
-          detailRow({ studentContact: studentContact(overrides) }),
+          detailRow({ acceptedAt, studentContact: studentContact(overrides) }),
         );
 
         const { student } = await createService().getReceivedDetail(
@@ -384,6 +427,72 @@ describe("CheersGraduatedService", () => {
           file_name: null,
         },
       ]);
+    });
+  });
+
+  describe("accept", () => {
+    it("throws 404 for a missing or someone else's request", async () => {
+      coffeeChatRequestRepository.findReceivedForAccept.mockResolvedValue(null);
+
+      await expect(createService().accept(userPk, requestPk)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(coffeeChatRequestRepository.markAccepted).not.toHaveBeenCalled();
+    });
+
+    it("returns the first result without writing when already accepted", async () => {
+      coffeeChatRequestRepository.findReceivedForAccept.mockResolvedValue(
+        acceptRow({ acceptedAt, studentActive: false }),
+      );
+
+      const result = await createService().accept(userPk, requestPk);
+
+      expect(result).toEqual({
+        accepted_at: acceptedAt.toISOString(),
+        student: { email: "gildong@gm.gist.ac.kr", phone: "01011112222" },
+      });
+      expect(coffeeChatRequestRepository.markAccepted).not.toHaveBeenCalled();
+    });
+
+    it("throws 410 on a first accept when the student left", async () => {
+      coffeeChatRequestRepository.findReceivedForAccept.mockResolvedValue(
+        acceptRow({ studentActive: false }),
+      );
+
+      await expect(createService().accept(userPk, requestPk)).rejects.toThrow(
+        GoneException,
+      );
+      expect(coffeeChatRequestRepository.markAccepted).not.toHaveBeenCalled();
+    });
+
+    it("saves the accept and reveals the student's contact without notifying", async () => {
+      coffeeChatRequestRepository.findReceivedForAccept.mockResolvedValue(
+        acceptRow(),
+      );
+      coffeeChatRequestRepository.markAccepted.mockResolvedValue(acceptedAt);
+
+      const result = await createService().accept(userPk, requestPk);
+
+      expect(coffeeChatRequestRepository.markAccepted).toHaveBeenCalledWith(
+        requestPk,
+        tx,
+      );
+      expect(result).toEqual({
+        accepted_at: acceptedAt.toISOString(),
+        student: { email: "gildong@gm.gist.ac.kr", phone: "01011112222" },
+      });
+      expect(notificationService.notifyAsync).not.toHaveBeenCalled();
+    });
+
+    it("shows only the channels the student chose", async () => {
+      coffeeChatRequestRepository.findReceivedForAccept.mockResolvedValue(
+        acceptRow({ studentContact: studentContact({ emailEnabled: false }) }),
+      );
+      coffeeChatRequestRepository.markAccepted.mockResolvedValue(acceptedAt);
+
+      const result = await createService().accept(userPk, requestPk);
+
+      expect(result.student).toEqual({ email: null, phone: "01011112222" });
     });
   });
 
@@ -450,6 +559,18 @@ describe("CheersGraduatedService", () => {
       const result = await createService().shareContact(userPk, requestPk);
 
       expect(result.shared_email).toBe("old@example.com");
+    });
+
+    it("throws 409 before sharing when the request is not accepted", async () => {
+      coffeeChatRequestRepository.findReceivedForShare.mockResolvedValue(
+        shareRow({ acceptedAt: null }),
+      );
+      coffeeChatContactRepository.findByUserPk.mockResolvedValue(myContact());
+
+      await expect(
+        createService().shareContact(userPk, requestPk),
+      ).rejects.toThrow("Coffee chat is not accepted");
+      expectNothingShared();
     });
 
     it("throws 410 on a first share to a student who left", async () => {

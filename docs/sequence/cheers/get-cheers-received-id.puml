@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title GET /api/v1/cheers/received/{id}
-caption CRB-42 · 받은 요청 상세 (요청 당시 재학생 정보 + 현재 연락처). 처음 열람 시 graduated_viewed_at 기록
+caption CRB-42 · CRB-88 · 받은 요청 상세 (요청 당시 재학생 정보). 재학생 연락처는 수락(accept) 뒤에만 내려줌. 처음 열람 시 graduated_viewed_at 기록
 
 actor Client
 participant "UserGuard\n+ UserTypeGuard" as Guard
@@ -80,8 +80,8 @@ loop source = file 인 첨부마다 (link는 url 그대로)
 end
 note right of Service: S3 서명은 트랜잭션 밖에서 처리해 DB 연결을 오래 잡지 않음
 
-Service -> Service: status 계산 ("viewed" | "contact_shared")\nstudent.email = c.email_enabled ? c.email : null\nstudent.phone = c.kakao_enabled ? c.phone : null\nactivities, attachments는 없으면 []
+Service -> Service: status 계산 ("viewed" | "accepted" | "contact_shared")\naccepted_at 있음 → student.email = c.email_enabled ? c.email : null\n               student.phone = c.kakao_enabled ? c.phone : null\naccepted_at 없음 → email · phone 모두 null (수락 전에는 숨김)\nactivities, attachments는 없으면 []
 Service --> Controller: ReceivedRequestDetailDto
-Controller --> Client: 200 { id, message, status, created_at, contact_shared_at,\nstudent: { name, department, interests, activities, attachments, email, phone } }
+Controller --> Client: 200 { id, message, status, created_at, accepted_at, contact_shared_at,\nstudent: { name, department, interests, activities, attachments, email, phone } }
 
 @enduml

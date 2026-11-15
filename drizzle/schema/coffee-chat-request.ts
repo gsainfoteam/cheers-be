@@ -22,6 +22,7 @@ CREATE TABLE "coffee_chat_request" (
     "created_at"          timestamp with time zone NOT NULL DEFAULT NOW(),
     "updated_at"          timestamp with time zone NOT NULL DEFAULT NOW(),
     "graduated_viewed_at" timestamp with time zone NULL,
+    "accepted_at"         timestamp with time zone NULL,
     "contact_shared_at"   timestamp with time zone NULL,
     "student_viewed_at"   timestamp with time zone NULL,
     "message"             text                     NULL,
@@ -30,7 +31,7 @@ CREATE TABLE "coffee_chat_request" (
     FOREIGN KEY ("student_profile_pk", "student_pk") REFERENCES "student_profile" ("pk", "student_pk")
 );
 */
-// 커피챗 요청. 진행 단계(현업자 확인 → 연락처 공유 → 재학생 확인)는 처음 했을 때 시각만 기록
+// 커피챗 요청. 진행 단계(현업자 확인 → 수락 → 연락처 공유 → 재학생 확인)는 처음 했을 때 시각만 기록
 export const coffeeChatRequest = pgTable(
   "coffee_chat_request",
   {
@@ -50,6 +51,8 @@ export const coffeeChatRequest = pgTable(
       .notNull()
       .defaultNow(),
     graduatedViewedAt: timestamp("graduated_viewed_at", { withTimezone: true }),
+    // 현업자가 수락한 시각. 수락해야 재학생 연락처를 볼 수 있음 (알림 없음)
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
     contactSharedAt: timestamp("contact_shared_at", { withTimezone: true }),
     studentViewedAt: timestamp("student_viewed_at", { withTimezone: true }),
     message: text("message"),

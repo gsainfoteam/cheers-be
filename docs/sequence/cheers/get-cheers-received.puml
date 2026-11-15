@@ -60,7 +60,7 @@ else
 end
 note right of Service: 트랜잭션 없음 (조회만)
 
-Service -> Service: status 계산\ncontact_shared_at 있음 → "contact_shared"\ngraduated_viewed_at 있음 → "viewed"\n그 외 → "requested"
+Service -> Service: status 계산\ncontact_shared_at 있음 → "contact_shared"\naccepted_at 있음 → "accepted"\ngraduated_viewed_at 있음 → "viewed"\n그 외 → "requested"
 alt student_active = true
   Service -> Service: student_withdrawn = false\nstudent_name = u.name, department = d.name,\ninterests = sp.interests, activities = sp.activities ?? []
 else 탈퇴 또는 탈퇴 유예기간 중 (student_active = false)

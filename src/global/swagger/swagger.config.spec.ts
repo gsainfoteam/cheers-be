@@ -198,7 +198,7 @@ describe("API document", () => {
   it("lists every route handler", () => {
     const handlers = CONTROLLERS.flatMap(handlersOf);
 
-    expect(handlers).toHaveLength(26);
+    expect(handlers).toHaveLength(27);
     expect(operations()).toHaveLength(handlers.length);
   });
 

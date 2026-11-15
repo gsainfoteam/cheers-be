@@ -20,6 +20,7 @@
 | message | text |  | true |  |  |  |
 | shared_phone | varchar(20) |  | true |  |  | 공유 시점 현업자 연락처 |
 | shared_email | varchar(255) |  | true |  |  | 공유 시점 현업자 연락처 |
+| accepted_at | timestamp with time zone |  | true |  |  |  |
 
 ## Constraints
 
@@ -61,6 +62,7 @@ erDiagram
   text message
   varchar_20_ shared_phone
   varchar_255_ shared_email
+  timestamp_with_time_zone accepted_at
 }
 "public.notification_log" {
   uuid *pk
