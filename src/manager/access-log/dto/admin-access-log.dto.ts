@@ -26,7 +26,7 @@ export class AdminAccessLogDto {
   admin_email: string;
   @ApiProperty({ enum: adminAccessTargetType.enumValues })
   target_type: AdminAccessTargetType;
-  /** business_card: graduated.pk, dev_user_hard_delete: 지운 users.pk */
+  /** business_card: graduated.pk, user_contact: 연락처를 본 users.pk, dev_user_hard_delete: 지운 users.pk */
   target_id: string;
   created_at: Date;
 }
