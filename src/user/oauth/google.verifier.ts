@@ -23,6 +23,18 @@ export class GoogleVerifier implements OAuthVerifier {
     );
   }
 
+  // users.picture_url(varchar 2048)에 들어가도록 https URL만 받음
+  private static parsePicture(value: unknown): string | null {
+    if (typeof value !== "string" || value.length > 2048) {
+      return null;
+    }
+    try {
+      return new URL(value).protocol === "https:" ? value : null;
+    } catch {
+      return null;
+    }
+  }
+
   async verify(token: string, nonce?: string): Promise<OAuthProfile> {
     const payload = await this.idTokenVerifier.verify(token, nonce);
     return {
@@ -33,6 +45,7 @@ export class GoogleVerifier implements OAuthVerifier {
         typeof payload.email === "string" && payload.email_verified === true
           ? payload.email
           : null,
+      picture: GoogleVerifier.parsePicture(payload.picture),
     };
   }
 }

@@ -28,6 +28,7 @@ const userRow = (pk: string): UserRow => ({
   lastActiveAt: new Date(NOW.getTime() - 48 * HOUR_MS),
   name: null,
   email: null,
+  pictureUrl: null,
   withdrawRequestedAt: null,
 });
 

@@ -30,6 +30,7 @@ export class AppleVerifier implements OAuthVerifier {
       provider: "apple",
       sub: payload.sub,
       email: typeof payload.email === "string" ? payload.email : null,
+      picture: null,
     };
   }
 }

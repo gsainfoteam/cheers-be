@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title GET /api/v1/user/info
-caption CRB-10, CRB-38 · 내 정보, 가입 다음 단계(next_step), 재동의 필요 여부, 유형별 정보
+caption CRB-10, CRB-38, CRB-86 · 내 정보(구글 프로필 이미지 picture_url 포함), 가입 다음 단계(next_step), 재동의 필요 여부, 유형별 정보
 
 actor Client
 participant "AnyStatusGuard" as Guard
@@ -33,6 +33,7 @@ par 동시에 조회 — 유형이 필요한 조회는 토큰 클레임의 type(
   Service -> UserRepository: findByPk(userPk)
   UserRepository -> PostgreSQL: SELECT users (is_deleted = false\nAND withdraw_requested_at IS NULL)
   UserRepository --> Service: user | null
+  note right: user.picture_url은 DB에 저장된 구글 URL 그대로 (서명 없음, 없으면 null)
 else
   Service -> CoffeeChatContactRepository: findByUserPk(userPk)
   CoffeeChatContactRepository -> PostgreSQL: SELECT coffee_chat_contact
@@ -102,6 +103,6 @@ note right of Service
   null 배열(activities, hashtags, links)은 []로 응답
 end note
 Service --> Controller: UserInfoDto
-Controller --> Client: 200 { id, type, status, next_step, name, email,\nconsent_required, student, graduated }
+Controller --> Client: 200 { id, type, status, next_step, name, email,\npicture_url, consent_required, student, graduated }
 
 @enduml

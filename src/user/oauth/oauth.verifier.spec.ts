@@ -48,6 +48,7 @@ describe("GoogleVerifier", () => {
       provider: "google",
       sub: "g-1",
       email: "a@gmail.com",
+      picture: null,
     });
     expect(mockedJwtVerify).toHaveBeenCalledWith("id-token", "jwks", {
       issuer: ["https://accounts.google.com", "accounts.google.com"],
@@ -69,6 +70,27 @@ describe("GoogleVerifier", () => {
     await expect(verifier.verify("id-token", NONCE)).resolves.toMatchObject({
       sub: "g-1",
       email: null,
+    });
+  });
+
+  it.each([
+    [
+      "https://lh3.googleusercontent.com/a/p",
+      "https://lh3.googleusercontent.com/a/p",
+    ],
+    ["http://example.com/p.png", null],
+    ["not a url", null],
+    [`https://example.com/${"a".repeat(2048)}`, null],
+    [123, null],
+    [undefined, null],
+  ])("maps the picture claim %p to %p", async (picture, expected) => {
+    mockedJwtVerify.mockResolvedValue({
+      payload: { sub: "g-1", picture, nonce: NONCE_HASH },
+    });
+    const verifier = new GoogleVerifier(config({ GOOGLE_CLIENT_ID: "web-id" }));
+
+    await expect(verifier.verify("id-token", NONCE)).resolves.toMatchObject({
+      picture: expected,
     });
   });
 
@@ -148,6 +170,7 @@ describe("AppleVerifier", () => {
       provider: "apple",
       sub: "a-1",
       email: "x@privaterelay.appleid.com",
+      picture: null,
     });
     expect(mockedJwtVerify).toHaveBeenCalledWith("id-token", "jwks", {
       issuer: ["https://appleid.apple.com"],
@@ -187,6 +210,7 @@ describe("NaverVerifier", () => {
       provider: "naver",
       sub: "n-1",
       email: "c@naver.com",
+      picture: null,
     });
     expect(fetchMock).toHaveBeenCalledWith(
       "https://openapi.naver.com/v1/nid/me",

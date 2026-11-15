@@ -31,7 +31,7 @@ class FakeGoogleVerifier implements OAuthVerifier {
     if (prefix !== "fake-google" || !sub || !nonce) {
       throw new UnauthorizedException("Invalid OAuth token");
     }
-    return { provider: "google", sub, email: email ?? null };
+    return { provider: "google", sub, email: email ?? null, picture: null };
   }
 }
 
