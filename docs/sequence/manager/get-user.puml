@@ -1,0 +1,53 @@
+@startuml get-manager-user
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/manager/v1/user
+caption CRB-91 · 회원 목록 (읽기 전용). 연락처 · OAuth 식별자 · 토큰은 조회하지 않음
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "ManagerUserController" as Controller
+participant "ManagerUserService" as Service
+participant "AdminUserRepository" as UserRepository
+database PostgreSQL
+
+Client -> Guard: GET /api/manager/v1/user?type&status&withdrawal&q&created_from&created_to&page&size\nAuthorization: Bearer <manager token>
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Pipe: 통과
+alt query 검증 실패 (type · status · withdrawal enum, 날짜 형식, 빈 검색어, page · size 범위)
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+Pipe -> Controller: listUsers(query)
+Controller -> Service: listUsers(query)
+alt created_from이 created_to보다 늦음
+  Service -[#red]-> Client: 400 created_from must not be after created_to
+end
+Service -> UserRepository: findPage(filter, offset, limit)
+par 동시에 조회 — 같은 조건
+  UserRepository -> PostgreSQL: SELECT users + 재학생 학과 · 현업자 닉네임 · 회사 · 직무 (LEFT JOIN)\nWHERE ... AND (pk::text ILIKE ? OR name ILIKE ? OR email ILIKE ?)\nORDER BY created_at DESC, pk DESC LIMIT OFFSET
+  PostgreSQL --> UserRepository: rows
+else
+  UserRepository -> PostgreSQL: SELECT count(*) (같은 조건)
+  PostgreSQL --> UserRepository: total
+end
+note right of UserRepository
+  q: pk(uuid 문자열) · 이름 · 이메일 부분 일치 (대소문자 무시). 탈퇴 purge 후에는 이름 · 이메일이 null이라 pk로 찾음
+  LIKE 특수문자(%, _)는 이스케이프. pk::text 비교라 pk 인덱스는 타지 않음 (회원 수가 많아지면 다시 검토)
+  목록 컬럼에 pk 포함 (화면에서 전체 값 복사 가능)
+  withdrawal: all(기본) | none(정상) | requested(탈퇴 유예 중) | deleted(탈퇴 완료)
+  탈퇴 상태는 is_deleted · withdraw_requested_at으로 계산
+  재학생은 최신 student_profile의 학교 · 학과, 현업자는 회사 · 직무. 가입 중이라 프로필이 없으면 모두 null
+end note
+UserRepository --> Service: { rows, total }
+Service --> Controller: PageResponseDto<UserListItemDto>
+Controller --> Client: 200 { items: [{ pk, name, email, type, status, withdrawal_state, affiliation: { school, department, company, job }, created_at, last_active_at }], page, size, total }
+
+@enduml

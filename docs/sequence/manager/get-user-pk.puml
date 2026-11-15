@@ -1,0 +1,64 @@
+@startuml get-manager-user-pk
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/manager/v1/user/{pk}
+caption CRB-91 · 회원 상세 (읽기 전용). 연락처 값 · OAuth 식별자 · 토큰 · 명함 사진은 응답에 넣지 않음 (연락처 · 명함은 화면의 보기 버튼이 별도 API로 조회하고 열람 기록을 남김)
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ParseUUIDPipe" as Pipe
+participant "ManagerUserController" as Controller
+participant "ManagerUserService" as Service
+participant "AdminUserRepository" as UserRepository
+database PostgreSQL
+
+Client -> Guard: GET /api/manager/v1/user/{pk}\nAuthorization: Bearer <manager token>
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Pipe: 통과
+alt pk가 uuid가 아님
+  Pipe -[#red]-> Client: 400 Validation failed (uuid is expected)
+end
+Pipe -> Controller: getUser(pk)
+Controller -> Service: getUser(pk)
+Service -> UserRepository: findDetailByPk(pk)
+UserRepository -> PostgreSQL: SELECT users WHERE pk
+PostgreSQL --> UserRepository: row | 없음
+alt 없는 회원
+  Service -[#red]-> Client: 404 User not found
+end
+par 동시에 조회 — 모두 user_pk 기준
+  UserRepository -> PostgreSQL: SELECT user_oauth_account (provider · email · created_at · last_login_at)\nprovider_sub는 SELECT하지 않음
+else
+  UserRepository -> PostgreSQL: SELECT coffee_chat_contact (kakao_enabled · email_enabled)\nphone · email은 SELECT하지 않음
+else
+  UserRepository -> PostgreSQL: SELECT user_consent ORDER BY agreed_at DESC, pk DESC
+else
+  alt type = student
+    UserRepository -> PostgreSQL: SELECT student (학교 이메일 · verified_at)\n+ 최신 student_profile (학교 · 학과 · 관심분야 · 활동)\n+ 보낸 커피챗 요청 수 (서브쿼리 count)
+  else type = graduated
+    UserRepository -> PostgreSQL: SELECT graduated (verified_at · 명함 등록 여부) + graduated_profile\n(닉네임 · 회사 · 부서 · 직무 · 해시태그 · 링크)\n+ 받은 커피챗 요청 수 (서브쿼리 count)
+  end
+else
+end
+PostgreSQL --> UserRepository: rows
+UserRepository --> Service: detail
+note right of Service
+  탈퇴 완료(is_deleted)면 purge로 지워진 값은 null — 그대로 내려줌
+  가입 미완료(pending)면 profile · contact는 null
+  [명함 보기] 버튼: 기존 GET /api/manager/v1/business-card/{graduatedPk} 호출
+    (graduated_pk 내려줌, 열람 기록 admin_access_log는 그 API가 남김)
+  [연락처 보기] 버튼: GET /api/manager/v1/user/{pk}/contact 호출 (manager/get-user-pk-contact.puml, 열람 기록을 남김)
+  하단 커피챗 목록: 기존 GET /api/manager/v1/coffee-chat/request?student_pk= 또는 graduated_pk= 재사용
+    (재학생은 보낸 요청, 현업자는 받은 요청. 새 API 없음. student_pk · graduated_pk를 내려줌)
+end note
+Service --> Controller: UserDetailDto
+Controller --> Client: 200 { pk, name, email, type, status, withdrawal_state, created_at, updated_at, last_active_at, withdraw_requested_at,\noauth_accounts: [{ provider, email, created_at, last_login_at }],\ncontact_methods: { kakao_enabled, email_enabled } | null,\nconsents: [{ type, version, agreed_at, revoked_at }],\nstudent: { student_pk, school_email, verified_at, school, department, interests, activities } | null,\ngraduated: { graduated_pk, verified_at, has_business_card, nickname, company, department, job, hashtags, links } | null,\ncoffee_chat_request_count }
+
+@enduml
