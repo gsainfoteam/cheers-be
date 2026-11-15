@@ -311,6 +311,20 @@ select {
   margin: 0;
 }
 
+/* 회원 상세처럼 제목 + 카드가 여러 개 이어지는 화면. 구역 사이를 띄우고 카드 안 요소 사이도 띄움 */
+.detail-section {
+  margin-top: 32px;
+}
+
+.detail-section > .page-header h2 {
+  margin-bottom: 12px;
+  font-size: 18px;
+}
+
+.detail-section .card > * + * {
+  margin-top: 16px;
+}
+
 .pre-wrap {
   white-space: pre-wrap;
 }

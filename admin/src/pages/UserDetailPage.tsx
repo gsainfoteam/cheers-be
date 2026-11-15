@@ -112,7 +112,7 @@ function BasicInfo({ user }: { user: UserDetail }) {
 
 function OauthAccounts({ user }: { user: UserDetail }) {
   return (
-    <>
+    <section className="detail-section">
       <div className="page-header">
         <h2>로그인 계정</h2>
       </div>
@@ -143,7 +143,7 @@ function OauthAccounts({ user }: { user: UserDetail }) {
           <p className="placeholder">연결된 로그인 계정이 없습니다.</p>
         )}
       </div>
-    </>
+    </section>
   );
 }
 
@@ -151,7 +151,7 @@ function StudentProfile({ user }: { user: UserDetail }) {
   const student = user.student;
   if (!student) return null;
   return (
-    <>
+    <section className="detail-section">
       <div className="page-header">
         <h2>재학생 프로필</h2>
       </div>
@@ -171,7 +171,7 @@ function StudentProfile({ user }: { user: UserDetail }) {
           <dd>{join(student.activities)}</dd>
         </dl>
       </div>
-    </>
+    </section>
   );
 }
 
@@ -205,7 +205,7 @@ function GraduatedProfile({ user }: { user: UserDetail }) {
   };
 
   return (
-    <>
+    <section className="detail-section">
       <div className="page-header">
         <h2>현업자 프로필</h2>
       </div>
@@ -280,7 +280,7 @@ function GraduatedProfile({ user }: { user: UserDetail }) {
           </div>
         )}
       </div>
-    </>
+    </section>
   );
 }
 
@@ -308,7 +308,7 @@ function Contact({ user }: { user: UserDetail }) {
   const canShow = !!methods && (methods.kakao_enabled || methods.email_enabled);
 
   return (
-    <>
+    <section className="detail-section">
       <div className="page-header">
         <h2>커피챗 연락수단</h2>
       </div>
@@ -358,13 +358,13 @@ function Contact({ user }: { user: UserDetail }) {
         )}
         {error && <p className="error-text">{error}</p>}
       </div>
-    </>
+    </section>
   );
 }
 
 function Consents({ user }: { user: UserDetail }) {
   return (
-    <>
+    <section className="detail-section">
       <div className="page-header">
         <h2>약관 동의 이력</h2>
       </div>
@@ -397,7 +397,7 @@ function Consents({ user }: { user: UserDetail }) {
           <p className="placeholder">동의 이력이 없습니다.</p>
         )}
       </div>
-    </>
+    </section>
   );
 }
 
@@ -440,7 +440,7 @@ function CoffeeChatRequests({ user }: { user: UserDetail }) {
   }, [memberPk, isStudent, page]);
 
   return (
-    <>
+    <section className="detail-section">
       <div className="page-header">
         <h2>
           {isStudent ? "보낸" : "받은"} 커피챗 요청 (
@@ -512,6 +512,6 @@ function CoffeeChatRequests({ user }: { user: UserDetail }) {
           </p>
         )}
       </div>
-    </>
+    </section>
   );
 }
