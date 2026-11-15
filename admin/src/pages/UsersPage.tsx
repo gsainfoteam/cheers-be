@@ -14,6 +14,10 @@ import { Pagination } from "./Pagination";
 
 const FILTER_KEYS = ["type", "status", "withdrawal", "q"];
 
+// 36자 uuid가 표를 너무 넓게 만들어 앞 · 뒤만 보여 줌. 시드 데이터처럼 앞이 같은 pk도 구분되도록 뒤도 남기고,
+// 전체 값은 마우스를 올리면 title로, 상세 화면에서는 그대로 보임. 검색은 전체 pk의 일부로도 됨
+const shortPk = (pk: string) => `${pk.slice(0, 8)}…${pk.slice(-4)}`;
+
 export function UsersPage() {
   const { params, result, error, search, goToPage, formKey } =
     usePagedList<UserListItem>(
@@ -108,8 +112,8 @@ export function UsersPage() {
               {result?.items.map((user) => (
                 <tr key={user.pk}>
                   <td>
-                    <Link to={`/users/${user.pk}`}>
-                      <code>{user.pk}</code>
+                    <Link to={`/users/${user.pk}`} title={user.pk}>
+                      <code className="pk-short">{shortPk(user.pk)}</code>
                     </Link>
                   </td>
                   <td>{userDisplayName(user)}</td>
