@@ -1,0 +1,46 @@
+@startuml get-manager-dashboard-todo
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/manager/v1/dashboard/todo
+caption CRB-92 · 어드민 홈 대시보드 — 처리할 일과 알림 상태. 읽기 전용, 기존 테이블만 집계 (신규 테이블 · 컬럼 없음). 개인정보를 내려주지 않아 access-log는 남기지 않음. 탈퇴한 회원(is_deleted)은 집계에서 제외 (커피챗 요청 이력은 탈퇴와 무관하게 그대로 셈)
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "ManagerDashboardController" as Controller
+participant "ManagerDashboardService" as Service
+participant "AdminDashboardRepository" as Repository
+database PostgreSQL
+
+Client -> Guard: GET /api/manager/v1/dashboard/todo\nAuthorization: Bearer <manager token>
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Pipe: 통과 (admin · superadmin 모두 조회 가능)
+Pipe -> Controller: getTodo()
+Controller -> Service: getTodo()
+note right of Service
+  range 없음. 처리할 일은 현재 시점 건수, 알림 상태는 최근 7일
+end note
+Service -> Repository: todoCounts(), notificationCounts(since = now - 7 days)
+par 동시에 조회
+  Repository -> PostgreSQL: 명함 인증 대기: graduated WHERE business_card_key IS NOT NULL AND verified_at IS NULL (탈퇴한 회원 제외)
+else
+  Repository -> PostgreSQL: 회사명 검토 필요: company_alias WHERE needs_review = true
+else
+  Repository -> PostgreSQL: notification_log WHERE created_at >= since\n· 최종 실패: status = 'failed' AND next_retry_at IS NULL\n· 재시도 대기: next_retry_at IS NOT NULL\n· 알림톡 결과 확인 불가: delivery_status = 'unknown'
+end
+PostgreSQL --> Repository: 집계 결과
+Repository --> Service: 원시 집계값
+note right of Service
+  알리고 잔여량은 외부 호출이라 포함하지 않음 (기존 coffee-chat/aligo-status 사용)
+end note
+Service --> Controller: ManagerDashboardTodoDto
+Controller --> Client: 200 {\n  generated_at,\n  business_card_pending, company_needs_review,\n  notification: { failed, retry_waiting, delivery_unknown }\n}
+
+@enduml

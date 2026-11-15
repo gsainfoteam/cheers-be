@@ -59,6 +59,10 @@
 | [manager/patch-admin-account-pk.puml](manager/patch-admin-account-pk.puml)                                                             | `PATCH /api/manager/v1/admin-account/{pk}`                               |
 | [manager/delete-admin-account-pk.puml](manager/delete-admin-account-pk.puml)                                                           | `DELETE /api/manager/v1/admin-account/{pk}`                              |
 | [manager/get-audit-log.puml](manager/get-audit-log.puml)                                                                               | `GET /api/manager/v1/audit-log`                                          |
+| [manager/get-dashboard-coffee-chat.puml](manager/get-dashboard-coffee-chat.puml)                                                       | `GET /api/manager/v1/dashboard/coffee-chat`                              |
+| [manager/get-dashboard-member.puml](manager/get-dashboard-member.puml)                                                                 | `GET /api/manager/v1/dashboard/member`                                   |
+| [manager/get-dashboard-demand.puml](manager/get-dashboard-demand.puml)                                                                 | `GET /api/manager/v1/dashboard/demand`                                   |
+| [manager/get-dashboard-todo.puml](manager/get-dashboard-todo.puml)                                                                     | `GET /api/manager/v1/dashboard/todo`                                     |
 | [manager/get-access-log.puml](manager/get-access-log.puml)                                                                             | `GET /api/manager/v1/access-log`                                         |
 | [manager/get-business-card.puml](manager/get-business-card.puml)                                                                       | `GET /api/manager/v1/business-card`                                      |
 | [manager/get-business-card-graduated-pk.puml](manager/get-business-card-graduated-pk.puml)                                             | `GET /api/manager/v1/business-card/{graduatedPk}`                        |
