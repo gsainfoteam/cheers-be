@@ -20,6 +20,8 @@ import { LoginPage } from "./pages/LoginPage";
 import { AligoStatusPage } from "./pages/AligoStatusPage";
 import { NotificationLogsPage } from "./pages/NotificationLogsPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
+import { UserDetailPage } from "./pages/UserDetailPage";
+import { UsersPage } from "./pages/UsersPage";
 
 function RequireAuth({ children }: { children: ReactNode }) {
   if (!getAccessToken()) {
@@ -43,6 +45,8 @@ export function App() {
       >
         <Route index element={<HomePage />} />
         <Route path="consents" element={<ConsentsPage />} />
+        <Route path="users" element={<UsersPage />} />
+        <Route path="users/:pk" element={<UserDetailPage />} />
         {PLACEHOLDER_MENUS.map((menu) => (
           <Route
             key={menu.path}

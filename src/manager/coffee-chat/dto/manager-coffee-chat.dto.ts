@@ -32,7 +32,7 @@ export const COFFEE_CHAT_REQUEST_STATUSES = [
 ] as const satisfies readonly CoffeeChatRequestStatus[];
 
 // PostgreSQL은 text 파라미터에 NUL을 받지 않음
-const toKeyword = ({ value }: { value: unknown }) =>
+export const toKeyword = ({ value }: { value: unknown }) =>
   typeof value === "string" ? value.replaceAll("\0", "").trim() : value;
 
 // IsISO8601만으로는 오프셋이 없는 값(서버 시간대로 해석됨)과 Date로 읽지 못하는 값(20261015, 2026-W01)이 통과함

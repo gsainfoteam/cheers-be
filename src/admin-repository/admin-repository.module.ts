@@ -14,6 +14,7 @@ import { AdminSchoolRepository } from "@src/admin-repository/admin-school.reposi
 import { AdminStudentRepository } from "@src/admin-repository/admin-student.repository";
 import { AdminInterestRepository } from "@src/admin-repository/admin-interest.repository";
 import { AdminCompanyRepository } from "@src/admin-repository/admin-company.repository";
+import { AdminUserRepository } from "@src/admin-repository/admin-user.repository";
 import { DatabaseModule } from "@src/database/database.module";
 
 const repositories = [
@@ -32,6 +33,7 @@ const repositories = [
   AdminStudentRepository,
   AdminInterestRepository,
   AdminCompanyRepository,
+  AdminUserRepository,
 ];
 
 // 어드민 API에서 쓰는 레포지토리. 앱 API용 src/database/repository와 섞지 않음.

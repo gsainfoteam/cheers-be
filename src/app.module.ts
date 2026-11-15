@@ -20,6 +20,7 @@ import { AdminAccessLogModule } from "@src/manager/access-log/admin-access-log.m
 import { AdminAuditModule } from "@src/manager/audit/admin-audit.module";
 import { ManagerModule } from "@src/manager/manager.module";
 import { ManagerCoffeeChatModule } from "@src/manager/coffee-chat/manager-coffee-chat.module";
+import { ManagerUserModule } from "@src/manager/user/manager-user.module";
 import { ManagerConsentModule } from "@src/manager/consent/manager-consent.module";
 import { BusinessCardModule } from "@src/manager/business-card/business-card.module";
 import { SchoolDepartmentModule } from "@src/manager/department/school-department.module";
@@ -66,6 +67,7 @@ import { AdminCompanyModule } from "@src/manager/company/admin-company.module";
     AdminAuditModule,
     AdminInterestModule,
     ManagerCoffeeChatModule,
+    ManagerUserModule,
     ManagerConsentModule,
     BusinessCardModule,
     SchoolDepartmentModule,

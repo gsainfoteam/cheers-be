@@ -1,0 +1,54 @@
+@startuml get-manager-user-pk-contact
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/manager/v1/user/{pk}/contact
+caption CRB-91 · 회원 상세의 [연락처 보기] 버튼. 커피챗 연락처 값(전화번호 · 이메일) 조회. 열람 기록을 먼저 남기고, 저장에 실패하면 값을 내려주지 않음
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ParseUUIDPipe" as Pipe
+participant "ManagerUserController" as Controller
+participant "ManagerUserService" as Service
+participant "AdminUserRepository" as UserRepository
+participant "AdminAccessLogRepository" as AdminAccessLogRepository
+database PostgreSQL
+
+Client -> Guard: GET /api/manager/v1/user/{pk}/contact\nAuthorization: Bearer <manager token>
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found\nadmin · superadmin 모두 가능
+Guard -> Pipe: 통과
+alt pk가 uuid가 아님
+  Pipe -[#red]-> Client: 400 Validation failed (uuid is expected)
+end
+Pipe -> Controller: getContact(pk, manager)
+Controller -> Service: getContact(pk, manager)
+Service -> UserRepository: findContactByUserPk(pk)
+UserRepository -> PostgreSQL: SELECT c.kakao_enabled, c.email_enabled, c.phone, c.email\nFROM coffee_chat_contact c JOIN users u\nWHERE c.user_pk = ? AND u.is_deleted = false
+PostgreSQL --> UserRepository: row | 0행
+alt 회원 없음 · 탈퇴 완료 · 연락수단 미입력 (가입 미완료)
+  Service -[#red]-> Client: 404 Contact not found
+end
+
+Service -> AdminAccessLogRepository: insert({ adminEmail, targetType: "user_contact", targetId: pk })
+AdminAccessLogRepository -> PostgreSQL: INSERT INTO admin_access_log
+note right
+  명함 열람과 같은 방식 (개인정보 열람 기록).
+  users로 FK를 걸지 않아 탈퇴 삭제(purge)를 막지 않음. 이 INSERT 하나만 씀.
+  QueryLogWriter가 이 테이블의 쿼리 파라미터(이메일)를 로그에서 가림.
+  연락처 값은 로그 · 기록에 남기지 않음. 누가 · 언제 · 누구 것을 봤는지만 남김
+end note
+alt 기록 저장 실패
+  PostgreSQL --> AdminAccessLogRepository: 오류
+  AdminAccessLogRepository -[#red]-> Client: 500 An unexpected error occurred. (값을 내려주지 않음, Slack 알림)
+end
+
+Service --> Controller: UserContactDto
+Controller --> Client: 200 { kakao_enabled, email_enabled, phone | null, email | null }
+
+@enduml

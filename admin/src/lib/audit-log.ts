@@ -42,6 +42,7 @@ export const AUDIT_TARGET_TYPE_LABELS: Record<string, string> = {
 
 export const ACCESS_TARGET_TYPE_LABELS: Record<string, string> = {
   business_card: "명함 이미지 열람",
+  user_contact: "회원 연락처 열람",
   dev_user_hard_delete: "회원 완전탈퇴 (개발용)",
 };
 
