@@ -36,11 +36,12 @@ Controller -> Service: getSentList(userPk, query)
 
 par 동시에 조회 — 같은 조건
   Service -> CoffeeChatRequestRepository: findSentPage(userPk, offset, limit)
-  CoffeeChatRequestRepository -> PostgreSQL: SELECT r.pk, r.message, r.created_at,\nr.graduated_viewed_at, r.contact_shared_at,\ngp.graduated_pk, gp.nickname, ca.name AS company, gp.job,\nisActiveAccount AS graduated_active\nFROM coffee_chat_request r\nJOIN student s ON s.pk = r.student_pk AND s.user_pk = ?\nJOIN graduated_profile gp\nON gp.graduated_pk = r.graduated_pk\nJOIN company_alias ca ON ca.pk = gp.company_alias_pk\nJOIN graduated g ON g.pk = r.graduated_pk JOIN users u ON u.pk = g.user_pk\nORDER BY r.created_at DESC, r.pk DESC LIMIT OFFSET
+  CoffeeChatRequestRepository -> PostgreSQL: SELECT r.pk, r.message, r.created_at,\nr.graduated_viewed_at, r.contact_shared_at,\ngp.graduated_pk, gp.nickname, ca.name AS company, gp.department, gp.job, gp.hashtags,\nisActiveAccount AS graduated_active\nFROM coffee_chat_request r\nJOIN student s ON s.pk = r.student_pk AND s.user_pk = ?\nJOIN graduated_profile gp\nON gp.graduated_pk = r.graduated_pk\nJOIN company_alias ca ON ca.pk = gp.company_alias_pk\nJOIN graduated g ON g.pk = r.graduated_pk JOIN users u ON u.pk = g.user_pk\nORDER BY r.created_at DESC, r.pk DESC LIMIT OFFSET
   note right
     상대 현업자가 탈퇴했어도 요청 기록은 보여 줌
     (탈퇴 정책상 graduated_profile · 요청 기록은 보관).
     닉네임 · 회사 · 직무는 그대로 두고 graduated_withdrawn으로 탈퇴 여부만 알림
+    CRB-87: 새로 추가한 department · hashtags는 탈퇴면 비워서 내림 (DB에는 보관)
   end note
   CoffeeChatRequestRepository --> Service: rows
 else
@@ -50,7 +51,7 @@ else
 end
 note right of Service: 트랜잭션 없음 (조회만)
 
-Service -> Service: status 계산\ncontact_shared_at 있음 → "contact_shared"\ngraduated_viewed_at 있음 (수락 포함) → "viewed"\n(재학생에게는 수락 사실이 보이지 않음)\n그 외 → "requested"\ngraduated_withdrawn = NOT graduated_active
+Service -> Service: status 계산\ncontact_shared_at 있음 → "contact_shared"\ngraduated_viewed_at 있음 (수락 포함) → "viewed"\n(재학생에게는 수락 사실이 보이지 않음)\n그 외 → "requested"\ngraduated_withdrawn = NOT graduated_active\ngraduated_active = true → department (없으면 null), hashtags ?? []\n탈퇴 또는 유예 중 → department = null, hashtags = []
 Service --> Controller: { items, page, size, total }
 Controller --> Client: 200 { items: SentRequestDto[] (graduated_withdrawn 포함), page, size, total }
 

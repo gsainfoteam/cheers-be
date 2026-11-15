@@ -27,7 +27,11 @@ import {
 } from "./dto/create-request.dto";
 import { CheersCardDto, GraduatedListQueryDto } from "./dto/graduated-list.dto";
 import { PageResponseDto, PaginationQueryDto } from "./dto/pagination.dto";
-import { SentRequestDetailDto, SentRequestDto } from "./dto/sent-request.dto";
+import {
+  RequestGraduatedDto,
+  SentRequestDetailDto,
+  SentRequestDto,
+} from "./dto/sent-request.dto";
 
 // API 명세 "커피챗 · 재학생" 섹션. 받은 요청 · 연락처 공유(현업자)는 CheersGraduatedService
 @Injectable()
@@ -183,8 +187,17 @@ export class CheersStudentService {
       return found;
     });
 
+    // 탈퇴한 현업자는 프로필 정보(로고 · 링크)를 내리지 않으므로 로고도 서명하지 않음
+    const logoKey = row.graduatedActive ? row.graduated.companyLogoKey : null;
+    const logoUrls = await this.fileService.getPresignedUrls([logoKey]);
+
     return {
       ...this.toSentRequestDto(row),
+      graduated: {
+        ...this.toRequestGraduatedDto(row),
+        company_logo_url: logoKey ? (logoUrls.get(logoKey) ?? null) : null,
+        links: row.graduatedActive ? (row.graduated.links ?? []) : [],
+      },
       shared_contact: row.contactSharedAt
         ? {
             // 탈퇴 처리 후에는 이름이 지워지고, 유예기간 중에는 다른 회원에게 보이지 않아야 함
@@ -203,16 +216,23 @@ export class CheersStudentService {
   private toSentRequestDto(row: SentRequestRow): SentRequestDto {
     return {
       id: row.pk,
-      graduated: {
-        graduated_id: row.graduated.graduatedPk,
-        nickname: row.graduated.nickname,
-        company: row.graduated.company,
-        job: row.graduated.job,
-      },
+      graduated: this.toRequestGraduatedDto(row),
       graduated_withdrawn: !row.graduatedActive,
       message: row.message ?? "",
       status: toRequestStatus(row),
       created_at: row.createdAt.toISOString(),
+    };
+  }
+
+  // 탈퇴했거나 유예기간 중인 현업자의 프로필 정보(부서 · 해시태그)는 DB에는 남아 있어도 내리지 않음
+  private toRequestGraduatedDto(row: SentRequestRow): RequestGraduatedDto {
+    return {
+      graduated_id: row.graduated.graduatedPk,
+      nickname: row.graduated.nickname,
+      company: row.graduated.company,
+      department: row.graduatedActive ? row.graduated.department : null,
+      job: row.graduated.job,
+      hashtags: row.graduatedActive ? (row.graduated.hashtags ?? []) : [],
     };
   }
 }

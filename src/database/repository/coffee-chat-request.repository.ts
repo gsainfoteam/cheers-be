@@ -30,19 +30,25 @@ export type SentRequestRow = Pick<
     graduatedPk: string;
     nickname: string;
     company: string;
+    department: string | null;
     job: string;
+    hashtags: string[] | null;
   };
   // 현업자가 사용 중인 계정 (탈퇴 · 탈퇴 유예기간 중이면 false)
   graduatedActive: boolean;
 };
 
-export type SentRequestDetailRow = SentRequestRow &
+export type SentRequestDetailRow = Omit<SentRequestRow, "graduated"> &
   Pick<
     CoffeeChatRequestRow,
     "studentViewedAt" | "sharedEmail" | "sharedPhone"
   > & {
     // 현업자 이름 (탈퇴 처리 후에는 null)
     graduatedName: string | null;
+    graduated: SentRequestRow["graduated"] & {
+      companyLogoKey: string | null;
+      links: string[] | null;
+    };
   };
 
 export type SentRequestPage = {
@@ -156,7 +162,9 @@ const sentRequestColumns = {
     graduatedPk: graduatedProfile.graduatedPk,
     nickname: graduatedProfile.nickname,
     company: companyAlias.name,
+    department: graduatedProfile.department,
     job: graduatedProfile.job,
+    hashtags: graduatedProfile.hashtags,
   },
   graduatedActive: sql<boolean>`${isActiveAccount}`,
 };
@@ -191,7 +199,7 @@ export class CoffeeChatRequestRepository {
 
   /*
   SELECT r.pk, r.message, r.created_at, r.graduated_viewed_at, r.contact_shared_at,
-    gp.graduated_pk, gp.nickname, ca.name AS company, gp.job,
+    gp.graduated_pk, gp.nickname, ca.name AS company, gp.department, gp.job, gp.hashtags,
     (u.is_deleted = false AND u.withdraw_requested_at IS NULL) AS graduated_active
   FROM coffee_chat_request r
   JOIN student s ON s.pk = r.student_pk AND s.user_pk = ?1
@@ -234,7 +242,8 @@ export class CoffeeChatRequestRepository {
   }
 
   /*
-  SELECT r.*, gp.graduated_pk, gp.nickname, ca.name AS company, gp.job, u.name,
+  SELECT r.*, gp.graduated_pk, gp.nickname, ca.name AS company, ca.logo_key,
+    gp.department, gp.job, gp.hashtags, gp.links, u.name,
     (u.is_deleted = false AND u.withdraw_requested_at IS NULL) AS graduated_active
   FROM coffee_chat_request r
   JOIN student s ON s.pk = r.student_pk AND s.user_pk = ?2
@@ -257,6 +266,11 @@ export class CoffeeChatRequestRepository {
         sharedEmail: coffeeChatRequest.sharedEmail,
         sharedPhone: coffeeChatRequest.sharedPhone,
         graduatedName: users.name,
+        graduated: {
+          ...sentRequestColumns.graduated,
+          companyLogoKey: companyAlias.logoKey,
+          links: graduatedProfile.links,
+        },
       })
       .from(coffeeChatRequest)
       .innerJoin(student, isSentBy(studentUserPk))
