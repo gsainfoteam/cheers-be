@@ -4,6 +4,7 @@ import { AdminAuditLogRepository } from "@src/admin-repository/admin-audit-log.r
 import { AdminAccountRepository } from "@src/admin-repository/admin-account.repository";
 import { AdminDevUserRepository } from "@src/admin-repository/admin-dev-user.repository";
 import { AdminCoffeeChatRequestRepository } from "@src/admin-repository/admin-coffee-chat-request.repository";
+import { AdminAlimtalkTemplateRepository } from "@src/admin-repository/admin-alimtalk-template.repository";
 import { AdminNotificationLogRepository } from "@src/admin-repository/admin-notification-log.repository";
 import { AdminConsentRepository } from "@src/admin-repository/admin-consent.repository";
 import { AdminGraduatedRepository } from "@src/admin-repository/admin-graduated.repository";
@@ -20,6 +21,7 @@ const repositories = [
   AdminCoffeeChatRequestRepository,
   AdminDevUserRepository,
   AdminNotificationLogRepository,
+  AdminAlimtalkTemplateRepository,
   AdminAccessLogRepository,
   AdminAuditLogRepository,
   AdminConsentRepository,

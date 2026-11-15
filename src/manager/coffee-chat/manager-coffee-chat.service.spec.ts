@@ -10,6 +10,10 @@ import { DatabaseService } from "@src/database/database.service";
 import { TxType } from "@src/global/types/tx.types";
 import { ManagerContext } from "@src/manager/context/manager-context";
 import { ManagerCoffeeChatService } from "@src/manager/coffee-chat/manager-coffee-chat.service";
+import { AdminAlimtalkTemplateRepository } from "@src/admin-repository/admin-alimtalk-template.repository";
+import { AligoBalanceAlertService } from "@src/notification/aligo-balance-alert.service";
+import { AlimtalkTemplateCache } from "@src/notification/alimtalk-template.cache";
+import { AlimtalkService } from "@src/notification/alimtalk.service";
 import { NotificationDeliverySyncService } from "@src/notification/notification-delivery-sync.service";
 
 const NOW = new Date("2026-10-31T00:00:00Z");
@@ -53,6 +57,7 @@ const logRow = (overrides: object = {}) => ({
 describe("ManagerCoffeeChatService", () => {
   const requests = { findPage: jest.fn(), findByPk: jest.fn() };
   const logs = {
+    countAlimtalkAcceptedSince: jest.fn(),
     findPage: jest.fn(),
     findByRequestPk: jest.fn(),
     findByPk: jest.fn(),
@@ -63,6 +68,14 @@ describe("ManagerCoffeeChatService", () => {
     db: { transaction: (fn: (tx: TxType) => unknown) => fn(tx) },
   };
   const auditLogs = { insert: jest.fn() };
+  const templates = {
+    findAll: jest.fn(),
+    findByEventForUpdate: jest.fn(),
+    update: jest.fn(),
+  };
+  const templateCache = { refresh: jest.fn() };
+  const alimtalk = { fetchBalance: jest.fn() };
+  const balanceAlert = { getThreshold: jest.fn() };
   const manager = new ManagerContext("me", "me@gm.gist.ac.kr", "admin");
   const service = new ManagerCoffeeChatService(
     requests as unknown as AdminCoffeeChatRequestRepository,
@@ -70,6 +83,10 @@ describe("ManagerCoffeeChatService", () => {
     deliverySync as unknown as NotificationDeliverySyncService,
     dbService as unknown as DatabaseService,
     auditLogs as unknown as AdminAuditLogRepository,
+    templates as unknown as AdminAlimtalkTemplateRepository,
+    templateCache as unknown as AlimtalkTemplateCache,
+    alimtalk as unknown as AlimtalkService,
+    balanceAlert as unknown as AligoBalanceAlertService,
   );
 
   beforeEach(() => jest.resetAllMocks());
@@ -390,6 +407,150 @@ describe("ManagerCoffeeChatService", () => {
         service.lookupDelivery("log", manager),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(deliverySync.refresh).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("getAligoStatus", () => {
+    // 2026-11-15 12:00 KST
+    const now = new Date("2026-11-15T03:00:00Z");
+
+    it("잔액과 이번 달(KST) 접수 건수를 결과별로 합침", async () => {
+      alimtalk.fetchBalance.mockResolvedValue({
+        status: "ok",
+        amount: 12500,
+        counts: { alt_cnt: 340 },
+      });
+      logs.countAlimtalkAcceptedSince.mockResolvedValue([
+        { deliveryStatus: "delivered", total: 8 },
+        { deliveryStatus: "failed", total: 1 },
+        { deliveryStatus: "pending", total: 2 },
+        { deliveryStatus: null, total: 3 },
+      ]);
+      balanceAlert.getThreshold.mockReturnValue(100);
+
+      const res = await service.getAligoStatus(now);
+
+      expect(logs.countAlimtalkAcceptedSince).toHaveBeenCalledWith(
+        new Date("2026-10-31T15:00:00Z"),
+      );
+      expect(res).toEqual({
+        configured: true,
+        balance: { amount: 12500, counts: { alt_cnt: 340 } },
+        month: {
+          since: new Date("2026-10-31T15:00:00Z"),
+          accepted: 14,
+          delivered: 8,
+          failed: 1,
+          pending: 2,
+          unknown: 0,
+        },
+        low_balance_threshold: 100,
+        fetched_at: now,
+      });
+    });
+
+    it("키가 없으면 balance는 null이고 발송량은 그대로 줌", async () => {
+      alimtalk.fetchBalance.mockResolvedValue({ status: "not_configured" });
+      logs.countAlimtalkAcceptedSince.mockResolvedValue([]);
+      balanceAlert.getThreshold.mockReturnValue(null);
+
+      const res = await service.getAligoStatus(now);
+
+      expect(res.configured).toBe(false);
+      expect(res.balance).toBeNull();
+      expect(res.month.accepted).toBe(0);
+    });
+
+    it("알리고 조회가 실패하면 502", async () => {
+      alimtalk.fetchBalance.mockResolvedValue({
+        status: "error",
+        error: "-101 인증오류입니다.",
+      });
+
+      await expect(service.getAligoStatus(now)).rejects.toBeInstanceOf(
+        BadGatewayException,
+      );
+      expect(logs.countAlimtalkAcceptedSince).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("updateAlimtalkTemplate", () => {
+    const row = (overrides: object = {}) => ({
+      event: "contact_shared",
+      tplCode: "TPL-1",
+      title: "제목",
+      message: "본문",
+      buttonName: "버튼",
+      updatedAt: NOW,
+      ...overrides,
+    });
+
+    it("수정하고 감사 로그를 같은 트랜잭션에 남긴 뒤 캐시를 다시 읽음", async () => {
+      templates.findByEventForUpdate.mockResolvedValue(row());
+      templates.update.mockResolvedValue(row({ title: "새 제목" }));
+
+      const res = await service.updateAlimtalkTemplate(
+        "contact_shared",
+        { title: "새 제목" },
+        manager,
+      );
+
+      expect(templates.update).toHaveBeenCalledWith(
+        "contact_shared",
+        { title: "새 제목" },
+        tx,
+      );
+      expect(auditLogs.insert).toHaveBeenCalledWith(
+        {
+          adminEmail: "me@gm.gist.ac.kr",
+          action: "alimtalk_template.update",
+          targetType: "alimtalk_template",
+          targetId: "contact_shared",
+          before: {
+            tpl_code: "TPL-1",
+            title: "제목",
+            message: "본문",
+            button_name: "버튼",
+          },
+          after: {
+            tpl_code: "TPL-1",
+            title: "새 제목",
+            message: "본문",
+            button_name: "버튼",
+          },
+        },
+        tx,
+      );
+      expect(templateCache.refresh).toHaveBeenCalled();
+      expect(res).toEqual({
+        event: "contact_shared",
+        tpl_code: "TPL-1",
+        title: "새 제목",
+        message: "본문",
+        button_name: "버튼",
+        updated_at: NOW,
+      });
+    });
+
+    it("보낸 필드가 없으면 400", async () => {
+      await expect(
+        service.updateAlimtalkTemplate("contact_shared", {}, manager),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(templates.findByEventForUpdate).not.toHaveBeenCalled();
+    });
+
+    it("없는 템플릿이면 404이고 기록하지 않음", async () => {
+      templates.findByEventForUpdate.mockResolvedValue(null);
+
+      await expect(
+        service.updateAlimtalkTemplate(
+          "contact_shared",
+          { title: "새 제목" },
+          manager,
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(auditLogs.insert).not.toHaveBeenCalled();
+      expect(templateCache.refresh).not.toHaveBeenCalled();
     });
   });
 });

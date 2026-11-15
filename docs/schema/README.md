@@ -48,6 +48,8 @@ FK는 모두 `ON DELETE NO ACTION`입니다. 부모 행을 지우기 전에 백�
 | [public.company_alias](public.company_alias.md) | 6 | 회사 (공식 이름). 현업자 목록 등 화면에는 이 이름과 로고가 나가며, 사람마다 다른 표기는 company_name에 묶임 | BASE TABLE |
 | [public.company_name](public.company_name.md) | 5 | 회사 이름 표기. 회사 검색은 이 테이블만 봄 (회사 이름도 여기에 들어 있음). 한 표기는 한 회사에만 속함 | BASE TABLE |
 | [public.admin_audit_log](public.admin_audit_log.md) | 8 | 어드민의 데이터 변경 기록 (변경 전 · 후 값). 변경과 같은 트랜잭션에서 insert만 함. 대상이 지워져도 남도록 다른 테이블로 FK를 걸지 않음 | BASE TABLE |
+| [public.aligo_alert_state](public.aligo_alert_state.md) | 2 |  | BASE TABLE |
+| [public.alimtalk_template](public.alimtalk_template.md) | 6 |  | BASE TABLE |
 
 ## Stored procedures and functions
 
@@ -335,6 +337,18 @@ erDiagram
   jsonb before
   jsonb after
   timestamp_with_time_zone created_at
+}
+"public.aligo_alert_state" {
+  smallint *pk
+  timestamp_with_time_zone alerted_at
+}
+"public.alimtalk_template" {
+  notification_event event
+  varchar_64_ tpl_code
+  varchar_50_ title
+  text message
+  varchar_14_ button_name
+  timestamp_with_time_zone updated_at
 }
 ```
 

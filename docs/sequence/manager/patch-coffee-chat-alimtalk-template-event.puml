@@ -1,0 +1,54 @@
+@startuml patch-manager-coffee-chat-alimtalk-template-event
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title PATCH /api/manager/v1/coffee-chat/alimtalk-template/{event}
+caption CRB-78 · 알림톡 템플릿 수정. 알리고에 등록한 템플릿과 글자 하나까지 같아야 전송됨
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ParseEnumPipe\n+ ValidationPipe" as Pipe
+participant "ManagerCoffeeChatController" as Controller
+participant "ManagerCoffeeChatService" as Service
+participant "AdminAlimtalkTemplateRepository" as Repository
+participant "AdminAuditLogRepository" as AdminAuditLogRepository
+participant "AlimtalkTemplateCache" as Cache
+database PostgreSQL
+
+Client -> Guard: PATCH /api/manager/v1/coffee-chat/alimtalk-template/{event}\nAuthorization: Bearer <manager token>\n{ tpl_code?, title?, message?, button_name? }
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Pipe: 통과
+alt event가 notification_event 값이 아님
+  Pipe -[#red]-> Client: 400 Validation failed
+else 필드가 문자열이 아님, trim 후 비었거나 길이 초과 (title 50 · message 1000 · button_name 14 · tpl_code 64), 보낸 필드가 하나도 없음
+  Pipe -[#red]-> Client: 400 (class-validator 메시지)
+end
+Pipe -> Controller: updateAlimtalkTemplate(event, req, manager)
+Controller -> Service: updateAlimtalkTemplate(event, req, manager)
+group transaction (DatabaseService.db.transaction)
+  Service -> Repository: findByEventForUpdate(event, tx)
+  Repository -> PostgreSQL: SELECT * FROM alimtalk_template WHERE event = ? FOR UPDATE
+  PostgreSQL --> Repository: row (= before)
+  Service -> Repository: update(event, fields, tx)
+  Repository -> PostgreSQL: UPDATE alimtalk_template SET ..., updated_at = now() WHERE event = ? RETURNING
+  PostgreSQL --> Repository: row (= after)
+  Service -> AdminAuditLogRepository: insert({ adminEmail, action: "alimtalk_template.update", targetType: "alimtalk_template", targetId: event,\nbefore, after }, tx)
+  AdminAuditLogRepository -> PostgreSQL: INSERT admin_audit_log
+  note right of AdminAuditLogRepository: 변경과 같은 트랜잭션 (flow/admin-audit.puml). 기록이 실패하면 변경도 rollback
+end
+Service -> Cache: refresh()
+ref over Service, PostgreSQL: 커밋 뒤 이 인스턴스 캐시를 다시 읽음 — flow/alimtalk-template-lookup.puml\n재조회 실패는 로그만 남기고 응답은 성공 (캐시는 최대 60초 TTL로 다시 읽음)
+note over Service, PostgreSQL
+  이 인스턴스는 다음 발송부터 바뀐 값을 쓰고, 다른 인스턴스는 캐시 TTL(60초) 안에 반영됨. 이미 접수된 건에는 영향 없음.
+  알리고 쪽 템플릿은 어드민이 바꾸지 못함 (알리고 · 카카오에서 따로 수정 · 심사)
+end note
+Service --> Controller: AlimtalkTemplateDto
+Controller --> Client: 200 { event, tpl_code, title, message, button_name, updated_at }
+
+@enduml

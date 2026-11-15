@@ -20,6 +20,8 @@
 | [flow/admin-login.puml](flow/admin-login.puml)                                                                                         | 어드민 화면 로그인 (PKCE)                                                |
 | [flow/admin-audit.puml](flow/admin-audit.puml)                                                                                         | 어드민 감사 로그 기록 (변경 전 · 후 값, 같은 트랜잭션)                   |
 | [flow/alimtalk-template-lookup.puml](flow/alimtalk-template-lookup.puml)                                                               | 알림톡 발송 시 DB 템플릿 조회                                            |
+| [flow/alimtalk-template-lookup.puml](flow/alimtalk-template-lookup.puml)                                                               | 알림톡 발송 시 DB 템플릿 조회 (캐시)                                     |
+| [flow/aligo-low-balance-alert.puml](flow/aligo-low-balance-alert.puml)                                                                 | 알리고 잔여량 부족 Slack 알림 스케줄러                                   |
 | [flow/manager-guards.puml](flow/manager-guards.puml)                                                                                   | 매니저 가드                                                              |
 | [health/get-health.puml](health/get-health.puml)                                                                                       | `GET /health`                                                            |
 | [health/get-health-ready.puml](health/get-health-ready.puml)                                                                           | `GET /health/ready`                                                      |
@@ -69,6 +71,9 @@
 | [manager/put-interest-order.puml](manager/put-interest-order.puml)                                                                     | `PUT /api/manager/v1/interest/order`                                     |
 | [manager/get-coffee-chat-request.puml](manager/get-coffee-chat-request.puml)                                                           | `GET /api/manager/v1/coffee-chat/request`                                |
 | [manager/get-coffee-chat-request-pk.puml](manager/get-coffee-chat-request-pk.puml)                                                     | `GET /api/manager/v1/coffee-chat/request/{pk}`                           |
+| [manager/get-coffee-chat-aligo-status.puml](manager/get-coffee-chat-aligo-status.puml)                                                 | `GET /api/manager/v1/coffee-chat/aligo-status`                           |
+| [manager/get-coffee-chat-alimtalk-template.puml](manager/get-coffee-chat-alimtalk-template.puml)                                       | `GET /api/manager/v1/coffee-chat/alimtalk-template`                      |
+| [manager/patch-coffee-chat-alimtalk-template-event.puml](manager/patch-coffee-chat-alimtalk-template-event.puml)                       | `PATCH /api/manager/v1/coffee-chat/alimtalk-template/{event}`            |
 | [manager/get-coffee-chat-aligo-status.puml](manager/get-coffee-chat-aligo-status.puml)                                                 | `GET /api/manager/v1/coffee-chat/aligo-status`                           |
 | [manager/get-coffee-chat-alimtalk-template.puml](manager/get-coffee-chat-alimtalk-template.puml)                                       | `GET /api/manager/v1/coffee-chat/alimtalk-template`                      |
 | [manager/patch-coffee-chat-alimtalk-template-event.puml](manager/patch-coffee-chat-alimtalk-template-event.puml)                       | `PATCH /api/manager/v1/coffee-chat/alimtalk-template/{event}`            |

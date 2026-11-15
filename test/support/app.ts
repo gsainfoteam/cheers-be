@@ -11,6 +11,7 @@ import { MailResult, SendMailInput } from "@src/mail/mail.types";
 import { InfoteamIdpService } from "@src/manager/infoteam-idp.service";
 import { AlimtalkService } from "@src/notification/alimtalk.service";
 import {
+  AligoBalanceResult,
   AlimtalkDeliveryResult,
   AlimtalkResult,
   SendAlimtalkInput,
@@ -70,10 +71,16 @@ export class FakeAlimtalkService {
   // mid → 알리고 전송결과 조회 결과. 없으면 아직 전송 중. 실제 HTTP 응답 해석은 alimtalk.service.spec.ts에서 확인 (CRB-77)
   readonly deliveryResults = new Map<string, AlimtalkDeliveryResult>();
   readonly fetchedMids: string[] = [];
+  // 알리고 잔여량 조회 결과 (CRB-78). reset에서 되돌림
+  balanceResult: AligoBalanceResult = { status: "not_configured" };
 
   async send(input: SendAlimtalkInput): Promise<AlimtalkResult> {
     this.sent.push(input);
     return this.sendResult;
+  }
+
+  async fetchBalance(): Promise<AligoBalanceResult> {
+    return this.balanceResult;
   }
 
   async fetchResult(mid: string): Promise<AlimtalkDeliveryResult> {
@@ -182,6 +189,7 @@ export async function createE2eApp(): Promise<E2eContext> {
       alimtalk.sendResult = ALIMTALK_SKIPPED;
       alimtalk.deliveryResults.clear();
       alimtalk.fetchedMids.length = 0;
+      alimtalk.balanceResult = { status: "not_configured" };
       slack.messages.length = 0;
     },
     close: async () => {

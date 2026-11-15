@@ -1,0 +1,49 @@
+@startuml alimtalk-template-lookup
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title 알림톡 발송 시 템플릿 조회
+caption CRB-78 · src/notification/alimtalk.service.ts · 하드코딩된 TEMPLATES 대신 alimtalk_template을 읽고, 인메모리 캐시(TTL 60초)에 둠
+
+participant "NotificationService" as Notification
+participant "AlimtalkService" as Alimtalk
+participant "AlimtalkTemplateCache" as Cache
+participant "AlimtalkTemplateRepository" as Repository
+database PostgreSQL
+participant "Aligo"
+
+Notification -> Alimtalk: send({ event, to, variables })
+Alimtalk -> Cache: get(event)
+alt 캐시가 없거나 마지막 로드 후 60초가 지남
+  Cache -> Repository: findAll()
+  Repository -> PostgreSQL: SELECT * FROM alimtalk_template
+  PostgreSQL --> Repository: rows
+  Repository --> Cache: templates
+  note right of Cache
+    이벤트별이 아니라 전체(2건)를 한 번에 로드해 교체.
+    동시에 여러 발송이 만료를 보면 한 번만 읽도록 진행 중인 로드를 공유.
+    조회 실패 시 이전 캐시가 있으면 그것으로 계속 (경고 로그), 없으면 실패
+  end note
+end
+Cache --> Alimtalk: template | 없음
+alt 템플릿 행이 없음 또는 캐시를 처음 채우는 조회가 실패
+  Alimtalk --> Notification: { success: false, error: "template not found" }
+  note right: 재시도 대상 (flow/notification-retry.puml). 마이그레이션이 행을 채우므로 정상 환경에서는 없음
+end
+note right of Alimtalk
+  tpl_code · title · message · button_name은 캐시된 DB 값. 버튼 링크 경로(/applications/{pk})는 코드에 둠.
+  tpl_code가 비어 있으면 발송하지 않고 로그만 남김 (skipped).
+  KAKAO_TEMPLATE_* 환경변수는 이제 쓰지 않음. 예전 값이 남은 서버는 뜰 때 비어 있는 tpl_code만 한 번 채움
+  어드민이 수정하면 그 인스턴스는 바로 갱신, 다른 인스턴스는 최대 60초 뒤 반영
+end note
+Alimtalk -> Aligo: POST https://kakaoapi.aligo.in/akv10/alimtalk/send/ (tpl_code, emtitle_1, message_1, button_1 ...)
+Aligo --> Alimtalk: { code, message, info }
+Alimtalk --> Notification: AlimtalkResult
+
+@enduml

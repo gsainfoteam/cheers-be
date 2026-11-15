@@ -25,3 +25,9 @@ export const ALIMTALK_DELIVERY_GIVE_UP_AFTER_MS = 25 * HOUR_MS;
 export const ALIMTALK_DELIVERY_CLAIM_LEASE_MS = 5 * MINUTE_MS;
 // 한 번에 잡아 조회하는 수
 export const ALIMTALK_DELIVERY_BATCH_SIZE = 50;
+
+// 알림톡 템플릿 캐시 (CRB-78). 어드민이 수정하면 그 인스턴스는 바로 갱신하고, 다른 인스턴스는 이 시간 안에 반영됨
+export const ALIMTALK_TEMPLATE_CACHE_TTL_MS = 60 * 1000;
+
+// 알리고 잔여량 부족 알림 (CRB-78). 부족한 동안 이 간격으로만 다시 알림
+export const ALIGO_LOW_BALANCE_ALERT_INTERVAL_MS = 24 * HOUR_MS;

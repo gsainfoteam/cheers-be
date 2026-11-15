@@ -1051,7 +1051,7 @@ function checkNotification(
     failed(
       `${name} 기록이 있음`,
       channel === "kakao_alimtalk"
-        ? `${NOTIFICATION_WAIT_MS / 1000}초 기다림. 서버의 ALIGO_* · KAKAO_TEMPLATE_* · WEB_BASE_URL(https://) 중 비어 있으면 발송 없이 건너뛰어 기록이 남지 않음`
+        ? `${NOTIFICATION_WAIT_MS / 1000}초 기다림. 서버의 ALIGO_* · WEB_BASE_URL(https://) 또는 어드민의 알림톡 템플릿 코드가 비어 있으면 발송 없이 건너뛰어 기록이 남지 않음`
         : `${NOTIFICATION_WAIT_MS / 1000}초 기다림`,
     );
     return;

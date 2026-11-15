@@ -17,6 +17,7 @@ const NAV_ITEMS = [
   { to: "/interests", label: "관심분야", end: false },
   { to: "/coffee-chats", label: "커피챗 요청", end: false },
   { to: "/notification-logs", label: "알림 발송 결과", end: false },
+  { to: "/aligo-status", label: "알리고 현황", end: false },
   { to: "/business-cards", label: "현업자 명함", end: false },
   { to: "/companies", label: "회사", end: false },
   { to: "/departments", label: "학과", end: false },

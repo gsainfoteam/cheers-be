@@ -30,6 +30,7 @@ const AUDITED: Record<string, AdminAuditAction> = {
     "business_card.verification_cancel",
   "POST /coffee-chat/notification-log/:pk/delivery-lookup":
     "notification_log.delivery_lookup",
+  "PATCH /coffee-chat/alimtalk-template/:event": "alimtalk_template.update",
 
   "POST /company": "company.create",
   "PATCH /company/:pk": "company.update",

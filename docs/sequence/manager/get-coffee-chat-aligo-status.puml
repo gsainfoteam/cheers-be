@@ -1,0 +1,57 @@
+@startuml get-manager-coffee-chat-aligo-status
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/manager/v1/coffee-chat/aligo-status
+caption CRB-78 · 어드민 "알리고 현황": 알리고 잔여 충전금액 · 잔여 충전량(건수) · 이번 달 발송량 조회
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ManagerCoffeeChatController" as Controller
+participant "ManagerCoffeeChatService" as Service
+participant "AlimtalkService" as Alimtalk
+participant "AdminNotificationLogRepository" as LogRepository
+database PostgreSQL
+participant "Aligo"
+
+Client -> Guard: GET /api/manager/v1/coffee-chat/aligo-status\nAuthorization: Bearer <manager token>
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Controller: getAligoStatus()
+Controller -> Service: getAligoStatus()
+Service -> Alimtalk: fetchBalance()
+alt 알리고 키 미설정
+  Alimtalk --> Service: { status: "not_configured" }
+else 설정됨
+  Alimtalk -> Aligo: POST https://kakaoapi.aligo.in/akv10/heartinfo/ (apikey, userid)
+  Aligo --> Alimtalk: { code, message, list: { 잔여 충전금액, 유형별 잔여 건수 (알림톡 등) } }
+  note right of Alimtalk
+    throw하지 않음. 타임아웃 10초
+    · HTTP 오류 · JSON 아님 · code != 0 → error
+    · 그 밖 → ok (금액 · 건수를 숫자로 바꿔 전달. 숫자가 아닌 값은 null)
+    ※ 응답 필드명 · 건수 유형(알림톡 · 문자 등)은 구현 때 실제 호출로 확인 (알리고 문서에 예시가 적음).
+    알림톡 1건 단가가 응답에 없으면 "발송 가능 건수"는 계산하지 않고 알리고가 주는 건수만 보여줌
+  end note
+  Alimtalk --> Service: ok | error
+end
+alt error
+  Service -[#red]-> Client: 502 Failed to fetch the balance from Aligo: <사유>
+end
+Service -> LogRepository: countAlimtalkSince(이번 달 1일 00:00 KST)
+LogRepository -> PostgreSQL: SELECT delivery_status, count(*) FROM notification_log\nWHERE channel = 'kakao_alimtalk' AND status = 'sent' AND created_at >= ? GROUP BY delivery_status
+PostgreSQL --> LogRepository: rows
+LogRepository --> Service: 접수 건수 (delivered · failed · pending · unknown별)
+note right of Service
+  이번 달 발송량 = 알리고에 접수된 알림톡 수 (재시도로 다시 접수된 건도 각각 셈).
+  접수 실패(status = failed)는 제외. 잔액 조회가 성공한 뒤에만 계산함 (오류면 위에서 502로 끝남)
+end note
+note right of Service: 조회만 하므로 audit log 없음. 캐시 없이 화면을 열 때마다 호출
+Service --> Controller: AligoStatusDto
+Controller --> Client: 200 { configured, balance: { amount, counts: { alimtalk, ... } } | null,\nmonth: { since, accepted, delivered, failed, pending, unknown }, low_balance_threshold, fetched_at }
+
+@enduml
