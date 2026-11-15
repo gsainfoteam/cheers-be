@@ -1,4 +1,4 @@
-import { FormEvent, Fragment, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import {
   AligoStatus,
@@ -10,6 +10,18 @@ import {
   formatDateTime,
 } from "../lib/coffee-chat";
 import { errorMessage } from "../lib/format";
+
+// 알리고 잔여 건수 필드(heartinfo)의 이름. 모르는 키는 필드명 그대로 보여 줌
+const COUNT_LABELS: Record<string, string> = {
+  sms_cnt: "문자 (SMS)",
+  lms_cnt: "장문 (LMS)",
+  mms_cnt: "포토문자 (MMS)",
+  fts_cnt: "친구톡 텍스트",
+  ftm_cnt: "친구톡 이미지",
+  ftw_cnt: "친구톡 와이드",
+  ftl_cnt: "친구톡 와이드 리스트",
+  ftc_cnt: "친구톡 캐러셀",
+};
 
 const number = (value: number) => value.toLocaleString("ko-KR");
 
@@ -172,23 +184,34 @@ export function AligoStatusPage() {
               조회하지 않습니다.
             </p>
           )}
-          <dl className="detail-list">
-            {status.balance && (
-              <>
-                <dt>잔여 충전금액</dt>
-                <dd>
-                  {status.balance.amount === null
+          {status.balance && (
+            <div className="balance">
+              <div className="balance-main">
+                <span className="balance-label">알림톡 잔여 건수</span>
+                <strong>
+                  {status.balance.counts.alt_cnt === undefined
                     ? "-"
-                    : `${number(status.balance.amount)}원`}
-                </dd>
-                {Object.entries(status.balance.counts).map(([key, value]) => (
-                  <Fragment key={key}>
-                    <dt>잔여 건수 ({key})</dt>
-                    <dd>{number(value)}</dd>
-                  </Fragment>
-                ))}
-              </>
-            )}
+                    : `${number(status.balance.counts.alt_cnt)}건`}
+                </strong>
+                {status.balance.amount !== null && (
+                  <span className="balance-label">
+                    잔여 충전금액 {number(status.balance.amount)}원
+                  </span>
+                )}
+              </div>
+              <div className="balance-others">
+                {Object.entries(status.balance.counts)
+                  .filter(([key]) => key !== "alt_cnt")
+                  .map(([key, value]) => (
+                    <div key={key} className="balance-item">
+                      <span>{COUNT_LABELS[key] ?? key}</span>
+                      <strong>{number(value)}</strong>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+          <dl className="detail-list">
             <dt>이번 달 발송량 ({formatDateTime(status.month.since)} 이후)</dt>
             <dd>
               접수 {number(status.month.accepted)}건 · 도달{" "}
