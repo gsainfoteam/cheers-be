@@ -66,7 +66,7 @@ function TemplateForm({
   };
 
   return (
-    <form className="card" onSubmit={handleSubmit}>
+    <form className="card template-form" onSubmit={handleSubmit}>
       <h3>
         {EVENT_LABELS[template.event as keyof typeof EVENT_LABELS] ??
           template.event}
@@ -165,10 +165,11 @@ export function AligoStatusPage() {
 
       {statusError && <p className="error-text">{statusError}</p>}
       {status && (
-        <div className="card">
+        <div className="card status-card">
           {!status.configured && (
             <p className="placeholder">
-              알리고 키가 설정되지 않아 잔여량은 조회하지 않습니다.
+              알리고 키 또는 WEB_BASE_URL(https://) 설정이 없어 잔여량은
+              조회하지 않습니다.
             </p>
           )}
           <dl className="detail-list">
@@ -208,9 +209,7 @@ export function AligoStatusPage() {
         </div>
       )}
 
-      <div className="page-header">
-        <h2>알림톡 템플릿</h2>
-      </div>
+      <h2 className="section-title">알림톡 템플릿</h2>
       <p className="placeholder">
         알리고에 등록한 템플릿과 글자 하나까지 같아야 전송됩니다. 여기서 바꿔도
         알리고 · 카카오의 템플릿은 바뀌지 않으며, 서버마다 최대 1분 안에 발송에

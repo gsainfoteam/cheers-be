@@ -446,3 +446,60 @@ select {
 .diff-changed td {
   background: rgba(255, 196, 0, 0.14);
 }
+
+.status-card {
+  margin-bottom: 32px;
+}
+
+.status-card .placeholder {
+  margin-bottom: 12px;
+}
+
+.template-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 720px;
+  margin-bottom: 20px;
+}
+
+.template-form h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.template-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.template-form input,
+.template-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-weight: 400;
+}
+
+.template-form textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  resize: vertical;
+}
+
+.template-form .button {
+  align-self: flex-start;
+}
+
+.section-title {
+  margin: 0 0 12px;
+  font-size: 20px;
+}
