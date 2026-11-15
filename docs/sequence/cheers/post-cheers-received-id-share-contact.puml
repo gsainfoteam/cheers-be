@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title POST /api/v1/cheers/received/{id}/share-contact
-caption CRB-42 · CRB-75 · 현업자 연락처를 공유 시점 값으로 저장 + 재학생 연락 설정으로 비동기 알림 (실패한 채널은 스케줄러가 재시도). 이미 공유했으면 다시 보내지 않음
+caption CRB-42 · CRB-75 · CRB-88 (수락한 요청만 공유 가능) · 현업자 연락처를 공유 시점 값으로 저장 + 재학생 연락 설정으로 비동기 알림 (실패한 채널은 스케줄러가 재시도). 이미 공유했으면 다시 보내지 않음
 
 actor Client
 participant "UserGuard\n+ UserTypeGuard" as Guard
@@ -62,7 +62,7 @@ Service -> Service: shared_email = email_enabled ? email : null\nshared_phone = 
 
 group transaction (DatabaseService.db.transaction)
   Service -> CoffeeChatRequestRepository: findReceivedForShare(id, userPk, tx)
-  CoffeeChatRequestRepository -> PostgreSQL: SELECT r.pk, r.contact_shared_at, r.shared_email, r.shared_phone,\nu.name, isActiveAccount AS student_active, c.*\nFROM coffee_chat_request r\nJOIN graduated g ON g.pk = r.graduated_pk AND g.user_pk = ?\nJOIN student s ON s.pk = r.student_pk\nJOIN users u ON u.pk = s.user_pk\nLEFT JOIN coffee_chat_contact c ON c.user_pk = s.user_pk\nWHERE r.pk = ?\nFOR UPDATE OF r
+  CoffeeChatRequestRepository -> PostgreSQL: SELECT r.pk, r.accepted_at, r.contact_shared_at, r.shared_email, r.shared_phone,\nu.name, isActiveAccount AS student_active, c.*\nFROM coffee_chat_request r\nJOIN graduated g ON g.pk = r.graduated_pk AND g.user_pk = ?\nJOIN student s ON s.pk = r.student_pk\nJOIN users u ON u.pk = s.user_pk\nLEFT JOIN coffee_chat_contact c ON c.user_pk = s.user_pk\nWHERE r.pk = ?\nFOR UPDATE OF r
   note right
     요청 행을 잠가, 동시에 두 번 눌러도
     뒤의 호출은 커밋된 공유 결과를 보고 알림을 보내지 않음
@@ -73,6 +73,9 @@ group transaction (DatabaseService.db.transaction)
   else 이미 공유함 (contact_shared_at 있음)
     Service --> Client: 200 { contact_shared_at, shared_email, shared_phone }
     note right: 처음 공유한 결과를 그대로 반환. 알림 없음.\n이후 재학생이 탈퇴했어도 내 연락처만 담기므로 같은 응답
+  else 수락하지 않음 (accepted_at = null)
+    Service -[#red]-> Client: 409 Coffee chat is not accepted
+    note right: CRB-88: 수락(POST .../accept)과 연락처 공유를 분리. 먼저 수락해야 함
   else 재학생이 탈퇴했거나 탈퇴 유예기간 중 (student_active = false)
     Service -[#red]-> Client: 410 Student has withdrawn
   else 연락 설정이 없거나 "희망하지 않음" (shared_email · shared_phone 모두 null)

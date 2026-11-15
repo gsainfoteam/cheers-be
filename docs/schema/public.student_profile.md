@@ -67,6 +67,7 @@ erDiagram
   text message
   varchar_20_ shared_phone
   varchar_255_ shared_email
+  timestamp_with_time_zone accepted_at
 }
 "public.student_profile_attachment" {
   uuid *pk

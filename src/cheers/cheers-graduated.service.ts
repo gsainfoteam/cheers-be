@@ -7,7 +7,10 @@ import {
 } from "@nestjs/common";
 import { DatabaseService } from "@src/database/database.service";
 import { CoffeeChatContactRepository } from "@src/database/repository/coffee-chat-contact.repository";
-import { CoffeeChatRequestRepository } from "@src/database/repository/coffee-chat-request.repository";
+import {
+  CoffeeChatRequestRepository,
+  StudentContact,
+} from "@src/database/repository/coffee-chat-request.repository";
 import { GraduatedRepository } from "@src/database/repository/graduated.repository";
 import { UserRepository } from "@src/database/repository/user.repository";
 import { FileService } from "@src/file/file.service";
@@ -17,13 +20,24 @@ import {
   STUDENT_FALLBACK_NAME,
   WITHDRAWN_STUDENT_REQUEST_LABEL,
 } from "./cheers.constants";
-import { toOffset, toRequestStatus } from "./cheers.utils";
+import { toOffset, toReceivedStatus } from "./cheers.utils";
 import { PageResponseDto, PaginationQueryDto } from "./dto/pagination.dto";
 import {
+  AcceptResponseDto,
   ReceivedRequestDetailDto,
   ReceivedRequestDto,
   ShareContactResponseDto,
 } from "./dto/received-request.dto";
+
+function toStudentContact(contact: StudentContact | null): {
+  email: string | null;
+  phone: string | null;
+} {
+  return {
+    email: contact?.emailEnabled ? contact.email : null,
+    phone: contact?.kakaoEnabled ? contact.phone : null,
+  };
+}
 
 // API 명세 "커피챗 · 현업자" 섹션
 @Injectable()
@@ -62,7 +76,7 @@ export class CheersGraduatedService {
         interests: row.interests,
         activities: row.activities ?? [],
         student_withdrawn: !row.studentActive,
-        status: toRequestStatus(row),
+        status: toReceivedStatus(row),
         created_at: row.createdAt.toISOString(),
       })),
       page: query.page,
@@ -119,8 +133,9 @@ export class CheersGraduatedService {
       id: row.pk,
       message: row.message ?? "",
       // 이 호출로 확인 처리되므로 "requested"는 내려가지 않음
-      status: row.contactSharedAt ? "contact_shared" : "viewed",
+      status: toReceivedStatus({ ...row, graduatedViewedAt: new Date() }),
       created_at: row.createdAt.toISOString(),
+      accepted_at: row.acceptedAt?.toISOString() ?? null,
       contact_shared_at: row.contactSharedAt?.toISOString() ?? null,
       student: {
         name: row.studentName ?? STUDENT_FALLBACK_NAME,
@@ -128,10 +143,46 @@ export class CheersGraduatedService {
         interests: row.interests,
         activities: row.activities ?? [],
         attachments,
-        email: contact?.emailEnabled ? contact.email : null,
-        phone: contact?.kakaoEnabled ? contact.phone : null,
+        // 수락해야 재학생 연락처가 보임 (CRB-88)
+        ...(row.acceptedAt
+          ? toStudentContact(contact)
+          : { email: null, phone: null }),
       },
     };
+  }
+
+  async accept(userPk: string, requestPk: string): Promise<AcceptResponseDto> {
+    await this.assertVerified(userPk);
+    // 알림 없음. 재학생에게는 수락 사실이 전달되지 않음
+    return this.dbService.db.transaction(async (tx) => {
+      const row = await this.coffeeChatRequestRepository.findReceivedForAccept(
+        requestPk,
+        userPk,
+        tx,
+      );
+      if (!row) {
+        throw new NotFoundException("Coffee chat request not found");
+      }
+      // 처음 수락한 결과를 그대로 반환. 쓰기 없음
+      if (row.acceptedAt) {
+        return {
+          accepted_at: row.acceptedAt.toISOString(),
+          student: toStudentContact(row.studentContact),
+        };
+      }
+      if (!row.studentActive) {
+        throw new GoneException("Student has withdrawn");
+      }
+
+      const acceptedAt = await this.coffeeChatRequestRepository.markAccepted(
+        row.pk,
+        tx,
+      );
+      return {
+        accepted_at: acceptedAt.toISOString(),
+        student: toStudentContact(row.studentContact),
+      };
+    });
   }
 
   async shareContact(
@@ -167,6 +218,10 @@ export class CheersGraduatedService {
             },
             notification: null,
           };
+        }
+        // 수락과 연락처 공유는 따로 진행 (CRB-88)
+        if (!row.acceptedAt) {
+          throw new ConflictException("Coffee chat is not accepted");
         }
         if (!row.studentActive) {
           throw new GoneException("Student has withdrawn");

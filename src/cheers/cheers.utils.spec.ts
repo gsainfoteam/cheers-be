@@ -1,5 +1,10 @@
 import { buildCoffeeChatRequestedMail } from "@src/mail/templates/coffee-chat-requested.template";
-import { randomSeed, toOffset, toRequestStatus } from "./cheers.utils";
+import {
+  randomSeed,
+  toOffset,
+  toReceivedStatus,
+  toRequestStatus,
+} from "./cheers.utils";
 
 describe("cheers utils", () => {
   const at = new Date("2026-10-25T12:00:00.000Z");
@@ -12,6 +17,27 @@ describe("cheers utils", () => {
     [{ graduatedViewedAt: null, contactSharedAt: at }, "contact_shared"],
   ])("toRequestStatus(%o) = %s", (row, expected) => {
     expect(toRequestStatus(row)).toBe(expected);
+  });
+
+  it.each([
+    [
+      { graduatedViewedAt: at, acceptedAt: null, contactSharedAt: null },
+      "viewed",
+    ],
+    [
+      { graduatedViewedAt: at, acceptedAt: at, contactSharedAt: null },
+      "accepted",
+    ],
+    [
+      { graduatedViewedAt: at, acceptedAt: at, contactSharedAt: at },
+      "contact_shared",
+    ],
+    [
+      { graduatedViewedAt: null, acceptedAt: null, contactSharedAt: null },
+      "requested",
+    ],
+  ])("toReceivedStatus(%o) = %s", (row, expected) => {
+    expect(toReceivedStatus(row)).toBe(expected);
   });
 
   it("randomSeed changes only at interval boundaries", () => {

@@ -1,0 +1,70 @@
+@startuml post-cheers-received-id-accept
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title POST /api/v1/cheers/received/{id}/accept
+caption CRB-88 · 커피챗 수락. 수락하면 재학생 연락처를 볼 수 있음. 메일 · 알림톡은 보내지 않음. 이미 수락했으면 처음 결과를 그대로 반환
+
+actor Client
+participant "UserGuard\n+ UserTypeGuard" as Guard
+participant "ParseUUIDPipe" as Pipe
+participant "CheersGraduatedController" as Controller
+participant "CheersGraduatedService" as Service
+participant "GraduatedRepository" as GraduatedRepository
+participant "CoffeeChatRequestRepository" as CoffeeChatRequestRepository
+database PostgreSQL
+
+Client -> Guard: POST /api/v1/cheers/received/<id>/accept\nAuthorization: Bearer <access token>
+ref over Client, Guard
+  UserGuard, UserTypeGuard — flow/auth-guards.puml
+  @UserTypes(["graduated"]). 가입을 마친(active) 현업자만
+  401 Missing access token / Token expired / Invalid token
+  403 Signup is not completed / User type not allowed (재학생)
+end ref
+Guard -> Pipe: 통과
+alt id가 UUID 형식이 아님
+  Pipe -[#red]-> Client: 400 Validation failed (uuid is expected)
+end
+Pipe -> Controller: accept(id, user)
+Controller -> Service: accept(userPk, id)
+
+Service -> GraduatedRepository: findByUserPk(userPk)
+GraduatedRepository -> PostgreSQL: SELECT graduated WHERE user_pk = ?
+PostgreSQL --> GraduatedRepository: row
+alt verified_at = NULL (어드민이 명함 인증을 취소하고 아직 재업로드하지 않음)
+  Service -[#red]-> Client: 403 Business card verification is required
+end
+
+group transaction (DatabaseService.db.transaction)
+  Service -> CoffeeChatRequestRepository: findReceivedForAccept(id, userPk, tx)
+  CoffeeChatRequestRepository -> PostgreSQL: SELECT r.pk, r.accepted_at, isActiveAccount AS student_active, c.*\nFROM coffee_chat_request r\nJOIN graduated g ON g.pk = r.graduated_pk AND g.user_pk = ?\nJOIN student s ON s.pk = r.student_pk\nJOIN users u ON u.pk = s.user_pk\nLEFT JOIN coffee_chat_contact c ON c.user_pk = s.user_pk\nWHERE r.pk = ?\nFOR UPDATE OF r
+  note right: 요청 행을 잠가 동시에 두 번 눌러도 accepted_at을 덮어쓰지 않음
+  CoffeeChatRequestRepository --> Service: row | null
+  alt 요청 없음 또는 내가 받은 요청이 아님
+    Service -[#red]-> Client: 404 Coffee chat request not found
+  else 이미 수락함 (accepted_at 있음)
+    Service --> Client: 200 { accepted_at, student: { email, phone } }
+    note right: 처음 수락한 결과를 그대로 반환. 쓰기 없음
+  else 재학생이 탈퇴했거나 탈퇴 유예기간 중 (student_active = false)
+    Service -[#red]-> Client: 410 Student has withdrawn
+  end
+
+  Service -> CoffeeChatRequestRepository: markAccepted(id, tx)
+  CoffeeChatRequestRepository -> PostgreSQL: UPDATE coffee_chat_request\nSET accepted_at = now(),\ngraduated_viewed_at = COALESCE(graduated_viewed_at, now()),\nupdated_at = now() WHERE pk = ?\nRETURNING accepted_at
+  note right: 상세를 안 열고 바로 수락해도 확인 시각이 비지 않게 함
+  CoffeeChatRequestRepository --> Service: accepted_at
+end
+note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
+
+Service -> Service: student.email = c.email_enabled ? c.email : null\nstudent.phone = c.kakao_enabled ? c.phone : null
+note right of Service: 알림(NotificationService)은 호출하지 않음.\n재학생에게는 수락 사실이 전달되지 않음 (연락처 공유 시에만 알림)
+Service --> Controller: { accepted_at, student: { email, phone } }
+Controller --> Client: 200 { accepted_at, student: { email, phone } }
+
+@enduml
