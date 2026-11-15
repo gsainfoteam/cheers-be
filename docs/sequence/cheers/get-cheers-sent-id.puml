@@ -17,6 +17,7 @@ participant "ParseUUIDPipe" as Pipe
 participant "CheersStudentController" as Controller
 participant "CheersStudentService" as Service
 participant "CoffeeChatRequestRepository" as CoffeeChatRequestRepository
+participant "FileService" as FileService
 database PostgreSQL
 
 Client -> Guard: GET /api/v1/cheers/sent/<id>\nAuthorization: Bearer <access token>
@@ -35,7 +36,7 @@ Controller -> Service: getSentDetail(userPk, id)
 
 group transaction (DatabaseService.db.transaction)
   Service -> CoffeeChatRequestRepository: findSentByPk(id, userPk, tx)
-  CoffeeChatRequestRepository -> PostgreSQL: SELECT r.*, g.pk, gp.nickname, ca.name AS company, gp.job, u.name,\nisActiveAccount AS graduated_active\nFROM coffee_chat_request r\nJOIN student s ON s.pk = r.student_pk AND s.user_pk = ?\nJOIN graduated_profile gp\nJOIN company_alias ca ON ca.pk = gp.company_alias_pk\nJOIN graduated g JOIN users u ON u.pk = g.user_pk\nWHERE r.pk = ?
+  CoffeeChatRequestRepository -> PostgreSQL: SELECT r.*, g.pk, gp.nickname, ca.name AS company, ca.logo_key, gp.department, gp.job,\ngp.hashtags, gp.links, u.name,\nisActiveAccount AS graduated_active\nFROM coffee_chat_request r\nJOIN student s ON s.pk = r.student_pk AND s.user_pk = ?\nJOIN graduated_profile gp\nJOIN company_alias ca ON ca.pk = gp.company_alias_pk\nJOIN graduated g JOIN users u ON u.pk = g.user_pk\nWHERE r.pk = ?
   note right: 내가 보낸 요청만 (다른 재학생의 요청은 없는 것으로 봄)
   CoffeeChatRequestRepository --> Service: row | null
   alt 요청 없음 또는 내가 보낸 요청이 아님
@@ -50,7 +51,24 @@ group transaction (DatabaseService.db.transaction)
 end
 note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
 
+opt company_logo_key 있음 AND 현업자 활성
+  Service -> FileService: getPresignedUrls([logo_key])
+  FileService --> Service: presigned GET URL
+  note right: 로고 서명 실패 시 company_logo_url = null (CheersCardDto와 같음)
+end
+
 Service -> Service: status 계산 (GET /api/v1/cheers/sent 와 같음)\ngraduated_withdrawn = NOT graduated_active
+alt 현업자 활성
+  Service -> Service: graduated = { graduated_id, nickname, company, company_logo_url,\n  department, job, hashtags ?? [], links ?? [] }
+else 현업자 탈퇴 또는 탈퇴 유예기간 중
+  Service -> Service: 위와 같되 department = null, hashtags = [],\n  company_logo_url = null, links = []
+  note right
+    탈퇴 처리 후에도 graduated_profile(링크 포함)은 보관되므로(flow/withdrawal-purge.puml)
+    CRB-87에서 추가한 4개 필드는 응답에 내리지 않음 (DB는 그대로).
+    nickname · company · job은 기존 정책대로 유지.
+    유예기간 중 탈퇴를 취소하면 다시 내려감
+  end note
+end
 alt 공유 전 (contact_shared_at 없음)
   Service -> Service: shared_contact = null
 else 공유됨 AND 현업자 활성 (graduated_active = true)
@@ -66,6 +84,6 @@ note right of Service
   탈퇴 처리 후에는 users.name이 지워져 null이므로 name은 항상 "탈퇴한 계정"
 end note
 Service --> Controller: SentRequestDetailDto
-Controller --> Client: 200 { id, graduated, graduated_withdrawn, message, status, created_at, shared_contact }
+Controller --> Client: 200 { id, graduated (+ department · hashtags · company_logo_url · links), graduated_withdrawn, message, status, created_at, shared_contact }
 
 @enduml

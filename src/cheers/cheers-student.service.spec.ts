@@ -65,7 +65,9 @@ const sentRow = (overrides: Partial<SentRequestRow> = {}): SentRequestRow => ({
     graduatedPk,
     nickname: "철수",
     company: "인포테크",
+    department: "DA사업부",
     job: "백엔드 개발자",
+    hashtags: ["3년차", "산업기능요원"],
   },
   graduatedActive: true,
   ...overrides,
@@ -75,6 +77,11 @@ const detailRow = (
   overrides: Partial<SentRequestDetailRow> = {},
 ): SentRequestDetailRow => ({
   ...sentRow(),
+  graduated: {
+    ...sentRow().graduated,
+    companyLogoKey: "company/logo.png",
+    links: ["https://linkedin.com/in/chulsoo"],
+  },
   studentViewedAt: null,
   sharedEmail: null,
   sharedPhone: null,
@@ -448,7 +455,9 @@ describe("CheersStudentService", () => {
           graduated_id: graduatedPk,
           nickname: "철수",
           company: "인포테크",
+          department: "DA사업부",
           job: "백엔드 개발자",
+          hashtags: ["3년차", "산업기능요원"],
         },
         graduated_withdrawn: false,
         message: "궁금합니다",
@@ -473,8 +482,15 @@ describe("CheersStudentService", () => {
         false,
         true,
       ]);
-      // 닉네임 · 회사 · 직무는 그대로 보임
-      expect(result.items[1].graduated.nickname).toBe("철수");
+      // 닉네임 · 회사 · 직무는 그대로 보이고, 부서 · 해시태그는 비움
+      expect(result.items[1].graduated).toEqual({
+        graduated_id: graduatedPk,
+        nickname: "철수",
+        company: "인포테크",
+        department: null,
+        job: "백엔드 개발자",
+        hashtags: [],
+      });
     });
   });
 
@@ -532,6 +548,52 @@ describe("CheersStudentService", () => {
       expect(result.graduated_withdrawn).toBe(false);
     });
 
+    it("returns the graduated card fields with a signed logo", async () => {
+      coffeeChatRequestRepository.findSentByPk.mockResolvedValue(detailRow());
+      fileService.getPresignedUrls.mockResolvedValue(
+        new Map([["company/logo.png", "https://s3/logo"]]),
+      );
+
+      const result = await createService().getSentDetail(userPk, requestPk);
+
+      expect(fileService.getPresignedUrls).toHaveBeenCalledWith([
+        "company/logo.png",
+      ]);
+      expect(result.graduated).toEqual({
+        graduated_id: graduatedPk,
+        nickname: "철수",
+        company: "인포테크",
+        company_logo_url: "https://s3/logo",
+        department: "DA사업부",
+        job: "백엔드 개발자",
+        hashtags: ["3년차", "산업기능요원"],
+        links: ["https://linkedin.com/in/chulsoo"],
+      });
+    });
+
+    it("fills null profile fields with defaults", async () => {
+      coffeeChatRequestRepository.findSentByPk.mockResolvedValue(
+        detailRow({
+          graduated: {
+            ...detailRow().graduated,
+            department: null,
+            hashtags: null,
+            companyLogoKey: null,
+            links: null,
+          },
+        }),
+      );
+
+      const result = await createService().getSentDetail(userPk, requestPk);
+
+      expect(result.graduated).toMatchObject({
+        company_logo_url: null,
+        department: null,
+        hashtags: [],
+        links: [],
+      });
+    });
+
     it("does not record the view again", async () => {
       coffeeChatRequestRepository.findSentByPk.mockResolvedValue(
         detailRow({ ...shared, studentViewedAt: sharedAt }),
@@ -555,6 +617,18 @@ describe("CheersStudentService", () => {
       const result = await createService().getSentDetail(userPk, requestPk);
 
       expect(result.graduated_withdrawn).toBe(true);
+      // 탈퇴한 선배의 프로필 정보는 DB에 남아 있어도 내리지 않고 로고도 서명하지 않음
+      expect(fileService.getPresignedUrls).toHaveBeenCalledWith([null]);
+      expect(result.graduated).toEqual({
+        graduated_id: graduatedPk,
+        nickname: "철수",
+        company: "인포테크",
+        company_logo_url: null,
+        department: null,
+        job: "백엔드 개발자",
+        hashtags: [],
+        links: [],
+      });
       expect(result.shared_contact).toEqual({
         name: "탈퇴한 계정",
         email: null,
