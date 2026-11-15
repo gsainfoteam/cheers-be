@@ -61,6 +61,8 @@ const listRow = (
   studentName: "홍길동",
   studentActive: true,
   departmentName: "전기전자컴퓨터공학부",
+  interests: ["반도체"],
+  activities: null,
   ...overrides,
 });
 
@@ -69,8 +71,6 @@ const detailRow = (
 ): ReceivedRequestDetailRow => ({
   ...listRow(),
   message: "궁금합니다",
-  interests: ["반도체"],
-  activities: null,
   attachments: [],
   studentContact: studentContact(),
   ...overrides,
@@ -221,6 +221,8 @@ describe("CheersGraduatedService", () => {
         id: requestPk,
         student_name: "홍길동",
         department: "전기전자컴퓨터공학부",
+        interests: ["반도체"],
+        activities: [],
         student_withdrawn: false,
         status: "requested",
         created_at: createdAt.toISOString(),

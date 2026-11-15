@@ -60,6 +60,9 @@ export type ReceivedRequestRow = Pick<
   studentActive: boolean;
   // 요청 당시 학과
   departmentName: string;
+  // 요청 당시 관심 분야 · 활동 (활동은 없으면 null)
+  interests: string[];
+  activities: string[] | null;
 };
 
 export type ReceivedRequestPage = {
@@ -123,6 +126,8 @@ const receivedRequestColumns = {
   studentName: users.name,
   studentActive: sql<boolean>`${isActiveAccount}`,
   departmentName: department.name,
+  interests: studentProfile.interests,
+  activities: studentProfile.activities,
 };
 
 // 내가(재학생 user_pk) 보낸 요청
@@ -279,7 +284,8 @@ export class CoffeeChatRequestRepository {
 
   /*
   SELECT r.pk, r.created_at, r.graduated_viewed_at, r.contact_shared_at, u.name, d.name,
-    (u.is_deleted = false AND u.withdraw_requested_at IS NULL) AS student_active
+    (u.is_deleted = false AND u.withdraw_requested_at IS NULL) AS student_active,
+    sp.interests, sp.activities
   FROM coffee_chat_request r
   JOIN graduated g ON g.pk = r.graduated_pk AND g.user_pk = ?1
   JOIN student_profile sp ON sp.pk = r.student_profile_pk
@@ -346,8 +352,6 @@ export class CoffeeChatRequestRepository {
       .select({
         ...receivedRequestColumns,
         message: coffeeChatRequest.message,
-        interests: studentProfile.interests,
-        activities: studentProfile.activities,
         // 버전 하나에 첨부가 여러 개라 json 배열로 묶음 (pg 드라이버가 파싱)
         attachments: sql<StudentAttachment[]>`(
           SELECT COALESCE(

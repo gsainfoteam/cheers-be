@@ -48,7 +48,7 @@ else claimType = student
   StudentRepository --> Service: { student, latest: { profile, department, attachments } | null }
 else claimType = graduated
   Service -> GraduatedRepository: findByUserPkWithProfile(userPk)
-  GraduatedRepository -> PostgreSQL: SELECT graduated LEFT JOIN graduated_profile\nLEFT JOIN company_alias ON pk = company_alias_pk
+  GraduatedRepository -> PostgreSQL: SELECT graduated LEFT JOIN graduated_profile\nLEFT JOIN company_alias ON pk = company_alias_pk\n(회사 로고 logo_key 포함)
   GraduatedRepository --> Service: { graduated, profile | null, company | null }
 else
   Service -> AuthService: touchLastActive(userPk)
@@ -77,6 +77,11 @@ opt DB의 type ≠ claimType
     Service -> GraduatedRepository: findByUserPkWithProfile(userPk)
     note right: user.type = graduated일 때
   end
+end
+
+opt type = graduated이고 추가 정보가 있고 회사에 logo_key가 있음
+  Service -> S3: getPresignedUrl(logo_key)
+  note right: profile.company_logo_url = 서명 URL (로고 없으면 null).\n서명 실패 시 500
 end
 
 opt type = student이고 추가 정보가 있음

@@ -46,6 +46,8 @@ export class GraduatedProfileDto {
   /** 회사 검색 결과의 company_id */
   company_id: number;
   company: string;
+  /** 회사 로고 presigned GET URL. 로고가 없으면 null */
+  company_logo_url: string | null;
   /** 선택 입력이라 없으면 null */
   department: string | null;
   job: string;

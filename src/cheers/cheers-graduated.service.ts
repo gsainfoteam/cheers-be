@@ -59,6 +59,8 @@ export class CheersGraduatedService {
           ? (row.studentName ?? STUDENT_FALLBACK_NAME)
           : WITHDRAWN_STUDENT_REQUEST_LABEL,
         department: row.departmentName,
+        interests: row.interests,
+        activities: row.activities ?? [],
         student_withdrawn: !row.studentActive,
         status: toRequestStatus(row),
         created_at: row.createdAt.toISOString(),

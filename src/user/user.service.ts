@@ -162,7 +162,7 @@ export class UserService {
       ? await this.toStudentInfoDto(studentInfo, contactDto)
       : null;
     const graduated = graduatedInfo
-      ? this.toGraduatedInfoDto(graduatedInfo, contactDto)
+      ? await this.toGraduatedInfoDto(graduatedInfo, contactDto)
       : null;
 
     return {
@@ -342,10 +342,10 @@ export class UserService {
     };
   }
 
-  private toGraduatedInfoDto(
+  private async toGraduatedInfoDto(
     { graduated, profile, company }: GraduatedWithProfile,
     contact: ContactDto | null,
-  ): GraduatedInfoDto {
+  ): Promise<GraduatedInfoDto> {
     return {
       verified: graduated.verifiedAt !== null,
       // 프로필이 있으면 회사도 있음 (company_alias_pk NOT NULL)
@@ -355,6 +355,9 @@ export class UserService {
               nickname: profile.nickname,
               company_id: company.pk,
               company: company.name,
+              company_logo_url: company.logoKey
+                ? await this.fileService.getPresignedUrl(company.logoKey)
+                : null,
               department: profile.department,
               job: profile.job,
               hashtags: profile.hashtags ?? [],

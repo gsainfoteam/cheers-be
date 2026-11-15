@@ -569,8 +569,13 @@ describe("UserService", () => {
           hashtags: null,
           links: ["https://www.linkedin.com/in/chulsoo"],
         },
-        company: { pk: 7, name: "인포테크" },
+        company: {
+          pk: 7,
+          name: "인포테크",
+          logoKey: "company-logo/a/logo.png",
+        },
       });
+      fileService.getPresignedUrl.mockResolvedValue("https://s3/logo");
 
       const info = await service.getInfo(ctx("graduated"));
 
@@ -580,6 +585,7 @@ describe("UserService", () => {
         nickname: "철수",
         company_id: 7,
         company: "인포테크",
+        company_logo_url: "https://s3/logo",
         department: "플랫폼개발팀",
         job: "백엔드 개발자",
         hashtags: [],
