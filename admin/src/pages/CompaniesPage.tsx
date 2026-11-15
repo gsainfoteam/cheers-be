@@ -8,6 +8,7 @@ import {
 import { api } from "../lib/api";
 import { PageResponse } from "../lib/coffee-chat";
 import { errorMessage } from "../lib/format";
+import { CompanyBadgePreview } from "./CompanyBadgePreview";
 import { CompanyImportPanel } from "./CompanyImportPanel";
 import { Pagination } from "./Pagination";
 
@@ -68,6 +69,7 @@ export function CompaniesPage() {
   } | null>(null);
   const [addNameNotice, setAddNameNotice] = useState<string | null>(null);
   const [mergeSource, setMergeSource] = useState<Company | null>(null);
+  const [previewCompany, setPreviewCompany] = useState<Company | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -443,6 +445,12 @@ export function CompaniesPage() {
                       />
                     </label>
                     <button
+                      className="button secondary small"
+                      onClick={() => setPreviewCompany(company)}
+                    >
+                      미리보기
+                    </button>
+                    <button
                       className="button danger small"
                       disabled={submitting || company.graduated_count > 0}
                       title={
@@ -480,6 +488,13 @@ export function CompaniesPage() {
           submitting={submitting}
           onMerge={(target) => void handleMerge(target)}
           onClose={() => setMergeSource(null)}
+        />
+      )}
+
+      {previewCompany && (
+        <CompanyBadgePreview
+          company={previewCompany}
+          onClose={() => setPreviewCompany(null)}
         />
       )}
     </>

@@ -548,3 +548,269 @@ select {
   font-size: 16px;
   color: var(--text);
 }
+
+/* ── 회사 사원증 미리보기 (CRB-89) ──────────────────────────────────
+   cheers-fe src/components/employee-badge.tsx · brand-cat.tsx 의 Tailwind 클래스를
+   값 그대로 옮김. --u 는 시안 1px(카드 폭 170.5 기준). 프론트엔드 카드가 바뀌면 같이 고침 */
+
+.modal.wide {
+  max-width: 640px;
+}
+
+.badge-preview-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 24px;
+  padding: 16px 0;
+}
+
+.badge-preview-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.employee-badge-container {
+  container-type: inline-size;
+  width: 100%;
+}
+
+.employee-badge {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  aspect-ratio: 53.98 / 85.6;
+  overflow: clip;
+  border: calc(0.8 * var(--u)) solid #e8ddcf;
+  border-radius: calc(7.104 * var(--u));
+  background: #ffffff;
+  box-shadow:
+    0 12px 24px -8px rgb(41 28 18 / 0.102),
+    0 2px 3px 0 rgb(41 28 18 / 0.071);
+  color: #22201c;
+  font-family:
+    "Noto Sans KR Variable", "Apple SD Gothic Neo", "Malgun Gothic",
+    "맑은 고딕", system-ui, sans-serif;
+  line-height: 1.5;
+  text-align: left;
+}
+
+.employee-badge p {
+  margin: 0;
+}
+
+.employee-badge img {
+  display: block;
+}
+
+.employee-badge-company {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: calc(6 * var(--u));
+  min-height: calc(93.538 * var(--u));
+  padding: calc(26 * var(--u)) calc(16 * var(--u)) 0;
+}
+
+.employee-badge-logo {
+  width: calc(69.858 * var(--u));
+  height: calc(24.865 * var(--u));
+  object-fit: contain;
+}
+
+/* 고양이만 회사명과 같은 왼쪽 선에 붙임 */
+.employee-badge-logo-cat {
+  object-position: left;
+}
+
+.employee-badge-company-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  color: #685e52;
+  line-height: 18px;
+  letter-spacing: -0.3px;
+}
+
+.employee-badge-company-name {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.employee-badge-department {
+  font-size: 10px;
+  font-weight: 350;
+}
+
+.employee-badge-identity {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: calc(6 * var(--u));
+  width: 100%;
+  padding: calc(6 * var(--u)) calc(16 * var(--u)) calc(12 * var(--u));
+}
+
+.employee-badge-name {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 28px;
+  letter-spacing: -0.7px;
+}
+
+.employee-badge-role {
+  min-height: 44px;
+  font-size: 14px;
+  line-height: 20px;
+  letter-spacing: -0.4px;
+  white-space: pre-line;
+}
+
+.employee-badge-meta {
+  min-height: 20px;
+  color: #685e52;
+  font-size: 12px;
+  line-height: 18px;
+  letter-spacing: -0.4px;
+  white-space: pre-wrap;
+}
+
+/* 카드 폭 220px 이상(데스크톱 목록 288)에서는 글자만 따로 큼 */
+@container (min-width: 220px) {
+  .employee-badge-company-text {
+    gap: 4px;
+    line-height: 20px;
+    letter-spacing: normal;
+  }
+
+  .employee-badge-company-name {
+    font-size: 13px;
+  }
+
+  .employee-badge-department {
+    font-size: 13px;
+    font-weight: 400;
+  }
+
+  .employee-badge-name {
+    font-size: 30px;
+    line-height: 40px;
+    letter-spacing: -1.2px;
+  }
+
+  .employee-badge-role {
+    min-height: 48px;
+    font-size: 17px;
+    font-weight: 500;
+    line-height: 25px;
+    letter-spacing: normal;
+  }
+
+  .employee-badge-meta {
+    font-size: 13px;
+    line-height: 20px;
+    letter-spacing: normal;
+  }
+}
+
+.employee-badge-ribbon {
+  position: relative;
+  width: 100%;
+  height: calc(42.625 * var(--u));
+  margin-top: auto;
+  overflow: clip;
+  background: #ff9447;
+}
+
+.employee-badge-ribbon-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.employee-badge-wordmark {
+  position: absolute;
+  top: calc(7.1 * var(--u));
+  left: calc(14.21 * var(--u));
+  font-family:
+    "Geist", "Noto Sans KR Variable", "Apple SD Gothic Neo", "Malgun Gothic",
+    "맑은 고딕", system-ui, sans-serif;
+  font-size: calc(13.024 * var(--u));
+  font-weight: 700;
+  line-height: calc(15.392 * var(--u));
+  letter-spacing: calc(-1.2 * var(--u));
+}
+
+.employee-badge-micro {
+  position: absolute;
+  top: calc(25.46 * var(--u));
+  left: calc(14.8 * var(--u));
+  font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: calc(4.736 * var(--u));
+  line-height: calc(7.104 * var(--u));
+  letter-spacing: calc(0.592 * var(--u));
+}
+
+/* 띠의 인장. 프론트엔드 BrandCat(340×290 틀)과 같은 두 겹 */
+.brand-cat {
+  display: block;
+  aspect-ratio: 340 / 290;
+  pointer-events: none;
+}
+
+.employee-badge-seal {
+  position: absolute;
+  top: 50%;
+  left: calc(127.12 * var(--u));
+  width: calc(31.827 * var(--u));
+  transform: translateY(-50%);
+}
+
+.brand-cat-shadow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 98.38%;
+  height: 87.99%;
+  transform: translate(-50%, -50%);
+}
+
+.brand-cat-shadow-inset {
+  position: absolute;
+  inset: -6.66% -6.88% -9.01% -5.08%;
+}
+
+.brand-cat-shadow-inset img {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+}
+
+.brand-cat-image {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 99.83%;
+  height: 100%;
+  max-width: none;
+  transform: translate(-50%, -50%);
+}
+
+.employee-badge-slot {
+  position: absolute;
+  top: calc(6.3 * var(--u));
+  left: calc(72.61 * var(--u));
+  width: calc(23.681 * var(--u));
+  height: calc(2.96 * var(--u));
+  border: calc(0.6 * var(--u)) solid #e8ddcf;
+  border-radius: calc(1.48 * var(--u));
+  background: #f8f0e5;
+}
