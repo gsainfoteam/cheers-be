@@ -80,7 +80,7 @@ loop 더 처리할 유저가 없을 때까지
           end
         end
         Service -> UserRepository: withdraw(pk, tx)
-        UserRepository -> PostgreSQL: UPDATE users SET is_deleted = true, name = NULL, email = NULL
+        UserRepository -> PostgreSQL: UPDATE users SET is_deleted = true, name = NULL, email = NULL, picture_url = NULL
       end
     end
     opt 명함 key를 지웠음

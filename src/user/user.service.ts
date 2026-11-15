@@ -101,6 +101,13 @@ export class UserService {
         if (profile.email) {
           await this.userRepository.fillEmail(existing.pk, profile.email, tx);
         }
+        if (profile.picture) {
+          await this.userRepository.updatePictureUrl(
+            existing.pk,
+            profile.picture,
+            tx,
+          );
+        }
 
         // active: type 무시 / pending + 같은 type: 이어서 진행
         if (existing.status === "active" || existing.type === req.type) {
@@ -172,6 +179,7 @@ export class UserService {
       next_step: calculateNextStep(user.status, progress),
       name: user.name,
       email: user.email,
+      picture_url: user.pictureUrl,
       consent_required: this.isConsentRequired(user.status, progress),
       student,
       graduated,
@@ -193,7 +201,7 @@ export class UserService {
     tx: TxType,
   ): Promise<UserRow> {
     const user = await this.userRepository.insert(
-      { type, email: profile.email },
+      { type, email: profile.email, pictureUrl: profile.picture },
       tx,
     );
     const account = await this.userOauthAccountRepository.insert(

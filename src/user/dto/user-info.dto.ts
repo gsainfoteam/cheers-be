@@ -75,6 +75,8 @@ export class UserInfoDto {
   next_step: NextStep;
   name: string | null;
   email: string | null;
+  /** 구글 로그인 때 받은 프로필 이미지 URL. 없으면 null */
+  picture_url: string | null;
   consent_required: boolean;
   student: StudentInfoDto | null;
   graduated: GraduatedInfoDto | null;

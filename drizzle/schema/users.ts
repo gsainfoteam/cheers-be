@@ -27,6 +27,7 @@ CREATE TABLE "users" (
     "last_active_at" timestamp with time zone NOT NULL DEFAULT NOW(),
     "name"           varchar(64)              NULL,
     "email"          varchar(255)             NULL,
+    "picture_url"    varchar(2048)            NULL,
     "withdraw_requested_at" timestamp with time zone NULL
 );
 CREATE INDEX ON "users" ("created_at") WHERE "status" = 'pending';
@@ -54,6 +55,8 @@ export const users = pgTable(
     // 추가 정보 입력에서 사용자에게 한 번 받음 (OAuth 이름은 쓰지 않음). 이후 수정 불가
     name: varchar("name", { length: 64 }),
     email: varchar("email", { length: 255 }),
+    // 구글 로그인 때 받은 프로필 이미지 URL (구글 URL 그대로). 재로그인 때 받으면 갱신, 탈퇴 purge 때 제거
+    pictureUrl: varchar("picture_url", { length: 2048 }),
     // 회원 탈퇴 요청 시각. 유예기간(active: WITHDRAWAL_GRACE_DAYS, pending: 1일) 동안은 비활성,
     // 그 안에 다시 로그인하면 null로 되돌림. 지나면 스케줄러가 개인정보 삭제 + is_deleted = true
     withdrawRequestedAt: timestamp("withdraw_requested_at", {

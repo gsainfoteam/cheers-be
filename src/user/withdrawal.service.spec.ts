@@ -32,6 +32,7 @@ const userRow = (overrides: Partial<UserRow> = {}): UserRow => ({
   lastActiveAt: new Date(),
   name: "김철수",
   email: "a@gmail.com",
+  pictureUrl: null,
   withdrawRequestedAt: new Date("2026-09-01T00:00:00Z"),
   ...overrides,
 });

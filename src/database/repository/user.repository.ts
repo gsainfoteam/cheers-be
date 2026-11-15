@@ -90,11 +90,11 @@ export class UserRepository {
   }
 
   /*
-  INSERT INTO users (pk, type, email) VALUES (?1, ?2, ?3) RETURNING *;
+  INSERT INTO users (pk, type, email, picture_url) VALUES (?1, ?2, ?3, ?4) RETURNING *;
    */
   // 최초 OAuth 로그인. status는 기본값 pending, name은 추가 정보 입력에서 채움
   async insert(
-    row: Pick<UserRow, "type" | "email">,
+    row: Pick<UserRow, "type" | "email" | "pictureUrl">,
     tx: TxType,
   ): Promise<UserRow> {
     const result = await tx
@@ -107,6 +107,21 @@ export class UserRepository {
     }
 
     return result[0];
+  }
+
+  /*
+  UPDATE users SET picture_url = ?2, updated_at = now() WHERE pk = ?1;
+   */
+  // 재로그인: OAuth에서 picture를 받았으면 덮어씀 (구글 프로필 사진 변경 반영)
+  async updatePictureUrl(
+    userPk: string,
+    pictureUrl: string,
+    tx: TxType,
+  ): Promise<void> {
+    await tx
+      .update(users)
+      .set({ pictureUrl, updatedAt: new Date() })
+      .where(eq(users.pk, userPk));
   }
 
   /*
@@ -289,13 +304,19 @@ export class UserRepository {
   }
 
   /*
-  UPDATE users SET is_deleted = true, name = NULL, email = NULL, updated_at = now() WHERE pk = ?1;
+  UPDATE users SET is_deleted = true, name = NULL, email = NULL, picture_url = NULL, updated_at = now() WHERE pk = ?1;
    */
   // 탈퇴 유예기간 만료: soft delete + 개인정보 제거. withdraw_requested_at은 기록으로 남김
   async withdraw(userPk: string, tx: TxType): Promise<void> {
     await tx
       .update(users)
-      .set({ isDeleted: true, name: null, email: null, updatedAt: new Date() })
+      .set({
+        isDeleted: true,
+        name: null,
+        email: null,
+        pictureUrl: null,
+        updatedAt: new Date(),
+      })
       .where(eq(users.pk, userPk));
   }
 

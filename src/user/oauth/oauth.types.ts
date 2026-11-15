@@ -12,6 +12,8 @@ export type OAuthProfile = {
   provider: OAuthProvider;
   sub: string;
   email: string | null;
+  // 프로필 이미지 URL. 지금은 google만 (https, 2048자 이하일 때), 없으면 null
+  picture: string | null;
 };
 
 export interface OAuthVerifier {

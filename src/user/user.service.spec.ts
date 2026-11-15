@@ -34,6 +34,7 @@ const userRow = (overrides: Partial<UserRow> = {}): UserRow => ({
   lastActiveAt: new Date(),
   name: null,
   email: null,
+  pictureUrl: null,
   withdrawRequestedAt: null,
   ...overrides,
 });
@@ -42,6 +43,7 @@ const googleProfile: OAuthProfile = {
   provider: "google",
   sub: "g-1",
   email: "a@gmail.com",
+  picture: null,
 };
 
 const progress = (overrides: Partial<SignupProgress> = {}): SignupProgress => ({
@@ -82,6 +84,7 @@ describe("UserService", () => {
     insert: jest.fn(),
     updateType: jest.fn(),
     fillEmail: jest.fn(),
+    updatePictureUrl: jest.fn(),
     cancelWithdrawal: jest.fn(),
     findSignupProgress: jest.fn(),
   };
@@ -168,7 +171,7 @@ describe("UserService", () => {
         "raw-nonce",
       );
       expect(userRepository.insert).toHaveBeenCalledWith(
-        { type: "graduated", email: "a@gmail.com" },
+        { type: "graduated", email: "a@gmail.com", pictureUrl: null },
         tx,
       );
       expect(userOauthAccountRepository.insert).toHaveBeenCalledWith(
@@ -216,6 +219,34 @@ describe("UserService", () => {
       expect(graduatedRepository.insert).not.toHaveBeenCalled();
       expect(userRepository.cancelWithdrawal).not.toHaveBeenCalled();
       expect(authService.issueTokens).toHaveBeenCalledWith(active, tx);
+    });
+
+    it("overwrites the picture URL when OAuth provides one", async () => {
+      oauthService.verify.mockResolvedValue({
+        ...googleProfile,
+        picture: "https://lh3.googleusercontent.com/a/p",
+      });
+      userOauthAccountRepository.findUserForLogin.mockResolvedValue(
+        userRow({ status: "active" }),
+      );
+
+      await login("student");
+
+      expect(userRepository.updatePictureUrl).toHaveBeenCalledWith(
+        USER_PK,
+        "https://lh3.googleusercontent.com/a/p",
+        tx,
+      );
+    });
+
+    it("keeps the stored picture URL when OAuth did not provide one", async () => {
+      userOauthAccountRepository.findUserForLogin.mockResolvedValue(
+        userRow({ status: "active" }),
+      );
+
+      await login("student");
+
+      expect(userRepository.updatePictureUrl).not.toHaveBeenCalled();
     });
 
     it("does not fill the email when OAuth did not provide one", async () => {
@@ -421,6 +452,7 @@ describe("UserService", () => {
         next_step: "consent",
         name: null,
         email: "a@gmail.com",
+        picture_url: null,
         // 가입 중에는 next_step으로 안내
         consent_required: false,
         student: null,

@@ -48,6 +48,7 @@ export class NaverVerifier implements OAuthVerifier {
       provider: "naver",
       sub: profile.id,
       email: profile.email ?? null,
+      picture: null,
     };
   }
 }

@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title POST /api/v1/user/oauth/login
-caption CRB-10, CRB-52 · OAuth 토큰 검증, 최초 가입 / 재로그인 유형 처리, 토큰 발급 (이름은 OAuth에서 받지 않고 추가 정보 입력에서 받음)
+caption CRB-10, CRB-52, CRB-86 · OAuth 토큰 검증, 최초 가입 / 재로그인 유형 처리, 토큰 발급 (이름은 OAuth에서 받지 않고 추가 정보 입력에서 받음, 프로필 이미지 URL은 google에서만 받아 저장)
 
 actor Client
 participant "ValidationPipe" as Pipe
@@ -58,8 +58,9 @@ alt provider = google / apple (GoogleVerifier / AppleVerifier → IdTokenVerifie
     OAuthService -[#red]-> Client: 401 Invalid OAuth token
   end
   note right of OAuthService
-    google: email_verified = true일 때만 email 사용
-    apple: email(릴레이 주소 가능) 사용
+    google: email_verified = true일 때만 email 사용.
+    picture 클레임이 문자열이고 https URL이며 2048자 이하일 때만 picture_url로 사용 (아니면 null)
+    apple: email(릴레이 주소 가능) 사용, picture 없음
     토큰에 이름이 있어도 쓰지 않음
   end note
 else provider = naver (NaverVerifier)
@@ -74,7 +75,7 @@ else provider = naver (NaverVerifier)
     기존 계정에 로그인할 수 없음
   end note
 end
-OAuthService --> Service: OAuthProfile { provider, sub, email }
+OAuthService --> Service: OAuthProfile { provider, sub, email, picture }
 
 group transaction (DatabaseService.db.transaction)
   Service -> UserOauthAccountRepository: findUserForLogin(provider, sub, tx)
@@ -84,9 +85,9 @@ group transaction (DatabaseService.db.transaction)
   UserOauthAccountRepository --> Service: user | null
 
   alt 계정 없음 — 최초 로그인
-    Service -> UserRepository: insert({ type, email }, tx)
-    UserRepository -> PostgreSQL: INSERT users (status = pending, name = NULL)
-    note right: 이름은 추가 정보 입력 때 사용자에게 받음
+    Service -> UserRepository: insert({ type, email, pictureUrl }, tx)
+    UserRepository -> PostgreSQL: INSERT users (status = pending, name = NULL, picture_url)
+    note right: 이름은 추가 정보 입력 때 사용자에게 받음.\npicture_url은 google이 준 값 (없으면 NULL)
     Service -> UserOauthAccountRepository: insert({ provider, sub, userPk, email }, tx)
     UserOauthAccountRepository -> PostgreSQL: INSERT user_oauth_account ... ON CONFLICT DO NOTHING
     alt 같은 계정으로 동시에 최초 로그인해서 다른 요청이 먼저 넣음 (행을 못 받음)
@@ -108,6 +109,11 @@ group transaction (DatabaseService.db.transaction)
     opt OAuth에서 email을 받음
       Service -> UserRepository: fillEmail(pk, email, tx)
       UserRepository -> PostgreSQL: UPDATE users SET email = COALESCE(email, ?)
+    end
+    opt OAuth에서 picture를 받음 (google이고 유효한 URL)
+      Service -> UserRepository: updatePictureUrl(pk, picture, tx)
+      UserRepository -> PostgreSQL: UPDATE users SET picture_url = ?
+      note right: email과 달리 덮어씀 (구글 프로필 사진을 바꾸면 다음 로그인에 반영).\n토큰에 picture가 없으면 기존 값 유지
     end
 
     alt status = active 또는 요청 type = 기존 type

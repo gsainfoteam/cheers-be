@@ -36,6 +36,7 @@ const user = (overrides: Partial<UserRow> = {}): UserRow => ({
   lastActiveAt: now,
   name: "홍길동",
   email: "gildong@gmail.com",
+  pictureUrl: null,
   withdrawRequestedAt: null,
   ...overrides,
 });
