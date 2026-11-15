@@ -7,6 +7,10 @@ export class ReceivedRequestDto {
   student_name: string;
   /** 요청 당시 학과 */
   department: string;
+  /** 요청 당시 관심 분야 */
+  interests: string[];
+  /** 요청 당시 활동. 없으면 [] */
+  activities: string[];
   /** true면 상세를 열람할 수 없음 (프론트는 목록 클릭을 막음) */
   student_withdrawn: boolean;
   status: CoffeeChatRequestStatus;

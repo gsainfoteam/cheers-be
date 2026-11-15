@@ -101,6 +101,8 @@ describe("현업자 받은 요청 → 열람 → 연락처 공유", () => {
     expect(before.items[0]).toMatchObject({
       id,
       student_name: STUDENT_NAME,
+      interests: [expect.any(String)],
+      activities: [],
       student_withdrawn: false,
       status: "requested",
     });

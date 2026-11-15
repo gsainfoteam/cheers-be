@@ -11,13 +11,15 @@ export class GraduatedListQueryDto extends PaginationQueryDto {
   sort: GraduatedCardSort = "recent_joined";
 }
 
-// 이름 · 부서 · 연락처는 비공개라 포함하지 않음
+// 이름 · 연락처는 비공개라 포함하지 않음
 export class CheersCardDto {
   graduated_id: string;
   nickname: string;
   company: string;
   /** 회사 로고 presigned GET URL. 로고가 없으면 null */
   company_logo_url: string | null;
+  /** 선택 입력이라 없으면 null */
+  department: string | null;
   job: string;
   hashtags: string[];
   links: string[];

@@ -19,6 +19,8 @@ export type GraduatedCardRow = {
   company: string;
   // 회사 로고 S3 key. 없으면 null
   companyLogoKey: string | null;
+  // 선택 입력이라 없으면 null
+  department: string | null;
   job: string;
   hashtags: string[] | null;
   links: string[] | null;
@@ -55,7 +57,7 @@ export class GraduatedCardRepository {
 
   /*
   SELECT g.pk, gp.nickname, ca.name AS company, ca.logo_key,
-    gp.job, gp.hashtags, gp.links, u.last_active_at,
+    gp.department, gp.job, gp.hashtags, gp.links, u.last_active_at,
     COALESCE(c.kakao_enabled OR c.email_enabled, false) AS can_request
   FROM graduated g
   JOIN users u ON u.pk = g.user_pk
@@ -67,7 +69,7 @@ export class GraduatedCardRepository {
   ORDER BY <sort>, g.pk LIMIT ?1 OFFSET ?2;
   SELECT count(*) ... (같은 FROM · WHERE);
    */
-  // 현업자 목록. 이름 · 부서 · 연락처는 select하지 않음 (비공개)
+  // 현업자 목록. 이름 · 연락처는 select하지 않음 (비공개)
   async findPage(input: {
     sort: GraduatedCardSort;
     offset: number;
@@ -83,6 +85,7 @@ export class GraduatedCardRepository {
           nickname: graduatedProfile.nickname,
           company: companyAlias.name,
           companyLogoKey: companyAlias.logoKey,
+          department: graduatedProfile.department,
           job: graduatedProfile.job,
           hashtags: graduatedProfile.hashtags,
           links: graduatedProfile.links,

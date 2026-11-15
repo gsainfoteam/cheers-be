@@ -52,13 +52,13 @@ describe("시나리오 2: 현업자 가입 → 재학생 목록 조회 → 커�
     expect(card).toMatchObject({
       nickname: "현업자e2e",
       company: "인포테크",
+      department: "플랫폼개발팀",
       job: "백엔드 개발자",
       can_request: true,
     });
-    // 이름 · 부서 · 연락처는 비공개
+    // 이름 · 연락처는 비공개 (부서는 공개)
     const raw = JSON.stringify(card);
     expect(raw).not.toContain("박현업");
-    expect(raw).not.toContain("플랫폼개발팀");
     expect(raw).not.toContain("graduated-contact@example.com");
 
     const created = await http(ctx)

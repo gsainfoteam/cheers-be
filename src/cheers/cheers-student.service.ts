@@ -78,6 +78,7 @@ export class CheersStudentService {
         company_logo_url: row.companyLogoKey
           ? (logoUrls.get(row.companyLogoKey) ?? null)
           : null,
+        department: row.department,
         job: row.job,
         hashtags: row.hashtags ?? [],
         links: row.links ?? [],
