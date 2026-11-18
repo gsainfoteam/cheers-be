@@ -143,10 +143,10 @@ describe("AlimtalkService", () => {
     const { button } = JSON.parse(params.button_1);
     expect(button[0].name).toBe("Cheers에서 확인하기");
     expect(button[0].linkMo).toBe(
-      "https://cheers.example.com/applications/request-pk",
+      "https://cheers.example.com/applications/request-pk?type=graduated",
     );
     expect(button[0].linkPc).toBe(
-      "https://cheers.example.com/applications/request-pk",
+      "https://cheers.example.com/applications/request-pk?type=graduated",
     );
   });
 
