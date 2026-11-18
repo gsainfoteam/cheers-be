@@ -10,7 +10,7 @@ import {
   signupStudent,
 } from "./support/flows";
 
-describe("시나리오 3: 탈퇴 → 유예기간 중 재로그인 시 취소", () => {
+describe("시나리오 3: 가입 완료 회원 즉시 탈퇴", () => {
   let ctx: E2eContext;
 
   beforeAll(async () => {
@@ -19,7 +19,7 @@ describe("시나리오 3: 탈퇴 → 유예기간 중 재로그인 시 취소", 
   beforeEach(() => ctx.reset());
   afterAll(() => ctx.close());
 
-  it("탈퇴하면 토큰이 폐기되고 목록에서 사라지며, 재로그인하면 복구됨", async () => {
+  it("탈퇴하면 토큰과 OAuth 연결이 지워지고, 다음 로그인은 새 가입이 됨", async () => {
     const graduatedSession = await signupGraduated(ctx);
     const studentSession = await signupStudent(ctx);
     const { id: userPk } = await getInfo(ctx, graduatedSession);
@@ -39,8 +39,9 @@ describe("시나리오 3: 탈퇴 → 유예기간 중 재로그인 시 취소", 
       .select()
       .from(users)
       .where(eq(users.pk, userPk));
-    expect(withdrawing.withdrawRequestedAt).not.toBeNull();
-    expect(withdrawing.isDeleted).toBe(false);
+    expect(withdrawing.isDeleted).toBe(true);
+    expect(withdrawing.name).toBeNull();
+    expect(withdrawing.email).toBeNull();
 
     // 모든 기기 로그아웃
     await http(ctx)
@@ -48,7 +49,7 @@ describe("시나리오 3: 탈퇴 → 유예기간 중 재로그인 시 취소", 
       .send({ refresh_token: graduatedSession.refreshToken })
       .expect(401);
 
-    // 유예기간 중에는 다른 회원에게 보이지 않고 요청도 못 받음
+    // 탈퇴 완료 유저는 다른 회원에게 보이지 않고 요청도 못 받음
     const hidden = await http(ctx)
       .get("/api/v1/cheers")
       .set("Authorization", bearer(studentSession))
@@ -60,26 +61,22 @@ describe("시나리오 3: 탈퇴 → 유예기간 중 재로그인 시 취소", 
       .send({ graduated_id: graduatedId, message: "질문" })
       .expect(404);
 
-    // 다시 로그인하면 같은 계정으로 돌아옴
+    // OAuth 연결을 지웠으므로 다시 로그인하면 새 가입이 시작됨
     const again = await login(ctx, "graduated", graduatedSession.sub);
     const info = await getInfo(ctx, again);
-    expect(info).toMatchObject({ id: userPk, status: "active" });
+    expect(info).toMatchObject({ status: "pending" });
+    expect(info.id).not.toBe(userPk);
 
-    const [restored] = await ctx.db
+    const [withdrawn] = await ctx.db
       .select()
       .from(users)
       .where(eq(users.pk, userPk));
-    expect(restored.withdrawRequestedAt).toBeNull();
+    expect(withdrawn.isDeleted).toBe(true);
 
     const after = await http(ctx)
       .get("/api/v1/cheers")
       .set("Authorization", bearer(studentSession))
       .expect(200);
-    expect(after.body.items[0].graduated_id).toBe(graduatedId);
-    await http(ctx)
-      .post("/api/v1/cheers/request")
-      .set("Authorization", bearer(studentSession))
-      .send({ graduated_id: graduatedId, message: "질문" })
-      .expect(201);
+    expect(after.body.total).toBe(0);
   });
 });

@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title POST /api/v1/user/oauth/login
-caption CRB-10, CRB-52, CRB-86 · OAuth 토큰 검증, 최초 가입 / 재로그인 유형 처리, 토큰 발급 (이름은 OAuth에서 받지 않고 추가 정보 입력에서 받음, 프로필 이미지 URL은 google에서만 받아 저장)
+caption CRB-10, CRB-52, CRB-86, CRB-98 · OAuth 토큰 검증, 최초 가입 / 재로그인 유형 처리, 토큰 발급 (이름은 OAuth에서 받지 않고 추가 정보 입력에서 받음, 프로필 이미지 URL은 google에서만 받아 저장)
 
 actor Client
 participant "ValidationPipe" as Pipe
@@ -99,10 +99,10 @@ group transaction (DatabaseService.db.transaction)
       Service -> GraduatedRepository: insert(userPk, tx)
     end
   else 계정 있음
-    opt 탈퇴 유예기간 중 (withdraw_requested_at 있음)
+    opt pending 탈퇴 유예기간 중 (withdraw_requested_at 있음)
       Service -> UserRepository: cancelWithdrawal(pk, tx)
       UserRepository -> PostgreSQL: UPDATE users SET withdraw_requested_at = NULL
-      note right: 다시 로그인하면 탈퇴 취소.\n스케줄러는 FOR UPDATE SKIP LOCKED라\n로그인 중인 유저를 건너뜀
+      note right: 가입 중(pending) 유저만 다시 로그인하면 탈퇴 취소.\nactive 유저는 즉시 탈퇴되어 OAuth 연결이 없으므로\n다음 로그인은 신규 가입. 스케줄러는 FOR UPDATE SKIP LOCKED라\n로그인 중인 pending 유저를 건너뜀
     end
     Service -> UserOauthAccountRepository: updateLastLogin(provider, sub, email, tx)
     UserOauthAccountRepository -> PostgreSQL: UPDATE user_oauth_account SET last_login_at\n(email은 받았을 때만)

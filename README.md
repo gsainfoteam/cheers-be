@@ -146,7 +146,7 @@ staging에서는 pod 안에서 `bun run db:seed:dev`를 실행합니다. product
 
 ### 회원 완전탈퇴 (개발용)
 
-탈퇴는 유예기간(`WITHDRAWAL_GRACE_DAYS`) 뒤에 처리되어 같은 Google 계정으로 바로 다시 가입할 수 없습니다. staging에서는 어드민의 "완전탈퇴 (개발용)" 메뉴(superadmin)에서 회원과 하위 데이터 · 첨부 · 명함 파일을 바로 지울 수 있습니다. 이 회원이 주고받은 커피챗 요청은 상대방 기록에서도 사라집니다.
+가입을 완료한 회원은 탈퇴 요청 즉시 개인정보와 OAuth 연결이 정리되어 같은 Google 계정으로 새 가입할 수 있습니다. 가입 중 계정은 24시간 동안 활동이 없으면 정리 스케줄러가 삭제합니다. staging에서는 어드민의 "완전탈퇴 (개발용)" 메뉴(superadmin)에서 회원과 하위 데이터 · 첨부 · 명함 파일을 바로 지울 수 있습니다. 이 회원이 주고받은 커피챗 요청은 상대방 기록에서도 사라집니다.
 
 - API(`/api/manager/v1/dev/user`)는 서버 env `DEV_USER_DELETE_ENABLED=true`일 때만 열리고, 아니면 404입니다. production에는 넣지 않습니다.
 - 메뉴는 어드민 빌드 인자 `VITE_DEV_USER_DELETE_ENABLED=true`일 때만 보입니다 (`staging.yml`에서만 켬).
