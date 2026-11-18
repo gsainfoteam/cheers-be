@@ -21,6 +21,7 @@ import {
 const SCHOOLS = "/api/manager/v1/school";
 const GIST_PK = 1;
 const GIST_DOMAIN = "gm.gist.ac.kr";
+const GIST_DOMAINS = [GIST_DOMAIN, "gist.ac.kr"];
 const DEPARTMENTS = `${SCHOOLS}/${GIST_PK}/department`;
 const EMAIL_DOMAINS = `${SCHOOLS}/${GIST_PK}/email-domain`;
 const STUDENT_DEPARTMENTS = "/api/v1/user/student/departments";
@@ -53,10 +54,10 @@ describe("school · department admin", () => {
     }
     await ctx.db
       .delete(schoolEmailDomain)
-      .where(notInArray(schoolEmailDomain.domain, [GIST_DOMAIN]));
+      .where(notInArray(schoolEmailDomain.domain, GIST_DOMAINS));
     await ctx.db
       .insert(schoolEmailDomain)
-      .values({ schoolPk: GIST_PK, domain: GIST_DOMAIN })
+      .values(GIST_DOMAINS.map((domain) => ({ schoolPk: GIST_PK, domain })))
       .onConflictDoNothing({ target: schoolEmailDomain.domain });
     await ctx.db.delete(school).where(notInArray(school.pk, [GIST_PK]));
   };
@@ -140,7 +141,7 @@ describe("school · department admin", () => {
         .set("Authorization", adminAuth)
         .expect(200);
       expect(list.body).toEqual([
-        { pk: GIST_PK, name: "GIST", email_domains: [GIST_DOMAIN] },
+        { pk: GIST_PK, name: "GIST", email_domains: GIST_DOMAINS },
       ]);
 
       await addDepartment("어드민이 추가한 학과");
@@ -148,7 +149,7 @@ describe("school · department admin", () => {
       const res = await http(ctx)
         .put(EMAIL_DOMAINS)
         .set("Authorization", adminAuth)
-        .send({ email_domains: [GIST_DOMAIN, "new.ac.kr"] })
+        .send({ email_domains: [...GIST_DOMAINS, "new.ac.kr"] })
         .expect(403);
       expect(res.body.message).toBe("Superadmin privilege is required.");
     });
@@ -368,13 +369,14 @@ describe("school · department admin", () => {
         .send({ email_domains });
 
     it("도메인을 추가하면 그 도메인으로 인증하고 같은 학교의 학과를 받음", async () => {
-      const res = await putDomains([GIST_DOMAIN, "Student.GIST.ac.kr"]).expect(
-        200,
-      );
+      const res = await putDomains([
+        ...GIST_DOMAINS,
+        "Student.GIST.ac.kr",
+      ]).expect(200);
       expect(res.body).toEqual({
         pk: GIST_PK,
         name: "GIST",
-        email_domains: [GIST_DOMAIN, "student.gist.ac.kr"],
+        email_domains: [...GIST_DOMAINS, "student.gist.ac.kr"],
       });
 
       const session = await login(ctx, "student");
@@ -408,7 +410,9 @@ describe("school · department admin", () => {
       await ctx.db
         .insert(schoolEmailDomain)
         .values({ schoolPk: 2, domain: "other.ac.kr" });
-      const res = await putDomains([GIST_DOMAIN, "other.ac.kr"]).expect(409);
+      const res = await putDomains([...GIST_DOMAINS, "other.ac.kr"]).expect(
+        409,
+      );
       expect(res.body.message).toBe(
         "Email domain is already used by another school.",
       );
@@ -418,16 +422,16 @@ describe("school · department admin", () => {
         .set("Authorization", superAuth)
         .expect(200);
       expect(list.body).toEqual([
-        { pk: GIST_PK, name: "GIST", email_domains: [GIST_DOMAIN] },
+        { pk: GIST_PK, name: "GIST", email_domains: GIST_DOMAINS },
         { pk: 2, name: "다른 학교", email_domains: ["other.ac.kr"] },
       ]);
     });
 
     it("인증을 마친 재학생이 있는 도메인은 뺄 수 없고, 없으면 뺄 수 있음", async () => {
-      await putDomains([GIST_DOMAIN, "extra.ac.kr"]).expect(200);
+      await putDomains([...GIST_DOMAINS, "extra.ac.kr"]).expect(200);
 
       // 아직 아무도 인증하지 않은 도메인은 뺄 수 있음
-      await putDomains([GIST_DOMAIN]).expect(200);
+      await putDomains(GIST_DOMAINS).expect(200);
 
       await signupStudent(ctx);
       const res = await putDomains(["new.ac.kr"]).expect(409);
@@ -436,16 +440,16 @@ describe("school · department admin", () => {
       );
       // 먼저 지운 행이 rollback되어 도메인이 그대로 남음
       const rows = await ctx.db.select().from(schoolEmailDomain);
-      expect(rows.map((r) => r.domain)).toEqual([GIST_DOMAIN]);
+      expect(rows.map((r) => r.domain)).toEqual(GIST_DOMAINS);
 
       // 뒷부분만 같은 도메인은 사용 중이 아님
-      await putDomains([GIST_DOMAIN, "gist.ac.kr"]).expect(200);
-      await putDomains([GIST_DOMAIN]).expect(200);
+      await putDomains([...GIST_DOMAINS, "student.gist.ac.kr"]).expect(200);
+      await putDomains(GIST_DOMAINS).expect(200);
     });
 
     it("진행 중인 인증 완료가 커밋될 때까지 기다렸다가 그 학생을 보고 409", async () => {
       const email = "racing@extra.ac.kr";
-      await putDomains([GIST_DOMAIN, "extra.ac.kr"]).expect(200);
+      await putDomains([...GIST_DOMAINS, "extra.ac.kr"]).expect(200);
       await login(ctx, "student");
       const [row] = await ctx.db.select().from(student);
 
@@ -470,7 +474,7 @@ describe("school · department admin", () => {
       await lockHeld;
 
       let settled = false;
-      const removing = putDomains([GIST_DOMAIN]).then((res) => {
+      const removing = putDomains(GIST_DOMAINS).then((res) => {
         settled = true;
         return res;
       });
@@ -487,13 +491,13 @@ describe("school · department admin", () => {
     });
 
     it("뺀 도메인은 새 인증이 막히고, 이미 받은 인증번호도 쓸 수 없음", async () => {
-      await putDomains([GIST_DOMAIN, "extra.ac.kr"]).expect(200);
+      await putDomains([...GIST_DOMAINS, "extra.ac.kr"]).expect(200);
       const email = "late@extra.ac.kr";
       const session = await login(ctx, "student");
       await agreeConsents(ctx, session);
       await sendCode(ctx, session, email);
 
-      await putDomains([GIST_DOMAIN]).expect(200);
+      await putDomains(GIST_DOMAINS).expect(200);
 
       const verify = await http(ctx)
         .post("/api/v1/user/student/verify/code")

@@ -116,6 +116,33 @@ describe("시나리오 1: 재학생 가입", () => {
     expect(res.body.error_code).toBe("EMAIL_ALREADY_REGISTERED");
   });
 
+  it("GIST의 gist.ac.kr 이메일도 인증하고 GIST 학과를 조회할 수 있음 (CRB-97)", async () => {
+    const email = "e2e-student@gist.ac.kr";
+    const session = await login(ctx, "student");
+    await agreeConsents(ctx, session);
+
+    await sendCode(ctx, session, email);
+    await http(ctx)
+      .post("/api/v1/user/student/verify/code")
+      .set("Authorization", bearer(session))
+      .send({ code: ctx.mail.latestVerificationCode(email) })
+      .expect(201);
+
+    expect((await getInfo(ctx, session)).student).toMatchObject({
+      email,
+      verified: true,
+    });
+    const departments = await http(ctx)
+      .get("/api/v1/user/student/departments")
+      .set("Authorization", bearer(session))
+      .expect(200);
+    expect(departments.body.departments).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 1, name: "기초교육학부" }),
+      ]),
+    );
+  });
+
   it("인증 메일 발송에 실패하면 502이고, 실패한 발송은 기록되지 않아 바로 다시 보낼 수 있음 (CRB-75)", async () => {
     const email = "e2e-mail-fail@gm.gist.ac.kr";
     const session = await login(ctx, "student");

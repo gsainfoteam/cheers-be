@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title POST /api/v1/user/student/verify/code
-caption CRB-31 · CRB-48 · CRB-53 · CRB-43 · 인증코드 확인. 성공 시 student.email · verified_at 기록, 5회 틀리면 무효. 실패는 전송 기록에 누적
+caption CRB-31 · CRB-48 · CRB-53 · CRB-43 · CRB-97 · 인증코드 확인. GIST의 gm.gist.ac.kr · gist.ac.kr를 같은 학교로 확인하고, 성공 시 student.email · verified_at 기록, 5회 틀리면 무효. 실패는 전송 기록에 누적
 
 actor Client
 participant "SignupStepGuard\nUserTypeGuard" as Guard
@@ -74,6 +74,10 @@ group transaction (DatabaseService.db.transaction)
   else HMAC(code) = 저장된 code
     Service -> SchoolRepository: findByEmailDomainForShare(verification.email 의 @ 뒤, tx)
     SchoolRepository -> PostgreSQL: SELECT s.* FROM school s JOIN school_email_domain sd ON sd.school_pk = s.pk\nWHERE sd.domain = ? FOR SHARE OF sd
+    note right of SchoolRepository
+      CRB-97: GIST(school_pk = 1)에 gm.gist.ac.kr와 gist.ac.kr를
+      별도 행으로 매핑한다. 둘 다 같은 학교의 학과 목록으로 이어진다.
+    end note
     note right: 커밋할 때까지 어드민이 이 도메인을 빼지 못하게 잡음.\n어드민이 먼저 지웠으면 그 커밋을 기다렸다가 0행
     alt 인증번호를 받은 뒤 어드민이 도메인을 뺌
       note over Service: 결과 = DOMAIN_NOT_ALLOWED\n(인증하면 학과를 고를 수 없어 가입이 막히므로 여기서 거름)

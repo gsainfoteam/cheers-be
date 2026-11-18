@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title POST /api/v1/user/student/verify/send-code
-caption CRB-31 · CRB-48 · CRB-53 · CRB-75 · gist 이메일로 6자리 인증코드 전송 (재전송도 같은 API, 이전 코드 무효). 최근 24시간 전송 상한 적용. 발송 실패 시 되돌리고 502
+caption CRB-31 · CRB-48 · CRB-53 · CRB-75 · CRB-97 · GIST 학교 이메일로 6자리 인증코드 전송 (gm.gist.ac.kr · gist.ac.kr, 재전송도 같은 API, 이전 코드 무효). 최근 24시간 전송 상한 적용. 발송 실패 시 되돌리고 502
 
 actor Client
 participant "SignupStepGuard\nUserTypeGuard" as Guard
@@ -45,6 +45,11 @@ Service -> SchoolRepository: findByEmailDomain(email의 @ 뒤)
 SchoolRepository -> PostgreSQL: SELECT s.* FROM school s JOIN school_email_domain sd ON sd.school_pk = s.pk\nWHERE sd.domain = ?
 PostgreSQL --> SchoolRepository: row
 SchoolRepository --> Service: school | null
+note right of SchoolRepository
+  CRB-97: GIST(school_pk = 1)의 허용 도메인은
+  gm.gist.ac.kr와 gist.ac.kr를 각각 저장한다.
+  도메인 전체를 정확히 일치 비교하므로 두 주소 형식 모두 같은 GIST 학교로 인증한다.
+end note
 alt 등록된 학교 도메인이 아님 (서브도메인 · 대소문자 차이 없이 정확히 일치해야 함)
   Service -[#red]-> Client: 400 Email domain not allowed
 end
