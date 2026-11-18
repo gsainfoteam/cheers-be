@@ -114,9 +114,52 @@ describe("WithdrawalService", () => {
   describe("request", () => {
     const ctx = new UserContext(USER_PK, "graduated", "active");
 
-    it("locks the user, starts the grace period and logs out every device without deleting data", async () => {
+    it("deletes an active user immediately after locking the user", async () => {
       userRepository.findByPkForUpdate.mockImplementation(
-        record("users.lock", userRow({ withdrawRequestedAt: null })),
+        record(
+          "users.lock",
+          userRow({ status: "active", withdrawRequestedAt: null }),
+        ),
+      );
+      userOauthAccountRepository.deleteByUserPk.mockImplementation(
+        record("oauth.delete"),
+      );
+      authService.revokeAllTokens.mockImplementation(record("revokeAll"));
+      coffeeChatContactRepository.deleteByUserPk.mockImplementation(
+        record("contact.delete"),
+      );
+      studentEmailSendLogRepository.deleteByUserPk.mockImplementation(
+        record("send_log.delete"),
+      );
+      userRepository.withdraw.mockImplementation(record("users.withdraw"));
+
+      await expect(createService().request(ctx)).resolves.toBe(
+        BaseResultDto.OK,
+      );
+
+      expect(calls).toEqual([
+        "users.lock",
+        "oauth.delete",
+        "revokeAll",
+        "contact.delete",
+        "send_log.delete",
+        "users.withdraw",
+      ]);
+      expect(userRepository.requestWithdrawal).not.toHaveBeenCalled();
+      expect(userRepository.withdraw).toHaveBeenCalledWith(USER_PK, tx);
+      expect(userOauthAccountRepository.deleteByUserPk).toHaveBeenCalledWith(
+        USER_PK,
+        tx,
+      );
+      expect(fileService.deleteFileQuietly).not.toHaveBeenCalled();
+    });
+
+    it("keeps the existing one-day grace period for a pending withdrawal request", async () => {
+      userRepository.findByPkForUpdate.mockImplementation(
+        record(
+          "users.lock",
+          userRow({ status: "pending", withdrawRequestedAt: null }),
+        ),
       );
       userRepository.requestWithdrawal.mockImplementation(record("request"));
       authService.revokeAllTokens.mockImplementation(record("revokeAll"));
@@ -132,7 +175,6 @@ describe("WithdrawalService", () => {
       );
       expect(userRepository.withdraw).not.toHaveBeenCalled();
       expect(userOauthAccountRepository.deleteByUserPk).not.toHaveBeenCalled();
-      expect(fileService.deleteFileQuietly).not.toHaveBeenCalled();
     });
 
     it("returns 401 when the user already withdrew or requested withdrawal", async () => {

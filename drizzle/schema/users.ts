@@ -57,8 +57,8 @@ export const users = pgTable(
     email: varchar("email", { length: 255 }),
     // 구글 로그인 때 받은 프로필 이미지 URL (구글 URL 그대로). 재로그인 때 받으면 갱신, 탈퇴 purge 때 제거
     pictureUrl: varchar("picture_url", { length: 2048 }),
-    // 회원 탈퇴 요청 시각. 유예기간(active: WITHDRAWAL_GRACE_DAYS, pending: 1일) 동안은 비활성,
-    // 그 안에 다시 로그인하면 null로 되돌림. 지나면 스케줄러가 개인정보 삭제 + is_deleted = true
+    // 기존 탈퇴 요청 시각. active는 CRB-98부터 요청 안에서 즉시 삭제되고,
+    // pending의 기존 요청만 1일 유예 후 스케줄러가 처리하며 재로그인하면 null로 되돌림
     withdrawRequestedAt: timestamp("withdraw_requested_at", {
       withTimezone: true,
     }),

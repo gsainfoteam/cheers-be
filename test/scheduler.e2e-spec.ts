@@ -51,12 +51,10 @@ describe("시나리오 4: 스케줄러 작업", () => {
       .set({ createdAt: at, lastActiveAt: at })
       .where(eq(users.pk, pk));
 
+  // CRB-98 뒤에는 active 탈퇴가 즉시 처리되므로, 기존 유예 행을 직접 만들어
+  // 이전 요청의 스케줄러 호환 처리를 검증한다.
   const withdraw = async (session: Session, at: Date): Promise<string> => {
     const pk = await userPkOf(session);
-    await http(ctx)
-      .post("/api/v1/user/withdraw")
-      .set("Authorization", bearer(session))
-      .expect(201);
     await ctx.db
       .update(users)
       .set({ withdrawRequestedAt: at })

@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title POST /api/v1/user/withdraw
-caption CRB-10 · 회원 탈퇴 요청: 유예기간 시작 + 모든 기기 로그아웃 (삭제는 flow/withdrawal-purge.puml)
+caption CRB-10, CRB-98 · 가입 중(pending)은 1일 유예, 가입 완료(active)는 즉시 탈퇴
 
 actor Client
 participant "AnyStatusGuard" as Guard
@@ -17,8 +17,16 @@ participant "UserController" as Controller
 participant "WithdrawalService" as Service
 participant "AuthService" as AuthService
 participant "UserRepository" as UserRepository
+participant "UserOauthAccountRepository" as UserOauthAccountRepository
 participant "RefreshTokenRepository" as RefreshTokenRepository
+participant "CoffeeChatContactRepository" as CoffeeChatContactRepository
+participant "StudentEmailSendLogRepository" as SendLogRepository
+participant "StudentRepository" as StudentRepository
+participant "StudentEmailVerificationRepository" as StudentEmailVerificationRepository
+participant "StudentProfileAttachmentRepository" as AttachmentRepository
+participant "GraduatedRepository" as GraduatedRepository
 database PostgreSQL
+participant "S3"
 
 Client -> Guard: POST /api/v1/user/withdraw\nAuthorization: Bearer <access token>
 ref over Client, Guard: authenticate() — flow/auth-guards.puml\n401 Missing access token / Token expired / Invalid token
@@ -39,26 +47,61 @@ group transaction (DatabaseService.db.transaction)
     Service -[#red]-> Client: 401 User not found
   end
 
-  Service -> UserRepository: requestWithdrawal(pk, tx)
-  UserRepository -> PostgreSQL: UPDATE users SET withdraw_requested_at = now()
-  note right
-    유예기간 시작. 가입을 마친(active) 유저는 WITHDRAWAL_GRACE_DAYS(기본 30일),
-    가입 중(pending)이면 1일. 개인정보는 아직 지우지 않음
-  end note
-  Service -> AuthService: revokeAllTokens(pk, tx)
-  AuthService -> RefreshTokenRepository: deleteByUserPk(pk, tx)
-  RefreshTokenRepository -> PostgreSQL: DELETE refresh_token
-  note right: 모든 기기에서 로그아웃
+  alt status = pending (가입 중)
+    Service -> UserRepository: requestWithdrawal(pk, tx)
+    UserRepository -> PostgreSQL: UPDATE users SET withdraw_requested_at = now()
+    note right
+      기존 API 호환 경로: 1일 유예기간 시작. 개인정보는 아직 지우지 않음.
+      프런트의 가입 이탈 정리는 이 API가 아니라 CleanupService의 24시간 스케줄러가 담당.
+      유예기간 안에 동일 OAuth 계정으로 로그인하면 탈퇴 취소 가능.
+    end note
+    Service -> AuthService: revokeAllTokens(pk, tx)
+    AuthService -> RefreshTokenRepository: deleteByUserPk(pk, tx)
+    RefreshTokenRepository -> PostgreSQL: DELETE refresh_token
+    note right: 모든 기기에서 로그아웃
+  else status = active (가입 완료 · 일반 사용자)
+    Service -> UserOauthAccountRepository: deleteByUserPk(pk, tx)
+    UserOauthAccountRepository -> PostgreSQL: DELETE user_oauth_account
+    Service -> AuthService: revokeAllTokens(pk, tx)
+    AuthService -> RefreshTokenRepository: deleteByUserPk(pk, tx)
+    Service -> CoffeeChatContactRepository: deleteByUserPk(pk, tx)
+    Service -> SendLogRepository: deleteByUserPk(pk, tx)
+    alt type = student
+      Service -> StudentRepository: findByUserPk(pk, tx)
+      opt 재학생 행이 있음
+        Service -> StudentEmailVerificationRepository: deleteByStudentPk(studentPk, tx)
+        Service -> StudentRepository: clearEmailByUserPk(pk, tx)
+        Service -> AttachmentRepository: deleteFilesByStudentPk(studentPk, tx)
+      end
+    else type = graduated
+      Service -> GraduatedRepository: findByUserPk(pk, tx)
+      opt business_card_key가 있음
+        Service -> GraduatedRepository: clearBusinessCardKey(graduatedPk, tx)
+      end
+    end
+    Service -> UserRepository: withdraw(pk, tx)
+    UserRepository -> PostgreSQL: UPDATE users SET is_deleted = true,\nname = NULL, email = NULL, picture_url = NULL
+    note right
+      즉시 탈퇴 완료. OAuth 연결도 함께 지워
+      같은 OAuth 계정으로 재가입할 수 있음.
+    end note
+  end
 end
 note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
+
+opt active 사용자의 명함 · 첨부 파일 key가 있음 (커밋 뒤)
+  Service -> S3: deleteFileQuietly(key)
+  note right: 실패하면 로그만 남김 (DB 참조는 이미 제거됨)
+end
 
 Service --> Controller: BaseResultDto.OK
 Controller --> Client: 201 { result: "OK" }
 note right of Client
-  유예기간 중에는 비활성: findByPk가 탈퇴 요청 유저를 찾지 않아
+  pending 유예기간 중에는 비활성: findByPk가 탈퇴 요청 유저를 찾지 않아
   GET /user/info · 토큰 갱신 · 가입 단계 API는 401 User not found.
   이미 발급된 access token은 만료(기본 1시간)까지 UserGuard를 통과할 수 있음.
-  유예기간 안에 같은 OAuth 계정으로 로그인하면 탈퇴 취소 (user/post-oauth-login.puml)
+  pending만 유예기간 안에 같은 OAuth 계정으로 로그인하면 탈퇴 취소
+  (user/post-oauth-login.puml). active는 즉시 탈퇴라 취소할 계정이 없음.
 end note
 
 @enduml

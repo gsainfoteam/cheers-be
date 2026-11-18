@@ -138,31 +138,23 @@ describe("어드민 현업자 명함 (가짜 S3)", () => {
       );
     });
 
-    it("탈퇴 유예기간은 표시하고 탈퇴 처리가 끝나면 뺌", async () => {
+    it("가입 완료 회원이 즉시 탈퇴하면 목록에서 바로 뺌", async () => {
       const auth = await loginManager(ctx, ADMIN, "admin");
       const session = await signupGraduated(ctx);
-      const { id } = await getInfo(ctx, session);
+      const { pk } = await graduatedRowOf(session);
       await http(ctx)
         .post("/api/v1/user/withdraw")
         .set("Authorization", bearer(session))
         .send({})
         .expect(201);
 
-      const during = await http(ctx)
-        .get(BASE)
-        .set("Authorization", auth)
-        .expect(200);
-      expect(during.body.items[0].signup_status).toBe("withdrawal_requested");
-
-      await ctx.db
-        .update(users)
-        .set({ isDeleted: true })
-        .where(eq(users.pk, id));
       const after = await http(ctx)
         .get(BASE)
         .set("Authorization", auth)
         .expect(200);
-      expect(after.body).toMatchObject({ items: [], total: 0 });
+      expect(after.body.items).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ graduated_pk: pk })]),
+      );
     });
 
     it("query 형식 오류는 400", async () => {

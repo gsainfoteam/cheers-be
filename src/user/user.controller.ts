@@ -65,9 +65,9 @@ export class UserController {
     return this.userService.logout(req, userCtx);
   }
 
-  /** 탈퇴 요청 (유예기간 뒤 삭제, 유예기간 안에 다시 로그인하면 취소) */
-  // 가입 중 이탈한 유저도 직접 탈퇴할 수 있도록 상태와 무관하게 허용.
-  // 바로 지우지 않고 유예기간 뒤 스케줄러가 삭제 (WithdrawalService)
+  /** 탈퇴 요청 (가입 완료 사용자는 즉시 삭제) */
+  // 가입 중 유저의 기존 요청 경로는 호환을 위해 유지하며 1일 뒤 스케줄러가 삭제.
+  // 가입 도중 이탈한 계정은 CleanupService가 24시간 뒤 별도로 정리.
   @Post("/withdraw")
   @UseGuards(AnyStatusGuard)
   @ApiAuth()
