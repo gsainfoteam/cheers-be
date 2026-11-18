@@ -21,9 +21,10 @@ const ALIGO_DELIVERED_RSLT = "0";
 
 // 템플릿 문구 · 코드 · 버튼 이름은 DB(alimtalk_template)에 있고 어드민에서 수정함 (CRB-78).
 // 알리고에 등록한 템플릿과 글자 하나까지 같아야 전송됨. 버튼 링크는 템플릿에 https://#{cheers_url}로 등록되어 있어서 WEB_BASE_URL은 https://로 시작해야 함
-// 버튼 링크 경로는 코드에 둠. cheers-fe의 신청 상세(/applications/{id})는 학생 · 현업자 공용
+// 버튼 링크 경로는 코드에 둠. type marker는 cheers-fe 안내 UI 선택용일 뿐 권한 판단에 쓰지 않음.
 const BUTTON_PATHS: Record<NotificationEvent, (pk: string) => string> = {
-  coffee_chat_requested: (pk) => `/applications/${encodeURIComponent(pk)}`,
+  coffee_chat_requested: (pk) =>
+    `/applications/${encodeURIComponent(pk)}?type=graduated`,
   contact_shared: (pk) => `/applications/${encodeURIComponent(pk)}`,
 };
 

@@ -1,0 +1,64 @@
+@startuml coffee-chat-notification-recipient-marker
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title 커피챗 요청 알림의 수신자 유형 marker
+caption CRB-100 · 선배 수신 링크에만 type=graduated를 전달
+
+actor "재학생" as Student
+participant "CheersStudentService" as Service
+participant "CheersNotificationBuilder" as Builder
+participant "NotificationService" as Notification
+participant "MailService" as Mail
+participant "AlimtalkService" as Alimtalk
+participant "SMTP" as SMTP
+participant "Aligo" as Aligo
+actor "선배" as Graduated
+participant "cheers-fe" as Frontend
+participant "Coffee-chat API\nUserGuard + UserTypeGuard" as Api
+
+Student -> Service: POST /api/v1/cheers/request
+note right of Service
+  요청은 기존 권한 · 대상 검증 · 저장을 마친 뒤 커밋한다.
+  marker는 이 API의 권한 판정이나 데이터 접근 제어에 쓰지 않는다.
+end note
+Service -> Builder: requested(requestPk, graduated recipient)
+Builder -> Builder: emailLink = WEB_BASE_URL/applications/{pk}?type=graduated
+Builder --> Service: NotifyInput(email, alimtalk)
+Service ->> Notification: notifyAsync(input)
+Notification -> Mail: MailService.send(email)
+Mail -> SMTP: 이메일 본문 · 버튼 URL = emailLink
+
+Notification -> Alimtalk: send({ event: coffee_chat_requested, pk, ... })
+Alimtalk -> Alimtalk: buttonLink = WEB_BASE_URL/applications/{pk}?type=graduated
+Alimtalk -> Aligo: button_1.linkMo · linkPc = buttonLink
+note right of Alimtalk
+  알림톡 버튼 URL은 DB 템플릿이 아닌 백엔드 코드가 조립한다.
+  이메일과 동일한 marker를 전달한다.
+end note
+
+Graduated -> Frontend: 이메일 또는 알림톡 링크 열기
+Frontend -> Frontend: type=graduated이면 선배용 화면/안내 선택
+note right of Frontend
+  query marker는 안내 UI 선택 전용이다.
+  클라이언트가 바꾸거나 추가해도 권한이 생기지 않는다.
+end note
+Frontend -> Api: 기존 요청 상세 API 호출\nAuthorization: Bearer <access token>
+Api -> Api: 토큰의 실제 user type · 요청 소유/수신 관계로 권한 확인
+alt 권한이 없는 학생 토큰
+  Api --> Frontend: 기존 403/404 권한 결과
+else 권한이 있는 선배 토큰
+  Api --> Frontend: 요청 상세
+end
+
+note over Builder, Alimtalk
+  이번 범위 밖: 선배가 재학생에게 보내는 contact_shared 링크에는
+  type=student를 추가하지 않고 기존 URL을 유지한다.
+end note
+@enduml

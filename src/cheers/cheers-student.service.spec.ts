@@ -330,7 +330,7 @@ describe("CheersStudentService", () => {
       });
       const { email } = lastNotified();
       expect(email?.text).toContain(
-        `https://cheers.example.com/applications/${requestPk}`,
+        `https://cheers.example.com/applications/${requestPk}?type=graduated`,
       );
     });
 

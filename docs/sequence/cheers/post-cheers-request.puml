@@ -71,11 +71,13 @@ note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후
 
 == 커밋 뒤 ==
 
-Service -> Service: 켜진 채널만 담음\nemail_enabled → buildCoffeeChatRequestedMail(contact.email, name,\n  link = WEB_BASE_URL/applications/<id>)\nkakao_enabled → { to: contact.phone,\n  variables: { recipientName: name, coffeeChatRequestPk } }
+Service -> Service: 켜진 채널만 담음\nemail_enabled → buildCoffeeChatRequestedMail(contact.email, name,\n  link = WEB_BASE_URL/applications/<id>?type=graduated)\nkakao_enabled → { to: contact.phone,\n  variables: { recipientName: name, coffeeChatRequestPk } }
 note right of Service
   WEB_BASE_URL: production에서 비어 있으면 서버 시작 실패,
   로컬에서 비어 있으면 링크 없이 발송.
   name이 null이면 "현업자"로 대체
+  type=graduated는 선배 수신 링크의 프런트 안내 UI 선택용이며,
+  API 권한 판정이나 데이터 접근 제어에는 사용하지 않음.
 end note
 Service ->> NotificationService: notifyAsync({ coffeeChatRequestPk, event: "coffee_chat_requested", email?, alimtalk? })
 note right

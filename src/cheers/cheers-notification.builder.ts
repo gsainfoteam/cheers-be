@@ -36,7 +36,7 @@ export class CheersNotificationBuilder {
     const contact = recipient.contact;
     const name = recipient.name ?? GRADUATED_FALLBACK_NAME;
     const link = this.webBaseUrl
-      ? `${this.webBaseUrl}/applications/${coffeeChatRequestPk}`
+      ? `${this.webBaseUrl}/applications/${coffeeChatRequestPk}?type=graduated`
       : null;
 
     return {

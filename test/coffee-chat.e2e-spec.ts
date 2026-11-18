@@ -90,6 +90,11 @@ describe("시나리오 2: 현업자 가입 → 재학생 목록 조회 → 커�
     await waitUntil(() =>
       ctx.mail.sent.some((m) => m.to === GRADUATED_CONTACT_EMAIL),
     );
+    expect(
+      ctx.mail.sent.find((m) => m.to === GRADUATED_CONTACT_EMAIL)?.text,
+    ).toContain(
+      `http://localhost:5173/applications/${created.body.id}?type=graduated`,
+    );
   });
 
   describe("알림 결과 기록", () => {

@@ -21,6 +21,7 @@
 | [flow/admin-audit.puml](flow/admin-audit.puml)                                                                                         | 어드민 감사 로그 기록 (변경 전 · 후 값, 같은 트랜잭션)                   |
 | [flow/alimtalk-template-lookup.puml](flow/alimtalk-template-lookup.puml)                                                               | 알림톡 발송 시 DB 템플릿 조회                                            |
 | [flow/alimtalk-template-lookup.puml](flow/alimtalk-template-lookup.puml)                                                               | 알림톡 발송 시 DB 템플릿 조회 (캐시)                                     |
+| [flow/coffee-chat-notification-recipient-marker.puml](flow/coffee-chat-notification-recipient-marker.puml)                             | 커피챗 요청 알림의 선배 수신자 유형 marker                               |
 | [flow/aligo-low-balance-alert.puml](flow/aligo-low-balance-alert.puml)                                                                 | 알리고 잔여량 부족 Slack 알림 스케줄러                                   |
 | [flow/manager-guards.puml](flow/manager-guards.puml)                                                                                   | 매니저 가드                                                              |
 | [flow/admin-company-logo-preview.puml](flow/admin-company-logo-preview.puml)                                                           | 어드민 회사 로고 수정 후 사원증 미리보기 (화면 안, 새 API 없음)          |
