@@ -51,6 +51,5 @@ end
 
 == 재발 방지 ==
 Swagger -> Swagger: swagger.config.spec.ts\n① GET /cheers/sent/{id} 응답의 graduated가 RequestGraduatedDetailDto인지 확인\n② 모든 DTO에서 자식이 부모와 같은 이름의 필드를 선언하면 실패
-note right: 규칙은 AGENTS.md에도 기록
 
 @enduml

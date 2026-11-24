@@ -19,7 +19,7 @@ export class RequestGraduatedDetailDto extends RequestGraduatedDto {
 }
 
 // graduated의 타입이 목록 · 상세에서 달라 여기에는 두지 않음.
-// 상속한 필드의 타입을 다시 선언하면(declare 포함) Swagger가 부모 타입으로 보여 줌 (CRB-105, AGENTS.md)
+// 상속한 필드의 타입을 다시 선언하면(declare 포함) Swagger가 부모 타입으로 보여 줌 (CRB-105)
 export class SentRequestBaseDto {
   id: string;
   /** 현업자가 탈퇴했거나 탈퇴 유예기간 중이면 true (프론트는 탈퇴 안내를 보여 줌) */
