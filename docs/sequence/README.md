@@ -25,6 +25,7 @@
 | [flow/aligo-low-balance-alert.puml](flow/aligo-low-balance-alert.puml)                                                                 | 알리고 잔여량 부족 Slack 알림 스케줄러                                   |
 | [flow/manager-guards.puml](flow/manager-guards.puml)                                                                                   | 매니저 가드                                                              |
 | [flow/admin-company-logo-preview.puml](flow/admin-company-logo-preview.puml)                                                           | 어드민 회사 로고 수정 후 사원증 미리보기 (화면 안, 새 API 없음)          |
+| [flow/swagger-dto-inheritance.puml](flow/swagger-dto-inheritance.puml)                                                                 | Swagger 문서: DTO 상속과 필드 타입 재정의 (새 API 없음)                  |
 | [health/get-health.puml](health/get-health.puml)                                                                                       | `GET /health`                                                            |
 | [health/get-health-ready.puml](health/get-health-ready.puml)                                                                           | `GET /health/ready`                                                      |
 | [user/post-oauth-login.puml](user/post-oauth-login.puml)                                                                               | `POST /api/v1/user/oauth/login`                                          |
