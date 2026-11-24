@@ -1,7 +1,10 @@
+import { readdirSync } from "node:fs";
+import { join } from "node:path";
 import { INestApplication, Type } from "@nestjs/common";
 import { GUARDS_METADATA, PATH_METADATA } from "@nestjs/common/constants";
 import { ConfigService } from "@nestjs/config";
 import { DocumentBuilder, OpenAPIObject, SwaggerModule } from "@nestjs/swagger";
+import { SchemaObject } from "@nestjs/swagger/dist/interfaces/open-api-spec.interface";
 import { Test } from "@nestjs/testing";
 import * as request from "supertest";
 import { App } from "supertest/types";
@@ -227,5 +230,78 @@ describe("API document", () => {
       `#/components/schemas/${item}`,
     );
     expect(document.components?.schemas?.[item]).toBeDefined();
+  });
+
+  // 목록 API가 먼저 문서에 오르므로, 부모 필드를 다시 선언하면 부모 타입으로 보임 (CRB-105)
+  it("documents the detail DTO with its own graduated type", () => {
+    const schemas = document.components?.schemas ?? {};
+    const graduated = (schemas.SentRequestDetailDto as SchemaObject | undefined)
+      ?.properties?.graduated;
+
+    expect(graduated).toEqual({
+      $ref: "#/components/schemas/RequestGraduatedDetailDto",
+    });
+    expect(
+      Object.keys(
+        (schemas.RequestGraduatedDetailDto as SchemaObject).properties ?? {},
+      ),
+    ).toEqual(expect.arrayContaining(["company_logo_url", "links"]));
+    expect(
+      (schemas.SentRequestDto as SchemaObject).properties?.graduated,
+    ).toEqual({ $ref: "#/components/schemas/RequestGraduatedDto" });
+  });
+});
+
+// 자식 DTO가 부모와 같은 이름의 필드를 선언하면 Swagger는 읽는 순서에 따라 부모 타입을 보여 줌 (CRB-105).
+// 공통 필드만 담은 베이스 클래스로 나누고, 각 클래스가 자기 필드를 선언해야 함
+describe("DTO inheritance", () => {
+  const dtoFiles = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) return dtoFiles(path);
+      return entry.name.endsWith(".dto.ts") ? [path] : [];
+    });
+
+  const OPENAPI_METADATA_FACTORY = "_OPENAPI_METADATA_FACTORY";
+  type DtoClass = {
+    name: string;
+    [OPENAPI_METADATA_FACTORY]?: () => Record<string, unknown>;
+  };
+
+  const ownFields = (dto: DtoClass): string[] =>
+    Object.prototype.hasOwnProperty.call(dto, OPENAPI_METADATA_FACTORY)
+      ? Object.keys(dto[OPENAPI_METADATA_FACTORY]!())
+      : [];
+
+  it("never redeclares a field of the parent DTO", () => {
+    const dtos = new Set<DtoClass>();
+    for (const file of dtoFiles(join(__dirname, "../.."))) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const exported = require(file) as Record<string, unknown>;
+      for (const value of Object.values(exported)) {
+        if (typeof value === "function") dtos.add(value as unknown as DtoClass);
+      }
+    }
+    expect(dtos.size).toBeGreaterThan(0);
+
+    const redeclared: string[] = [];
+    for (const dto of dtos) {
+      const parent = Object.getPrototypeOf(dto) as DtoClass;
+      if (!parent?.name) continue;
+
+      const inherited = new Set<string>();
+      for (
+        let ancestor = parent;
+        ancestor?.name;
+        ancestor = Object.getPrototypeOf(ancestor) as DtoClass
+      ) {
+        ownFields(ancestor).forEach((field) => inherited.add(field));
+      }
+      for (const field of ownFields(dto)) {
+        if (inherited.has(field)) redeclared.push(`${dto.name}.${field}`);
+      }
+    }
+
+    expect(redeclared).toEqual([]);
   });
 });

@@ -18,14 +18,19 @@ export class RequestGraduatedDetailDto extends RequestGraduatedDto {
   links: string[];
 }
 
-export class SentRequestDto {
+// graduated의 타입이 목록 · 상세에서 달라 여기에는 두지 않음.
+// 상속한 필드의 타입을 다시 선언하면(declare 포함) Swagger가 부모 타입으로 보여 줌 (CRB-105)
+export class SentRequestBaseDto {
   id: string;
-  graduated: RequestGraduatedDto;
   /** 현업자가 탈퇴했거나 탈퇴 유예기간 중이면 true (프론트는 탈퇴 안내를 보여 줌) */
   graduated_withdrawn: boolean;
   message: string;
   status: CoffeeChatRequestStatus;
   created_at: string;
+}
+
+export class SentRequestDto extends SentRequestBaseDto {
+  graduated: RequestGraduatedDto;
 }
 
 // 공유 시점의 현업자 연락처
@@ -37,8 +42,8 @@ export class SharedContactDto {
   shared_at: string;
 }
 
-export class SentRequestDetailDto extends SentRequestDto {
-  declare graduated: RequestGraduatedDetailDto;
+export class SentRequestDetailDto extends SentRequestBaseDto {
+  graduated: RequestGraduatedDetailDto;
   /** 공유 전이면 null */
   shared_contact: SharedContactDto | null;
 }

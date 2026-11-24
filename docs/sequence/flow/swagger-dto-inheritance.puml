@@ -1,0 +1,55 @@
+@startuml swagger-dto-inheritance
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title Swagger 문서: DTO 상속과 필드 타입 재정의
+caption CRB-105 · 상속한 DTO에서 부모 필드의 타입을 다시 선언(declare 포함)하면 Swagger에는 부모 타입이 나옴\n문서 생성 시점의 일이라 요청 처리 흐름과 응답 값은 바뀌지 않음 (nest-cli.json의 @nestjs/swagger 플러그인)
+
+participant "nest build\n(Swagger 플러그인)" as Plugin
+participant "DTO 클래스\n_OPENAPI_METADATA_FACTORY" as Dto
+participant "SwaggerModule\n.createDocument" as Swagger
+participant "ModelPropertiesAccessor" as Accessor
+
+== 빌드 ==
+Plugin -> Dto: DTO 파일마다 정적 메서드 추가\nSentRequestDto → { graduated: RequestGraduatedDto, ... }\nSentRequestDetailDto → { graduated: RequestGraduatedDetailDto, shared_contact }
+note right of Plugin
+  플러그인은 declare 필드도 읽으므로
+  자식의 타입은 빌드 결과에 제대로 들어 있음
+end note
+
+== 문서 생성 (서버 기동, SWAGGER_ENABLED=true) ==
+Swagger -> Accessor: 컨트롤러 순서대로 응답 DTO의 필드 읽기\n1. GET /cheers/sent → SentRequestDto
+Accessor -> Dto: 부모(SentRequestDto)의 factory 적용
+Accessor --> Swagger: SentRequestDto.graduated = RequestGraduatedDto
+note right of Accessor: 메타데이터가 SentRequestDto.prototype에 저장됨
+
+Swagger -> Accessor: 2. GET /cheers/sent/{id} → SentRequestDetailDto
+Accessor -> Dto: 자식 factory 적용 (이미 있는 값은 덮어쓰지 않는 모드)
+alt 자식이 부모 필드를 다시 선언함 (현재 코드)
+  Accessor -> Accessor: 프로토타입 체인을 따라 부모가 저장한 graduated 메타데이터를 찾음\n→ "이미 있음"으로 보고 자식 값을 버림
+  Accessor -[#red]-> Swagger: SentRequestDetailDto.graduated = RequestGraduatedDto\n(RequestGraduatedDetailDto의 company_logo_url · links가 문서에 없음)
+  note right of Accessor
+    순서 의존: 자식이 먼저 읽히면 정상으로 보임.
+    그래서 로컬에서 단독으로 보면 재현되지 않고,
+    목록 API가 상세 API보다 먼저 등록된 전체 문서에서만 틀림
+  end note
+else 자식이 부모 필드를 다시 선언하지 않음 (수정 후)
+  note over Accessor
+    SentRequestBaseDto: 공통 필드만 (graduated 없음)
+    SentRequestDto extends Base { graduated: RequestGraduatedDto }
+    SentRequestDetailDto extends Base { graduated: RequestGraduatedDetailDto, shared_contact }
+    → 읽는 순서와 상관없이 필드마다 타입이 하나뿐
+  end note
+  Accessor --> Swagger: SentRequestDetailDto.graduated = RequestGraduatedDetailDto
+end
+
+== 재발 방지 ==
+Swagger -> Swagger: swagger.config.spec.ts\n① GET /cheers/sent/{id} 응답의 graduated가 RequestGraduatedDetailDto인지 확인\n② 모든 DTO에서 자식이 부모와 같은 이름의 필드를 선언하면 실패
+
+@enduml
