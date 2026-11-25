@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title POST /api/v1/file/business-card/upload-url
-caption CRB-6 · 명함 사진을 S3에 직접 올릴 presigned PUT URL 발급 (가입 중인 현업자도 호출)
+caption CRB-6 · 명함 사진을 S3에 직접 올릴 presigned PUT URL 발급 (가입 중(추가 정보 입력 단계)인 현업자도 호출)
 
 actor Client
 participant "AnyStatusGuard\n+ UserTypeGuard" as Guard
@@ -21,7 +21,7 @@ participant "S3"
 Client -> Guard: POST /api/v1/file/business-card/upload-url\nAuthorization: Bearer <access token>\n{ content_type, size }
 ref over Client, Guard
   AnyStatusGuard, UserTypeGuard — flow/auth-guards.puml
-  @UserTypes(["graduated"]). 가입 중(pending)에도 통과 (명함 인증 단계에서 호출)
+  @UserTypes(["graduated"]). 가입 중(pending)에도 통과 (명함은 선택. 추가 정보 입력 단계 · 마이페이지에서 호출)
   401 Missing access token / Token expired / Invalid token
   403 User type not allowed (재학생)
 end ref

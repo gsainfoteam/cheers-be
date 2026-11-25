@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title POST /api/v1/user/graduated/verify/business-card
-caption CRB-32 · 명함 사진 등록 = 즉시 인증. 다시 등록하면 이전 명함을 대체 (가입 후 마이페이지에서도)
+caption CRB-32, CRB-107 · 명함 사진 등록 (선택). 가입 중에는 추가 정보 입력 단계에서, 가입 후에는 마이페이지에서 호출. 다시 등록하면 이전 명함을 대체
 
 actor Client
 participant "SignupStepGuard\nUserTypeGuard" as Guard
@@ -25,8 +25,8 @@ participant "S3"
 Client -> Guard: POST /api/v1/user/graduated/verify/business-card\nAuthorization: Bearer <access token>\n{ key }
 ref over Client, Guard
   SignupStepGuard → UserTypeGuard — flow/auth-guards.puml
-  @SignupStep({ step: "verify", allowActive: true })
-  pending: next_step = verify 일 때만 / active: 항상 통과 (마이페이지 명함 교체, 인증 취소 후 재업로드)
+  @SignupStep({ step: "profile", allowActive: true })
+  pending: next_step = profile 일 때만 (약관 동의 뒤. 현업자는 verify 단계가 없음, CRB-107) / active: 항상 통과 (마이페이지 명함 등록 · 교체)
   @UserTypes("graduated")
   401 Missing access token / Token expired / Invalid token / User not found
   403 Signup step mismatch / User type not allowed
@@ -81,7 +81,7 @@ group transaction (DatabaseService.db.transaction)
   Service -> GraduatedRepository: updateBusinessCard(graduated.pk, 최종 key, tx)
   GraduatedRepository -> PostgreSQL: UPDATE graduated SET business_card_key = ?,\nverified_at = now(), updated_at = now() WHERE pk = ?
   note right
-    별도 검수 없이 즉시 인증. 다시 등록하면 verified_at 도 새 시각으로
+    verified_at 은 기록만 함 (어드민 명함 관리용). 가입 · 재학생 노출 · 받은 요청 처리에는 쓰지 않음. 다시 등록하면 새 시각으로
   end note
 end
 note over Service, PostgreSQL: 트랜잭션 안의 예외는 전부 rollback 후 응답
@@ -96,7 +96,7 @@ alt 트랜잭션 실패 (401 · 403 포함)
   Service -[#red]-> Client: 원래 예외 (401 / 403 / 500)
 end
 
-opt 이전 명함 key 있음 (재등록. 인증 취소 뒤에는 key가 NULL이라 해당 없음: 취소된 파일은 고아 파일 정리가 지움)
+opt 이전 명함 key 있음 (재등록. 어드민이 인증을 취소한 뒤에는 key가 NULL이라 해당 없음: 취소된 파일은 고아 파일 정리가 지움)
   Service -> FileService: deleteFileQuietly(이전 key)
   FileService -> S3: DeleteObject
   note right of Service
@@ -108,8 +108,8 @@ end
 Service --> Controller: BaseResultDto.OK
 Controller --> Client: 201 { result: "OK" }
 note right of Client
-  가입 중이면 다음 단계는 next_step = profile. 인증 취소 후 재업로드한 active 현업자는 바로 next_step = null
-  (POST /api/v1/user/graduated/info)
+  명함 등록은 가입 단계가 아님. 가입 중 next_step 은 그대로 profile (명함을 올려도 안 올려도 같음)
+  가입을 끝내려면 POST /api/v1/user/graduated/info
 end note
 
 @enduml

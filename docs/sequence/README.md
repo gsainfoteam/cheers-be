@@ -7,6 +7,7 @@
 | 파일                                                                                                                                   | 내용                                                                     |
 | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | [flow/auth-guards.puml](flow/auth-guards.puml)                                                                                         | 공통 인증 · 가입 단계 · 유형 가드                                        |
+| [flow/graduated-signup-without-verify.puml](flow/graduated-signup-without-verify.puml)                                                 | 현업자 가입: 명함 인증 단계 생략 (CRB-107)                               |
 | [flow/withdrawal-purge.puml](flow/withdrawal-purge.puml)                                                                               | 스케줄러: 탈퇴 유예기간 만료 처리                                        |
 | [flow/cleanup-schedulers.puml](flow/cleanup-schedulers.puml)                                                                           | 스케줄러: 미완료 가입 · 만료 인증 데이터 정리                            |
 | [flow/s3-orphan-cleanup.puml](flow/s3-orphan-cleanup.puml)                                                                             | 스케줄러: DB에서 참조하지 않는 S3 파일 정리                              |

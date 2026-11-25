@@ -40,7 +40,7 @@ else
   CoffeeChatContactRepository --> Service: contact | null
 else
   Service -> UserRepository: findSignupProgress(userPk, claimType)
-  UserRepository -> PostgreSQL: 필수 약관 미동의 여부,\n유형별 인증(verified_at) · 추가 정보 존재 여부
+  UserRepository -> PostgreSQL: 필수 약관 미동의 여부,\n유형별 인증(verified_at, 재학생만 사용) · 추가 정보 존재 여부
   UserRepository --> Service: { hasMissingRequiredConsent, verified, hasProfile }
 else claimType = student
   Service -> StudentRepository: findByUserPkWithLatestProfile(userPk)
@@ -95,11 +95,11 @@ opt type = student이고 추가 정보가 있음
   end
 end
 
-Service -> Service: next_step = calculateNextStep(status, progress)\nconsent_required = active && hasMissingRequiredConsent
+Service -> Service: next_step = calculateNextStep(status, type, progress)\nconsent_required = active && hasMissingRequiredConsent
 note right of Service
-  pending: next_step으로 안내 (consent → verify → profile), consent_required = false
+  pending: next_step으로 안내 (재학생 consent → verify → profile, 현업자 consent → profile), consent_required = false
   active: next_step = null, 개정된 필수 약관에 동의하지 않았으면 consent_required = true
-  active지만 어드민이 명함 인증을 취소한 현업자: next_step = verify (재업로드하면 null). 추가 정보는 다시 받지 않음
+  현업자는 명함 인증 여부와 무관하게 verify 단계가 없음 (CRB-107). graduated.verified는 DB의 verified_at 그대로 응답만 함 (동작에 쓰지 않음)
   null 배열(activities, hashtags, links)은 []로 응답
 end note
 Service --> Controller: UserInfoDto

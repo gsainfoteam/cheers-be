@@ -1,0 +1,77 @@
+@startuml graduated-signup-without-verify
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title 현업자 가입: 명함 인증 단계 생략
+caption CRB-107 · 현업자는 약관 동의 → 추가 정보 입력으로 가입을 마침. 명함은 선택이며 verified_at 은 더 이상 동작 조건이 아님 (컬럼은 유지)
+
+actor "현업자" as Client
+participant "SignupStepGuard" as Guard
+participant "UserService\n(GET /user/info)" as UserService
+participant "GraduatedService" as Service
+participant "CheersGraduatedService\nGraduatedCardRepository" as Cheers
+database PostgreSQL
+
+== 1. 로그인 직후: next_step ==
+Client -> UserService: GET /api/v1/user/info
+UserService -> UserService: calculateNextStep(status, type, progress)
+note right of UserService
+  현업자 (type = graduated)
+  - pending: 필수 약관 미동의 → consent, 아니면 hasProfile 없음 → profile, 둘 다 있으면 null
+  - active: null (인증 취소와 무관)
+  - verified 는 보지 않음
+  재학생 (type = student): 변경 없음. consent → verify(학교 이메일) → profile
+end note
+UserService --> Client: { next_step, graduated: { verified, profile } }
+note right of Client
+  graduated.verified 필드는 유지. DB의 verified_at !== null 값 그대로 (동작에는 쓰지 않음)
+end note
+
+== 2. 약관 동의 → 추가 정보 입력 (verify 단계 없음) ==
+Client -> Guard: POST /api/v1/user/consent
+Guard -> Client: next_step = profile
+opt 명함을 올리고 싶음 (선택)
+  Client -> Guard: POST /api/v1/file/business-card/upload-url (AnyStatusGuard, 변경 없음)
+  Client -> Guard: POST /api/v1/user/graduated/verify/business-card\n@SignupStep({ step: "profile", allowActive: true })
+  note right of Guard
+    변경: step "verify" → "profile".
+    pending: next_step = profile 일 때만 통과, consent 단계는 403 Signup step mismatch
+    active: 통과 (마이페이지 등록 · 교체)
+  end note
+  Guard -> Service: verifyBusinessCard(userPk, key)
+  Service -> PostgreSQL: UPDATE graduated SET business_card_key, verified_at = now() (기존과 같음)
+  note right: next_step 은 그대로 profile
+end
+Client -> Guard: POST /api/v1/user/graduated/info
+Guard -> Service: saveInfo(userPk, req)
+Service -> PostgreSQL: graduated_profile upsert, users.status = active
+Service --> Client: 가입 완료 + 토큰 재발급
+
+== 3. 재학생에게 보이는 범위 ==
+Client -> Cheers: (재학생) GET /api/v1/cheers, POST /api/v1/cheers/request
+Cheers -> PostgreSQL: WHERE u.type = 'graduated' AND u.status = 'active' AND isActiveAccount\n(g.verified_at IS NOT NULL 조건 삭제)
+note right of Cheers
+  명함 없이 가입을 마친 현업자도 목록 · 상세 · 커피챗 요청 대상에 포함
+  GraduatedCardRepository: isVisibleGraduated, findRequestTarget
+end note
+
+== 4. 현업자 받은 요청 처리 ==
+Client -> Cheers: GET /cheers/received, GET /cheers/received/{id}, POST .../accept, POST .../share-contact
+note right of Cheers
+  assertVerified() 삭제. 403 Business card verification is required 는 더 이상 없음
+  가입을 마친(active) 현업자면 명함 · verified_at 과 무관하게 처리 가능
+end note
+
+== 5. 어드민 (변경 없음) ==
+note over Client, PostgreSQL
+  명함 목록 · 이미지 열람 · 인증 취소 · 대시보드 명함 인증 대기는 그대로.
+  인증 취소는 verified_at · 명함 key 만 지움 (서비스 이용에는 영향 없음)
+end note
+
+@enduml
