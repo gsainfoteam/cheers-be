@@ -52,7 +52,6 @@
 | [cheers/get-cheers-sent-id.puml](cheers/get-cheers-sent-id.puml)                                                                       | `GET /api/v1/cheers/sent/{id}`                                           |
 | [cheers/get-cheers-received.puml](cheers/get-cheers-received.puml)                                                                     | `GET /api/v1/cheers/received`                                            |
 | [cheers/get-cheers-received-id.puml](cheers/get-cheers-received-id.puml)                                                               | `GET /api/v1/cheers/received/{id}`                                       |
-| [cheers/post-cheers-received-id-accept.puml](cheers/post-cheers-received-id-accept.puml)                                               | `POST /api/v1/cheers/received/{id}/accept`                               |
 | [cheers/post-cheers-received-id-share-contact.puml](cheers/post-cheers-received-id-share-contact.puml)                                 | `POST /api/v1/cheers/received/{id}/share-contact`                        |
 | [manager/post-auth-login.puml](manager/post-auth-login.puml)                                                                           | `POST /api/manager/v1/auth/login`                                        |
 | [manager/get-auth-me.puml](manager/get-auth-me.puml)                                                                                   | `GET /api/manager/v1/auth/me`                                            |

@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title GET /api/manager/v1/dashboard/coffee-chat
-caption CRB-92 · 어드민 홈 대시보드 — 커피챗 요청 퍼널과 월별 추이. 읽기 전용, 기존 테이블만 집계 (신규 테이블 · 컬럼 없음). 개인정보를 내려주지 않아 access-log는 남기지 않음. 커피챗 요청 이력은 요청자가 탈퇴해도 그대로 셈
+caption CRB-92 · CRB-106 (수락 단계 제거: 확인 → 연락처 공유 기준) · 어드민 홈 대시보드 — 커피챗 요청 퍼널과 월별 추이. 읽기 전용, 기존 테이블만 집계 (신규 테이블 · 컬럼 없음). 개인정보를 내려주지 않아 access-log는 남기지 않음. 커피챗 요청 이력은 요청자가 탈퇴해도 그대로 셈
 
 actor Client
 participant "ManagerGuard" as Guard
@@ -32,11 +32,11 @@ note right of Service
 end note
 Service -> Repository: coffeeChatFunnel(from = now - range), monthlyRequests(6개월)
 par 동시에 조회
-  Repository -> PostgreSQL: SELECT count(*) 요청 수, count(graduated_viewed_at) 현업자 확인,\ncount(accepted_at) 수락, count(contact_shared_at) 연락처 공유, count(student_viewed_at) 재학생 확인\nFROM coffee_chat_request WHERE created_at >= from
+  Repository -> PostgreSQL: SELECT count(*) 요청 수, count(graduated_viewed_at) 현업자 확인,\ncount(contact_shared_at) 연락처 공유, count(student_viewed_at) 재학생 확인\nFROM coffee_chat_request WHERE created_at >= from
 else
-  Repository -> PostgreSQL: 단계 간 평균 소요시간\navg(graduated_viewed_at - created_at), avg(accepted_at - graduated_viewed_at), avg(contact_shared_at - accepted_at)
+  Repository -> PostgreSQL: 단계 간 평균 소요시간\navg(graduated_viewed_at - created_at), avg(contact_shared_at - graduated_viewed_at)
 else
-  Repository -> PostgreSQL: 방치 요청 수 (기준 3일)\n미확인: graduated_viewed_at IS NULL AND created_at < now - 3 days\n수락 대기: graduated_viewed_at < now - 3 days AND accepted_at IS NULL
+  Repository -> PostgreSQL: 방치 요청 수 (기준 3일)\n미확인: graduated_viewed_at IS NULL AND created_at < now - 3 days\n연락처 미공유: graduated_viewed_at < now - 3 days AND contact_shared_at IS NULL
 else
   Repository -> PostgreSQL: SELECT date_trunc('month', created_at AT TIME ZONE 'Asia/Seoul') AS month, count(*)\nFROM coffee_chat_request WHERE created_at >= 최근 6개월 시작 GROUP BY month ORDER BY month
 end
@@ -47,6 +47,6 @@ note right of Service
   월별 추이는 요청이 없는 달도 0으로 채워 6개월을 모두 내려줌
 end note
 Service --> Controller: ManagerDashboardCoffeeChatDto
-Controller --> Client: 200 {\n  range, generated_at,\n  funnel: { requested, graduated_viewed, accepted, contact_shared, student_viewed,\n    rates: { viewed, accepted, contact_shared }, avg_hours: { to_viewed, to_accepted, to_shared },\n    stale: { unviewed_3d, unaccepted_3d } },\n  monthly_requests: [{ month, count }] (6개)\n}
+Controller --> Client: 200 {\n  range, generated_at,\n  funnel: { requested, graduated_viewed, contact_shared, student_viewed,\n    rates: { viewed, contact_shared }, avg_hours: { to_viewed, to_shared },\n    stale: { unviewed_3d, unshared_3d } },\n  monthly_requests: [{ month, count }] (6개)\n}
 
 @enduml

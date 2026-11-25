@@ -51,7 +51,7 @@ else
 end
 note right of Service: 트랜잭션 없음 (조회만)
 
-Service -> Service: status 계산\ncontact_shared_at 있음 → "contact_shared"\ngraduated_viewed_at 있음 (수락 포함) → "viewed"\n(재학생에게는 수락 사실이 보이지 않음)\n그 외 → "requested"\ngraduated_withdrawn = NOT graduated_active\ngraduated_active = true → department (없으면 null), hashtags ?? []\n탈퇴 또는 유예 중 → department = null, hashtags = []
+Service -> Service: status 계산\ncontact_shared_at 있음 → "contact_shared"\ngraduated_viewed_at 있음 → "viewed"\n그 외 → "requested"\ngraduated_withdrawn = NOT graduated_active\ngraduated_active = true → department (없으면 null), hashtags ?? []\n탈퇴 또는 유예 중 → department = null, hashtags = []
 Service --> Controller: { items, page, size, total }
 Controller --> Client: 200 { items: SentRequestDto[] (graduated_withdrawn 포함), page, size, total }
 
