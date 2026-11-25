@@ -78,7 +78,11 @@ else status = pending
   PostgreSQL --> UserRepository: row
   UserRepository --> SignupStepService: { hasMissingRequiredConsent, verified, hasProfile }
   SignupStepService -> SignupStepService: calculateNextStep()
-  note right: consent → verify → profile 순서
+  note right
+    재학생: consent → verify → profile 순서
+    현업자: consent → profile 순서 (가입 중 verify 단계 없음, CRB-107)
+    active 현업자는 verified_at 이 NULL 이면 verify (어드민 인증 취소 뒤 재업로드)
+  end note
   SignupStepService --> Guard: nextStep
   alt nextStep ≠ @SignupStep.step
     Guard -[#red]-> Client: 403 Signup step mismatch: expected <nextStep>, got <step>

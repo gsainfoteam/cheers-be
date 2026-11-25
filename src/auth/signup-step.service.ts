@@ -15,6 +15,6 @@ export class SignupStepService {
       user.type,
       tx,
     );
-    return calculateNextStep(user.status, progress);
+    return calculateNextStep(user.status, user.type, progress);
   }
 }

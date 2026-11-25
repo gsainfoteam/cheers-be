@@ -25,7 +25,7 @@ import {
   Session,
   signupGraduated,
   signupStudent,
-  submitBusinessCard,
+  seedPendingBusinessCard,
   uploadAttachment,
   verifyStudentEmail,
 } from "./support/flows";
@@ -133,7 +133,7 @@ describe("시나리오 4: 스케줄러 작업", () => {
     it("pending 현업자의 명함 파일을 DB 커밋 뒤에 지움", async () => {
       const session = await login(ctx, "graduated");
       await agreeConsents(ctx, session);
-      await submitBusinessCard(ctx, session);
+      await seedPendingBusinessCard(ctx, session);
       const pk = await userPkOf(session);
       const [row] = await ctx.db
         .select()

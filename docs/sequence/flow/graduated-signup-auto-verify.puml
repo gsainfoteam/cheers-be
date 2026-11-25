@@ -1,0 +1,58 @@
+@startuml graduated-signup-auto-verify
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title 현업자 가입: 명함 인증 단계 생략, 가입 완료 시 자동 인증
+caption CRB-107 · 가입 중에는 명함을 받지 않고, 가입 완료 때 verified_at 을 자동으로 기록. 이후 어드민이 인증을 취소하면 기존처럼 명함을 다시 올려야 함
+
+actor "현업자" as Client
+actor "어드민" as Admin
+participant "SignupStepGuard" as Guard
+participant "GraduatedService" as Service
+participant "CheersGraduatedService\nGraduatedCardRepository" as Cheers
+database PostgreSQL
+
+== 1. 가입 (verify 단계 없음) ==
+Client -> Guard: POST /api/v1/user/consent
+Guard -> Client: next_step = profile\n(현업자 pending: consent → profile)
+Client -> Guard: POST /api/v1/user/graduated/info
+Guard -> Service: saveInfo(userPk, req)
+Service -> PostgreSQL: graduated_profile upsert, users.status = active
+Service -> PostgreSQL: UPDATE graduated SET verified_at = now()\nWHERE pk = ? AND verified_at IS NULL
+note right of Service
+  명함 없이 자동 인증 (business_card_key = NULL)
+  이미 명함으로 인증한 사람은 verified_at 을 덮어쓰지 않음
+end note
+Service --> Client: 가입 완료 + 토큰 재발급 (next_step = null, graduated.verified = true)
+
+== 2. 인증된 현업자 (기존 동작과 같음) ==
+Client -> Cheers: (재학생) 목록 · 상세 · 커피챗 요청 / (현업자) 받은 요청 처리
+Cheers -> PostgreSQL: g.verified_at IS NOT NULL 조건 유지, assertVerified 유지
+note right of Cheers: 가입을 마친 현업자는 verified_at 이 있으므로 그대로 노출 · 처리 가능
+
+== 3. 어드민이 인증을 요청 (기존 인증 취소 그대로) ==
+Admin -> PostgreSQL: POST /api/manager/v1/business-card/graduated/{pk}/cancel-verification\nUPDATE graduated SET verified_at = NULL, business_card_key = NULL
+note right of Admin
+  어드민 API · 화면 변경 없음. 취소 = 명함 인증 요청.
+  명함 없이 자동 인증된 사람도 취소할 수 있음 (verified_at 만 있으면 됨)
+end note
+
+== 4. 인증 요청을 받은 현업자 (기존 동작과 같음) ==
+Client -> Guard: GET /api/v1/user/info
+Guard --> Client: next_step = verify (active 이지만 verified_at = NULL)\n추가 정보 · 약관은 다시 받지 않음
+Client -> Guard: POST /api/v1/user/graduated/verify/business-card\n@SignupStep({ step: "verify", allowActive: true })
+Guard -> Service: verifyBusinessCard(userPk, key)
+Service -> PostgreSQL: UPDATE graduated SET business_card_key, verified_at = now()
+Service --> Client: 201 OK (next_step = null)
+note over Client, PostgreSQL
+  인증이 없는 동안(취소 ~ 재업로드): 재학생 목록 · 상세 · 요청 대상에서 숨김,
+  받은 요청 처리는 403 Business card verification is required
+end note
+
+@enduml

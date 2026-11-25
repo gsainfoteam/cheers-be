@@ -212,17 +212,17 @@ describe("개발용 seed (가짜 S3)", () => {
       ["dev-pending-student-verify", "verify"],
       ["dev-pending-student-profile", "profile"],
       ["dev-pending-graduated-consent", "consent"],
-      ["dev-pending-graduated-verify", "verify"],
+      ["dev-pending-graduated-verify", "profile"],
       ["dev-pending-graduated-profile", "profile"],
     ];
 
     for (const [label, nextStep] of expected) {
       const user = await devUser(`${label}@dev.cheers.local`);
       const progress = await repository.findSignupProgress(user.pk, user.type);
-      expect([label, calculateNextStep(user.status, progress)]).toEqual([
+      expect([
         label,
-        nextStep,
-      ]);
+        calculateNextStep(user.status, user.type, progress),
+      ]).toEqual([label, nextStep]);
     }
   });
 

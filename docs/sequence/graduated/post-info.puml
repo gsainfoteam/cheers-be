@@ -143,6 +143,13 @@ group transaction (DatabaseService.db.transaction)
   opt user.status = pending (이번 호출로 가입 완료)
     Service -> UserRepository: activate(userPk, tx)
     UserRepository -> PostgreSQL: UPDATE users SET status = 'active', updated_at = now()
+    Service -> GraduatedRepository: markVerifiedIfNull(graduated.pk, tx)
+    GraduatedRepository -> PostgreSQL: UPDATE graduated SET verified_at = now(), updated_at = now()\nWHERE pk = ? AND verified_at IS NULL
+    note right
+      CRB-107: 가입 완료 시 명함 없이 자동 인증. business_card_key 는 그대로 NULL.
+      이미 명함으로 인증한 경우(verified_at 있음)는 덮어쓰지 않음.
+      이후 어드민이 인증을 취소하면 기존처럼 명함을 다시 올려야 함
+    end note
     Service -> AuthService: issueTokens({ ...user, status: "active" }, tx)
     AuthService -> PostgreSQL: INSERT refresh_token, UPDATE users.last_active_at
     AuthService --> Service: { accessToken, refreshToken }

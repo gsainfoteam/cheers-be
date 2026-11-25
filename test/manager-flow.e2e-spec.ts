@@ -132,7 +132,6 @@ describe("어드민 종합 시나리오", () => {
       expect.objectContaining({ type: CONSENT_TYPE, version: CONSENT_VERSION }),
     );
     await agreeConsents(ctx, graduated);
-    await submitBusinessCard(ctx, graduated);
     const graduatedSignup = await app(graduated)
       .post(
         "/api/v1/user/graduated/info",
@@ -143,6 +142,8 @@ describe("어드민 종합 시나리오", () => {
       ...graduated,
       accessToken: graduatedSignup.body.access_token,
     };
+    // 가입을 마친 뒤 명함을 올려 둠 (어드민 열람 확인용, CRB-107)
+    await submitBusinessCard(ctx, graduatedSession);
     expect(
       (await getInfo(ctx, graduatedSession)).graduated.profile,
     ).toMatchObject({

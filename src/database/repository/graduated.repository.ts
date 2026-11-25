@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { DatabaseService } from "@src/database/database.service";
 import { TxType } from "@src/global/types/tx.types";
@@ -93,6 +93,18 @@ export class GraduatedRepository {
       .update(graduated)
       .set({ businessCardKey, verifiedAt: now, updatedAt: now })
       .where(eq(graduated.pk, graduatedPk));
+  }
+
+  /*
+  UPDATE graduated SET verified_at = now(), updated_at = now() WHERE pk = ?1 AND verified_at IS NULL;
+   */
+  // 가입 완료 시 명함 없이 자동 인증 (CRB-107). 이미 명함으로 인증했다면 verified_at을 덮어쓰지 않음
+  async markVerifiedIfNull(graduatedPk: string, tx: TxType): Promise<void> {
+    const now = new Date();
+    await tx
+      .update(graduated)
+      .set({ verifiedAt: now, updatedAt: now })
+      .where(and(eq(graduated.pk, graduatedPk), isNull(graduated.verifiedAt)));
   }
 
   /*
