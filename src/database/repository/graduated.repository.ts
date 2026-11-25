@@ -82,7 +82,7 @@ export class GraduatedRepository {
   /*
   UPDATE graduated SET business_card_key = ?2, verified_at = now(), updated_at = now() WHERE pk = ?1;
    */
-  // 명함 인증: 별도 검수 없이 즉시 인증. 다시 등록하면 verified_at도 새 시각으로
+  // 명함 등록: verified_at을 기록만 함 (어드민 명함 관리용). 다시 등록하면 새 시각으로
   async updateBusinessCard(
     graduatedPk: string,
     businessCardKey: string,

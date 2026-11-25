@@ -30,7 +30,7 @@ describe("파일 업로드 오류 (가짜 S3)", () => {
       .set("Authorization", bearer(session))
       .send({ key });
 
-  // 약관 동의까지 마친 현업자 (명함 제출 단계)
+  // 약관 동의까지 마친 현업자 (추가 정보 입력 단계. 명함은 선택)
   const graduatedAtCardStep = async () => {
     const session = await login(ctx, "graduated");
     await agreeConsents(ctx, session);
@@ -88,7 +88,7 @@ describe("파일 업로드 오류 (가짜 S3)", () => {
   });
 
   describe("업로드한 파일 제출", () => {
-    it("명함: 다른 유저의 key · 업로드하지 않은 key는 400이고 다음 단계로 넘어가지 않음", async () => {
+    it("명함: 다른 유저의 key · 업로드하지 않은 key는 400이고 verified_at이 채워지지 않음", async () => {
       const mine = await graduatedAtCardStep();
       const other = await graduatedAtCardStep();
       const card = { content_type: "image/jpeg", size: JPEG_BYTES.length };
@@ -102,7 +102,7 @@ describe("파일 업로드 오류 (가짜 S3)", () => {
 
       expect(await getInfo(ctx, mine)).toMatchObject({
         status: "pending",
-        next_step: "verify",
+        next_step: "profile",
       });
       // 다른 유저의 파일은 지우지 않음
       expect(ctx.s3.objects.has(othersUpload.body.key)).toBe(true);

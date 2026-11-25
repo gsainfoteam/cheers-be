@@ -176,7 +176,7 @@ export class UserService {
       id: user.pk,
       type: user.type,
       status: user.status,
-      next_step: calculateNextStep(user.status, progress),
+      next_step: calculateNextStep(user.status, user.type, progress),
       name: user.name,
       email: user.email,
       picture_url: user.pictureUrl,

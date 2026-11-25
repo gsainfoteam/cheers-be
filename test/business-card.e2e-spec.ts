@@ -289,7 +289,7 @@ describe("어드민 현업자 명함 (가짜 S3)", () => {
   });
 
   describe("인증 취소", () => {
-    it("취소 → 목록 · 새 요청에서 빠짐 → 받은 요청 403 → 재업로드하면 전부 복구, 이전 요청도 그대로", async () => {
+    it("취소해도 목록 · 새 요청 · 받은 요청 처리가 그대로이고 명함만 지워짐. 재업로드하면 verified 복구", async () => {
       const auth = await loginManager(ctx, SUPER, "superadmin");
       const session = await signupGraduated(ctx);
       const student = await signupStudent(ctx);
@@ -312,38 +312,42 @@ describe("어드민 현업자 명함 (가짜 S3)", () => {
       expect(ctx.s3.deletedKeys).toEqual([]);
       expect(ctx.s3.objects.has(oldKey as string)).toBe(true);
 
-      // 가입 단계: 계정은 active로 남고 다음 단계가 verify
+      // 가입 단계: 현업자는 verify 단계가 없어 next_step은 null. verified는 DB 값 그대로 (표시용)
       expect(await getInfo(ctx, session)).toMatchObject({
         status: "active",
-        next_step: "verify",
+        next_step: null,
         graduated: { verified: false, profile: { company: "인포테크" } },
       });
 
-      // 재학생 쪽: 목록에서 빠지고 새 요청은 404. 이미 보낸 요청은 남음
-      expect(await visibleIds(student)).toEqual([]);
+      // 재학생 쪽: verified_at을 보지 않으므로 목록에 그대로 보이고 새 요청도 가능
+      expect(await visibleIds(student)).toEqual([pk]);
       await http(ctx)
         .post("/api/v1/cheers/request")
         .set("Authorization", bearer(student))
         .send({ graduated_id: pk, message: "또 질문" })
-        .expect(404);
+        .expect(201);
       await http(ctx)
         .get(`/api/v1/cheers/sent/${requestId}`)
         .set("Authorization", bearer(student))
         .expect(200);
 
-      // 현업자 쪽: 기존 access token(active)으로도 받은 요청 처리 불가
-      for (const call of [
-        () => http(ctx).get("/api/v1/cheers/received"),
-        () => http(ctx).get(`/api/v1/cheers/received/${requestId}`),
-        () => http(ctx).post(`/api/v1/cheers/received/${requestId}/accept`),
-        () =>
-          http(ctx).post(`/api/v1/cheers/received/${requestId}/share-contact`),
-      ]) {
-        const res = await call()
-          .set("Authorization", bearer(session))
-          .expect(403);
-        expect(res.body.message).toBe("Business card verification is required");
-      }
+      // 현업자 쪽: 받은 요청 처리도 그대로
+      await http(ctx)
+        .get("/api/v1/cheers/received")
+        .set("Authorization", bearer(session))
+        .expect(200);
+      await http(ctx)
+        .get(`/api/v1/cheers/received/${requestId}`)
+        .set("Authorization", bearer(session))
+        .expect(200);
+      await http(ctx)
+        .post(`/api/v1/cheers/received/${requestId}/accept`)
+        .set("Authorization", bearer(session))
+        .expect(200);
+      await http(ctx)
+        .post(`/api/v1/cheers/received/${requestId}/share-contact`)
+        .set("Authorization", bearer(session))
+        .expect(200);
 
       // 명함 조회 404, 다시 취소하면 409
       await http(ctx)
@@ -352,7 +356,7 @@ describe("어드민 현업자 명함 (가짜 S3)", () => {
         .expect(404);
       await cancel(auth, pk).expect(409);
 
-      // 재업로드: 추가 정보 없이 바로 복구
+      // 재업로드: verified_at 복구
       await submitBusinessCard(ctx, session);
       const reverified = await graduatedRowOf(session);
       expect(reverified.verifiedAt).not.toBeNull();
@@ -362,15 +366,6 @@ describe("어드민 현업자 명함 (가짜 S3)", () => {
         next_step: null,
         graduated: { verified: true },
       });
-      expect(await visibleIds(student)).toEqual([pk]);
-      await http(ctx)
-        .post(`/api/v1/cheers/received/${requestId}/accept`)
-        .set("Authorization", bearer(session))
-        .expect(200);
-      await http(ctx)
-        .post(`/api/v1/cheers/received/${requestId}/share-contact`)
-        .set("Authorization", bearer(session))
-        .expect(200);
     });
 
     it("access token을 다시 받아도 active. 토큰 갱신 · 로그인이 막히지 않음", async () => {
@@ -386,18 +381,18 @@ describe("어드민 현업자 명함 (가짜 S3)", () => {
       const next = { ...session, accessToken: refreshed.body.access_token };
       expect(await getInfo(ctx, next)).toMatchObject({
         status: "active",
-        next_step: "verify",
+        next_step: null,
       });
 
       // 다른 유형으로 로그인해도 active라 유형이 바뀌지 않고, 받은 요청이 있어도 지우지 않음
       const again = await login(ctx, "student", session.sub);
       expect(await getInfo(ctx, again)).toMatchObject({
         type: "graduated",
-        next_step: "verify",
+        next_step: null,
       });
     });
 
-    it("가입 중인 현업자를 취소하면 다시 verify 단계", async () => {
+    it("가입 중인 현업자를 취소해도 next_step은 profile 그대로", async () => {
       const auth = await loginManager(ctx, SUPER, "superadmin");
       const session = await login(ctx, "graduated");
       await agreeConsents(ctx, session);
@@ -409,7 +404,7 @@ describe("어드민 현업자 명함 (가짜 S3)", () => {
 
       expect(await getInfo(ctx, session)).toMatchObject({
         status: "pending",
-        next_step: "verify",
+        next_step: "profile",
       });
       await submitBusinessCard(ctx, session);
       expect((await getInfo(ctx, session)).next_step).toBe("profile");

@@ -82,7 +82,7 @@ export class BusinessCardService {
   }
 
   // users.status는 그대로 둠: pending으로 되돌리면 재업로드 뒤 가입을 끝낼 길이 없고, 미완료 가입 정리가 계정을 지움.
-  // 재학생 쪽 노출과 받은 요청 처리는 verified_at으로 막음 (GraduatedCardRepository, CheersGraduatedService).
+  // verified_at은 가입 단계 · 재학생 노출 · 받은 요청 처리에 쓰지 않으므로 취소해도 서비스 이용에는 영향 없음 (CRB-107).
   // S3 파일은 참조만 없애고 OrphanFileService에 맡김
   async cancelVerification(
     graduatedPk: string,

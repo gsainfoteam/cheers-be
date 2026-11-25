@@ -209,6 +209,16 @@ export const graduatedInfoBody = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+// 명함을 올리지 않고 가입 (명함 인증 단계 없음)
+export async function signupGraduatedWithoutCard(
+  ctx: E2eContext,
+  overrides: Record<string, unknown> = {},
+): Promise<Session> {
+  const session = await login(ctx, "graduated");
+  await agreeConsents(ctx, session);
+  return saveGraduatedInfo(ctx, session, overrides);
+}
+
 export async function signupGraduated(
   ctx: E2eContext,
   overrides: Record<string, unknown> = {},
@@ -216,6 +226,14 @@ export async function signupGraduated(
   const session = await login(ctx, "graduated");
   await agreeConsents(ctx, session);
   await submitBusinessCard(ctx, session);
+  return saveGraduatedInfo(ctx, session, overrides);
+}
+
+async function saveGraduatedInfo(
+  ctx: E2eContext,
+  session: Session,
+  overrides: Record<string, unknown>,
+): Promise<Session> {
   const res = await http(ctx)
     .post("/api/v1/user/graduated/info")
     .set("Authorization", bearer(session))

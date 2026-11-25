@@ -20,7 +20,7 @@ export class FileController {
   constructor(private readonly fileService: FileService) {}
 
   /** 명함 업로드용 presigned PUT URL 발급 */
-  // 명함 인증은 가입 단계라 가입 중(pending)인 현업자도 호출
+  // 명함은 선택이지만 가입 중(추가 정보 입력 단계)에도 올릴 수 있어 pending인 현업자도 호출
   @Post("/business-card/upload-url")
   @UseGuards(AnyStatusGuard, UserTypeGuard)
   @UserTypes(["graduated"])

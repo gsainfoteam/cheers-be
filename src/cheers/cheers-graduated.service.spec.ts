@@ -1,6 +1,5 @@
 import {
   ConflictException,
-  ForbiddenException,
   GoneException,
   NotFoundException,
 } from "@nestjs/common";
@@ -15,7 +14,6 @@ import {
   ReceivedRequestRow,
   StudentContact,
 } from "@src/database/repository/coffee-chat-request.repository";
-import { GraduatedRepository } from "@src/database/repository/graduated.repository";
 import { UserRepository } from "@src/database/repository/user.repository";
 import { FileService } from "@src/file/file.service";
 import { TxType } from "@src/global/types/tx.types";
@@ -127,7 +125,6 @@ describe("CheersGraduatedService", () => {
   };
   const coffeeChatContactRepository = { findByUserPk: jest.fn() };
   const userRepository = { findByPk: jest.fn() };
-  const graduatedRepository = { findByUserPk: jest.fn() };
   const fileService = { getPresignedUrl: jest.fn() };
   const notificationService = {
     notifyAsync: jest.fn((_input: NotifyInput<"contact_shared">) => {
@@ -146,7 +143,6 @@ describe("CheersGraduatedService", () => {
       coffeeChatRequestRepository as unknown as CoffeeChatRequestRepository,
       coffeeChatContactRepository as unknown as CoffeeChatContactRepository,
       userRepository as unknown as UserRepository,
-      graduatedRepository as unknown as GraduatedRepository,
       fileService as unknown as FileService,
       notificationService as unknown as NotificationService,
       new CheersNotificationBuilder({
@@ -160,9 +156,6 @@ describe("CheersGraduatedService", () => {
     events.length = 0;
     coffeeChatContactRepository.findByUserPk.mockResolvedValue(myContact());
     userRepository.findByPk.mockResolvedValue({ name: "김철수" });
-    graduatedRepository.findByUserPk.mockResolvedValue({
-      verifiedAt: createdAt,
-    });
     coffeeChatRequestRepository.markContactShared.mockResolvedValue(sharedAt);
   });
 
@@ -171,42 +164,6 @@ describe("CheersGraduatedService", () => {
       expect(() =>
         createService({ WEB_BASE_URL: "", NODE_ENV: "production" }),
       ).toThrow("WEB_BASE_URL is required in production.");
-    });
-  });
-
-  describe("명함 인증이 취소된 현업자", () => {
-    beforeEach(() => {
-      graduatedRepository.findByUserPk.mockResolvedValue({ verifiedAt: null });
-    });
-
-    it("받은 요청 목록 · 상세 · 연락처 공유가 모두 403이고 요청을 읽지 않음", async () => {
-      const service = createService();
-
-      await expect(
-        service.getReceivedList(userPk, new PaginationQueryDto()),
-      ).rejects.toBeInstanceOf(ForbiddenException);
-      await expect(
-        service.getReceivedDetail(userPk, requestPk),
-      ).rejects.toBeInstanceOf(ForbiddenException);
-      await expect(
-        service.shareContact(userPk, requestPk),
-      ).rejects.toBeInstanceOf(ForbiddenException);
-      await expect(service.accept(userPk, requestPk)).rejects.toBeInstanceOf(
-        ForbiddenException,
-      );
-
-      expect(
-        coffeeChatRequestRepository.findReceivedPage,
-      ).not.toHaveBeenCalled();
-      expect(
-        coffeeChatRequestRepository.findReceivedByPk,
-      ).not.toHaveBeenCalled();
-      expect(
-        coffeeChatRequestRepository.findReceivedForShare,
-      ).not.toHaveBeenCalled();
-      expect(
-        coffeeChatRequestRepository.findReceivedForAccept,
-      ).not.toHaveBeenCalled();
     });
   });
 

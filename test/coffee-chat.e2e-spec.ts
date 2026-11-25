@@ -10,6 +10,7 @@ import {
   http,
   Session,
   signupGraduated,
+  signupGraduatedWithoutCard,
   signupStudent,
   waitUntil,
 } from "./support/flows";
@@ -95,6 +96,38 @@ describe("시나리오 2: 현업자 가입 → 재학생 목록 조회 → 커�
     ).toContain(
       `http://localhost:5173/applications/${created.body.id}?type=graduated`,
     );
+  });
+
+  it("명함 없이 가입한 현업자도 목록에 보이고 받은 요청을 처리함", async () => {
+    const graduatedSession = await signupGraduatedWithoutCard(ctx, {
+      nickname: "명함없음",
+    });
+    expect(await getInfo(ctx, graduatedSession)).toMatchObject({
+      status: "active",
+      next_step: null,
+      graduated: { verified: false },
+    });
+    const studentSession = await signupStudent(ctx);
+
+    const page = await list(studentSession);
+    expect(page.total).toBe(1);
+    const created = await http(ctx)
+      .post("/api/v1/cheers/request")
+      .set("Authorization", bearer(studentSession))
+      .send({ graduated_id: page.items[0].graduated_id, message: "질문" })
+      .expect(201);
+
+    const received = await http(ctx)
+      .get("/api/v1/cheers/received")
+      .set("Authorization", bearer(graduatedSession))
+      .expect(200);
+    expect(received.body.items.map((i: { id: string }) => i.id)).toEqual([
+      created.body.id,
+    ]);
+    await http(ctx)
+      .post(`/api/v1/cheers/received/${created.body.id}/accept`)
+      .set("Authorization", bearer(graduatedSession))
+      .expect(200);
   });
 
   describe("알림 결과 기록", () => {
