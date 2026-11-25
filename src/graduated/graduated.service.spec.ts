@@ -125,6 +125,7 @@ describe("GraduatedService", () => {
     findByUserPk: jest.fn(),
     findByUserPkWithProfile: jest.fn(),
     updateBusinessCard: jest.fn(),
+    markVerifiedIfNull: jest.fn(),
   };
   const graduatedProfileRepository = {
     upsert: jest.fn(),
@@ -300,6 +301,10 @@ describe("GraduatedService", () => {
         tx,
       );
       expect(userRepository.activate).toHaveBeenCalledWith(USER_PK, tx);
+      expect(graduatedRepository.markVerifiedIfNull).toHaveBeenCalledWith(
+        graduatedRow().pk,
+        tx,
+      );
       expect(authService.issueTokens).toHaveBeenCalledWith(
         expect.objectContaining({ pk: USER_PK, status: "active" }),
         tx,
@@ -328,6 +333,7 @@ describe("GraduatedService", () => {
         tx,
       );
       expect(userRepository.activate).not.toHaveBeenCalled();
+      expect(graduatedRepository.markVerifiedIfNull).not.toHaveBeenCalled();
       expect(authService.issueTokens).not.toHaveBeenCalled();
     });
 

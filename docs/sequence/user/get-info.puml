@@ -95,11 +95,12 @@ opt type = student이고 추가 정보가 있음
   end
 end
 
-Service -> Service: next_step = calculateNextStep(status, progress)\nconsent_required = active && hasMissingRequiredConsent
+Service -> Service: next_step = calculateNextStep(status, type, progress)\nconsent_required = active && hasMissingRequiredConsent
 note right of Service
-  pending: next_step으로 안내 (consent → verify → profile), consent_required = false
+  pending: next_step으로 안내 (재학생 consent → verify → profile, 현업자 consent → profile: 가입 중 명함 인증 없음, CRB-107), consent_required = false
   active: next_step = null, 개정된 필수 약관에 동의하지 않았으면 consent_required = true
   active지만 어드민이 명함 인증을 취소한 현업자: next_step = verify (재업로드하면 null). 추가 정보는 다시 받지 않음
+  현업자 가입 완료 시 verified_at 이 자동으로 기록되므로 graduated.verified 는 가입 직후 true
   null 배열(activities, hashtags, links)은 []로 응답
 end note
 Service --> Controller: UserInfoDto

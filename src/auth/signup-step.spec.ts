@@ -9,7 +9,7 @@ const done = {
 describe("calculateNextStep", () => {
   it("returns null for active users", () => {
     expect(
-      calculateNextStep("active", {
+      calculateNextStep("active", "student", {
         hasMissingRequiredConsent: true,
         verified: true,
         hasProfile: false,
@@ -18,14 +18,17 @@ describe("calculateNextStep", () => {
   });
 
   it("returns verify for active users whose verification was canceled", () => {
-    expect(calculateNextStep("active", { ...done, verified: false })).toBe(
-      "verify",
-    );
+    expect(
+      calculateNextStep("active", "graduated", { ...done, verified: false }),
+    ).toBe("verify");
+    expect(
+      calculateNextStep("active", "student", { ...done, verified: false }),
+    ).toBe("verify");
   });
 
   it("returns consent first when a required consent is missing", () => {
     expect(
-      calculateNextStep("pending", {
+      calculateNextStep("pending", "student", {
         hasMissingRequiredConsent: true,
         verified: false,
         hasProfile: false,
@@ -33,9 +36,9 @@ describe("calculateNextStep", () => {
     ).toBe("consent");
   });
 
-  it("returns verify after consent", () => {
+  it("returns verify after consent for students", () => {
     expect(
-      calculateNextStep("pending", {
+      calculateNextStep("pending", "student", {
         ...done,
         verified: false,
         hasProfile: false,
@@ -43,13 +46,36 @@ describe("calculateNextStep", () => {
     ).toBe("verify");
   });
 
-  it("returns profile after verify", () => {
-    expect(calculateNextStep("pending", { ...done, hasProfile: false })).toBe(
-      "profile",
-    );
+  it("returns profile after verify for students", () => {
+    expect(
+      calculateNextStep("pending", "student", { ...done, hasProfile: false }),
+    ).toBe("profile");
+  });
+
+  it("skips verify for graduated users", () => {
+    expect(
+      calculateNextStep("pending", "graduated", {
+        ...done,
+        verified: false,
+        hasProfile: false,
+      }),
+    ).toBe("profile");
+  });
+
+  it("returns consent first for graduated users", () => {
+    expect(
+      calculateNextStep("pending", "graduated", {
+        hasMissingRequiredConsent: true,
+        verified: false,
+        hasProfile: false,
+      }),
+    ).toBe("consent");
   });
 
   it("returns null when every step is done", () => {
-    expect(calculateNextStep("pending", done)).toBeNull();
+    expect(calculateNextStep("pending", "student", done)).toBeNull();
+    expect(
+      calculateNextStep("pending", "graduated", { ...done, verified: false }),
+    ).toBeNull();
   });
 });
