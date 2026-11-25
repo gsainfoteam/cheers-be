@@ -22,7 +22,6 @@ import {
 import { CheersGraduatedService } from "./cheers-graduated.service";
 import { PageResponseDto, PaginationQueryDto } from "./dto/pagination.dto";
 import {
-  AcceptResponseDto,
   ReceivedRequestDetailDto,
   ReceivedRequestDto,
   ShareContactResponseDto,
@@ -70,25 +69,6 @@ export class CheersGraduatedController {
     return this.cheersGraduatedService.getReceivedDetail(user.userPk, id);
   }
 
-  /** 커피챗 수락. 수락하면 재학생 연락처를 볼 수 있음 (알림 없음) */
-  // 다시 호출해도 처음 결과를 돌려주므로 새로 만드는 응답이 아님 (200)
-  @Post("/:id/accept")
-  @HttpCode(200)
-  @UseGuards(UserGuard, UserTypeGuard)
-  @UserTypes(["graduated"])
-  @ApiErrors({
-    400: "id가 UUID 형식이 아님",
-    403: "가입을 마치지 않음, 현업자가 아님, 명함 인증이 취소됨",
-    404: "요청이 없거나 내가 받은 요청이 아님",
-    410: "재학생이 탈퇴했거나 탈퇴 유예기간 중",
-  })
-  async accept(
-    @Param("id", ParseUUIDPipe) id: string,
-    @CurrentUser() user: UserContext,
-  ): Promise<AcceptResponseDto> {
-    return this.cheersGraduatedService.accept(user.userPk, id);
-  }
-
   /** 내 연락처 공유 */
   // 다시 호출해도 처음 결과를 돌려주므로 새로 만드는 응답이 아님 (200)
   @Post("/:id/share-contact")
@@ -99,7 +79,7 @@ export class CheersGraduatedController {
     400: "id가 UUID 형식이 아님",
     403: "가입을 마치지 않음, 현업자가 아님, 명함 인증이 취소됨",
     404: "요청이 없거나 내가 받은 요청이 아님",
-    409: "수락하지 않은 요청이거나, 내 연락 설정이 희망하지 않음이라 공유할 연락처가 없음",
+    409: "내 연락 설정이 희망하지 않음이라 공유할 연락처가 없음",
     410: "재학생이 탈퇴했거나 탈퇴 유예기간 중",
   })
   async shareContact(

@@ -105,22 +105,19 @@ export class ManagerDashboardService {
       funnel: {
         requested: funnel.requested,
         graduated_viewed: funnel.graduatedViewed,
-        accepted: funnel.accepted,
         contact_shared: funnel.contactShared,
         student_viewed: funnel.studentViewed,
         rates: {
           viewed: ratio(funnel.graduatedViewed, funnel.requested),
-          accepted: ratio(funnel.accepted, funnel.graduatedViewed),
-          contact_shared: ratio(funnel.contactShared, funnel.accepted),
+          contact_shared: ratio(funnel.contactShared, funnel.graduatedViewed),
         },
         avg_hours: {
           to_viewed: funnel.hoursToViewed,
-          to_accepted: funnel.hoursToAccepted,
           to_shared: funnel.hoursToShared,
         },
         stale: {
           unviewed_3d: stale.unviewed,
-          unaccepted_3d: stale.unaccepted,
+          unshared_3d: stale.unshared,
         },
       },
       monthly_requests: fillMonths(months, monthly),

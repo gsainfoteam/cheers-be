@@ -14,21 +14,18 @@ export type DashboardCoffeeChat = {
   funnel: {
     requested: number;
     graduated_viewed: number;
-    accepted: number;
     contact_shared: number;
     student_viewed: number;
     // 분모가 0이면 null
     rates: {
       viewed: number | null;
-      accepted: number | null;
       contact_shared: number | null;
     };
     avg_hours: {
       to_viewed: number | null;
-      to_accepted: number | null;
       to_shared: number | null;
     };
-    stale: { unviewed_3d: number; unaccepted_3d: number };
+    stale: { unviewed_3d: number; unshared_3d: number };
   };
   monthly_requests: { month: string; count: number }[];
 };

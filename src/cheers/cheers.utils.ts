@@ -4,20 +4,6 @@ import { CoffeeChatRequestRow } from "@src/database/repository/coffee-chat-reque
 
 export type CoffeeChatRequestStatus = "requested" | "viewed" | "contact_shared";
 
-// 현업자 화면에는 수락 단계가 따로 보임. 재학생 · 어드민에는 수락이 드러나지 않아 viewed로 묶음 (CRB-88)
-export type ReceivedRequestStatus = CoffeeChatRequestStatus | "accepted";
-
-export function toReceivedStatus(
-  row: Pick<
-    CoffeeChatRequestRow,
-    "graduatedViewedAt" | "acceptedAt" | "contactSharedAt"
-  >,
-): ReceivedRequestStatus {
-  if (row.contactSharedAt) return "contact_shared";
-  if (row.acceptedAt) return "accepted";
-  return toRequestStatus(row);
-}
-
 // 진행 단계는 처음 일어난 시각 컬럼으로 계산 (가장 뒤 단계부터)
 export function toRequestStatus(
   row: Pick<CoffeeChatRequestRow, "graduatedViewedAt" | "contactSharedAt">,

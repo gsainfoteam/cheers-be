@@ -335,7 +335,6 @@ describe("어드민 현업자 명함 (가짜 S3)", () => {
       for (const call of [
         () => http(ctx).get("/api/v1/cheers/received"),
         () => http(ctx).get(`/api/v1/cheers/received/${requestId}`),
-        () => http(ctx).post(`/api/v1/cheers/received/${requestId}/accept`),
         () =>
           http(ctx).post(`/api/v1/cheers/received/${requestId}/share-contact`),
       ]) {
@@ -363,10 +362,6 @@ describe("어드민 현업자 명함 (가짜 S3)", () => {
         graduated: { verified: true },
       });
       expect(await visibleIds(student)).toEqual([pk]);
-      await http(ctx)
-        .post(`/api/v1/cheers/received/${requestId}/accept`)
-        .set("Authorization", bearer(session))
-        .expect(200);
       await http(ctx)
         .post(`/api/v1/cheers/received/${requestId}/share-contact`)
         .set("Authorization", bearer(session))
