@@ -176,6 +176,13 @@
       "when": 1794980093701,
       "tag": "0024_support_gist_email_domain",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1795581946622,
+      "tag": "0025_remove_coffee_chat_accepted_at",
+      "breakpoints": true
     }
   ]
 }
