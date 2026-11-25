@@ -26,7 +26,7 @@ Client -> Guard: POST /api/v1/user/graduated/verify/business-card\nAuthorization
 ref over Client, Guard
   SignupStepGuard → UserTypeGuard — flow/auth-guards.puml
   @SignupStep({ step: "verify", allowActive: true })
-  pending: next_step = verify 일 때만 / active: 항상 통과 (마이페이지 명함 교체, 인증 취소 후 재업로드)
+  pending: next_step = verify 일 때만 (현업자는 가입 중 verify 단계가 없어 사실상 호출 불가, CRB-107) / active: 항상 통과 (마이페이지 명함 교체, 인증 취소 후 재업로드)
   @UserTypes("graduated")
   401 Missing access token / Token expired / Invalid token / User not found
   403 Signup step mismatch / User type not allowed
