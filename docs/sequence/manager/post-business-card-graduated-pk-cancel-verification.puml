@@ -9,7 +9,7 @@ autonumber
 hide footbox
 
 title POST /api/manager/v1/business-card/{graduatedPk}/cancel-verification
-caption CRB-44, CRB-107 · 명함 인증 취소 (superadmin 전용). 재업로드하면 다시 인증됨. 알림 없음
+caption CRB-44 · 명함 인증 취소 (superadmin 전용). 재업로드하면 다시 인증됨. 알림 없음
 
 actor Client
 participant "ManagerGuard\n+ SuperAdminGuard" as Guard
@@ -55,10 +55,11 @@ note right of Service
   24시간 뒤 미완료 가입 정리가 계정을 지우며, 받은 커피챗 요청의 FK 때문에
   정리 · 유형 변경이 실패하고, 탈퇴 유예기간도 1일로 줄어듦.
 
-  영향 (CRB-107 이후)
-  - verified_at 은 가입 단계 · 재학생 노출 · 받은 요청 처리에 쓰지 않으므로 현업자의 서비스 이용에는 영향 없음
-  - GET /api/v1/user/info: graduated.verified = false (표시용), next_step 은 그대로 null
-  - 어드민 명함 목록의 verified_at · has_business_card 와 대시보드 명함 인증 대기 집계만 바뀜
+  영향 (active 현업자)
+  - GET /api/v1/user/info: next_step = "verify", graduated.verified = false
+  - 재학생의 현업자 목록 · 새 커피챗 요청: 빠짐 (verified_at IS NOT NULL 조건)
+  - 받은 요청 API 3개: 403 (재업로드 전까지). 요청 행은 그대로 남고 재인증하면 이어서 처리
+  - 이미 공유한 연락처는 재학생 기록에 그대로 남음
   - 재업로드: POST /api/v1/user/graduated/verify/business-card (allowActive)
 end note
 

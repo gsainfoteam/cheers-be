@@ -10,6 +10,7 @@ import {
   saveStudentInfo,
   Session,
   signupGraduated,
+  signupGraduatedWithoutCard,
   signupStudent,
   uploadAttachment,
 } from "./support/flows";
@@ -30,12 +31,8 @@ describe("파일 업로드 오류 (가짜 S3)", () => {
       .set("Authorization", bearer(session))
       .send({ key });
 
-  // 약관 동의까지 마친 현업자 (추가 정보 입력 단계. 명함은 선택)
-  const graduatedAtCardStep = async () => {
-    const session = await login(ctx, "graduated");
-    await agreeConsents(ctx, session);
-    return session;
-  };
+  // 가입을 마친 현업자. 명함 API는 가입 중에는 쓸 수 없고 가입 후에만 호출함 (CRB-107)
+  const graduatedAtCardStep = () => signupGraduatedWithoutCard(ctx);
 
   beforeAll(async () => {
     ctx = await createE2eApp();
@@ -88,7 +85,7 @@ describe("파일 업로드 오류 (가짜 S3)", () => {
   });
 
   describe("업로드한 파일 제출", () => {
-    it("명함: 다른 유저의 key · 업로드하지 않은 key는 400이고 verified_at이 채워지지 않음", async () => {
+    it("명함: 다른 유저의 key · 업로드하지 않은 key는 400이고 다음 단계로 넘어가지 않음", async () => {
       const mine = await graduatedAtCardStep();
       const other = await graduatedAtCardStep();
       const card = { content_type: "image/jpeg", size: JPEG_BYTES.length };
@@ -101,8 +98,8 @@ describe("파일 업로드 오류 (가짜 S3)", () => {
       await submitCard(mine, notUploaded.body.key).expect(400);
 
       expect(await getInfo(ctx, mine)).toMatchObject({
-        status: "pending",
-        next_step: "profile",
+        status: "active",
+        next_step: null,
       });
       // 다른 유저의 파일은 지우지 않음
       expect(ctx.s3.objects.has(othersUpload.body.key)).toBe(true);

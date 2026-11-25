@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import * as request from "supertest";
+import { eq } from "drizzle-orm";
 import { adminAccount } from "@drizzle/schema/admin-account";
+import { graduated } from "@drizzle/schema/graduated";
 import { E2eContext } from "./app";
 
 export type Session = {
@@ -178,6 +180,26 @@ export async function submitBusinessCard(
     .expect(201);
 }
 
+// 가입 중인(pending) 현업자에게 명함이 있는 상태를 만듦. 가입 중에는 명함 API를 쓸 수 없으므로 (CRB-107)
+// 배포 전에 가입 중 명함을 올린 사용자를 가정해 DB에 직접 넣음
+export async function seedPendingBusinessCard(
+  ctx: E2eContext,
+  session: Session,
+): Promise<string> {
+  const upload = await http(ctx)
+    .post("/api/v1/file/business-card/upload-url")
+    .set("Authorization", bearer(session))
+    .send({ content_type: "image/jpeg", size: JPEG_BYTES.length })
+    .expect(201);
+  ctx.s3.put(upload.body.key, JPEG_BYTES);
+  const info = await getInfo(ctx, session);
+  await ctx.db
+    .update(graduated)
+    .set({ businessCardKey: upload.body.key, verifiedAt: new Date() })
+    .where(eq(graduated.userPk, info.id));
+  return upload.body.key;
+}
+
 // 이력서 업로드 URL 발급 → (presigned PUT 대신) 가짜 S3에 직접 넣기. 반환한 임시 key를 추가 정보 저장에 씀
 export async function uploadAttachment(
   ctx: E2eContext,
@@ -209,37 +231,29 @@ export const graduatedInfoBody = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-// 명함을 올리지 않고 가입 (명함 인증 단계 없음)
+// 명함 없이 가입. 가입 중에는 명함 단계가 없고, 가입을 마치면 verified_at이 자동으로 기록됨 (CRB-107)
 export async function signupGraduatedWithoutCard(
   ctx: E2eContext,
   overrides: Record<string, unknown> = {},
 ): Promise<Session> {
   const session = await login(ctx, "graduated");
   await agreeConsents(ctx, session);
-  return saveGraduatedInfo(ctx, session, overrides);
-}
-
-export async function signupGraduated(
-  ctx: E2eContext,
-  overrides: Record<string, unknown> = {},
-): Promise<Session> {
-  const session = await login(ctx, "graduated");
-  await agreeConsents(ctx, session);
-  await submitBusinessCard(ctx, session);
-  return saveGraduatedInfo(ctx, session, overrides);
-}
-
-async function saveGraduatedInfo(
-  ctx: E2eContext,
-  session: Session,
-  overrides: Record<string, unknown>,
-): Promise<Session> {
   const res = await http(ctx)
     .post("/api/v1/user/graduated/info")
     .set("Authorization", bearer(session))
     .send(graduatedInfoBody(overrides))
     .expect(201);
   return withSignupTokens(session, res.body);
+}
+
+// 가입을 마친 뒤 명함을 올려 둠 (명함 목록 · 열람 · 정리 시나리오용)
+export async function signupGraduated(
+  ctx: E2eContext,
+  overrides: Record<string, unknown> = {},
+): Promise<Session> {
+  const session = await signupGraduatedWithoutCard(ctx, overrides);
+  await submitBusinessCard(ctx, session);
+  return session;
 }
 
 const withSignupTokens = (

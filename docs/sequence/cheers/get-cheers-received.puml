@@ -16,6 +16,7 @@ participant "UserGuard\n+ UserTypeGuard" as Guard
 participant "ValidationPipe" as Pipe
 participant "CheersGraduatedController" as Controller
 participant "CheersGraduatedService" as Service
+participant "GraduatedRepository" as GraduatedRepository
 participant "CoffeeChatRequestRepository" as CoffeeChatRequestRepository
 database PostgreSQL
 
@@ -33,6 +34,14 @@ end
 note right of Pipe: 기본값 page = 1, size = 20
 Pipe -> Controller: getReceivedList(query, user)
 Controller -> Service: getReceivedList(userPk, query)
+
+Service -> GraduatedRepository: findByUserPk(userPk)
+GraduatedRepository -> PostgreSQL: SELECT graduated WHERE user_pk = ?
+PostgreSQL --> GraduatedRepository: row
+alt verified_at = NULL (어드민이 명함 인증을 취소하고 아직 재업로드하지 않음)
+  Service -[#red]-> Client: 403 Business card verification is required
+end
+note right of Service: 가드는 토큰의 status만 보므로 인증 여부는 DB에서 확인. 취소 즉시 반영됨 (CRB-44)
 
 par 동시에 조회 — 같은 조건
   Service -> CoffeeChatRequestRepository: findReceivedPage(userPk, offset, limit)

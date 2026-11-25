@@ -17,10 +17,13 @@ describe("calculateNextStep", () => {
     ).toBeNull();
   });
 
-  it("returns null for active graduated users without verification", () => {
+  it("returns verify for active users whose verification was canceled", () => {
     expect(
       calculateNextStep("active", "graduated", { ...done, verified: false }),
-    ).toBeNull();
+    ).toBe("verify");
+    expect(
+      calculateNextStep("active", "student", { ...done, verified: false }),
+    ).toBe("verify");
   });
 
   it("returns consent first when a required consent is missing", () => {

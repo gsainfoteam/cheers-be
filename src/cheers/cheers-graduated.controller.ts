@@ -44,7 +44,7 @@ export class CheersGraduatedController {
   @ApiPageResponse(ReceivedRequestDto)
   @ApiErrors({
     400: "query 형식 오류",
-    403: "가입을 마치지 않음, 현업자가 아님",
+    403: "가입을 마치지 않음, 현업자가 아님, 명함 인증이 취소됨",
   })
   async getReceivedList(
     @Query() query: PaginationQueryDto,
@@ -59,7 +59,7 @@ export class CheersGraduatedController {
   @UserTypes(["graduated"])
   @ApiErrors({
     400: "id가 UUID 형식이 아님",
-    403: "가입을 마치지 않음, 현업자가 아님",
+    403: "가입을 마치지 않음, 현업자가 아님, 명함 인증이 취소됨",
     404: "요청이 없거나 내가 받은 요청이 아님",
     410: "재학생이 탈퇴했거나 탈퇴 유예기간 중",
   })
@@ -78,7 +78,7 @@ export class CheersGraduatedController {
   @UserTypes(["graduated"])
   @ApiErrors({
     400: "id가 UUID 형식이 아님",
-    403: "가입을 마치지 않음, 현업자가 아님",
+    403: "가입을 마치지 않음, 현업자가 아님, 명함 인증이 취소됨",
     404: "요청이 없거나 내가 받은 요청이 아님",
     410: "재학생이 탈퇴했거나 탈퇴 유예기간 중",
   })
@@ -97,7 +97,7 @@ export class CheersGraduatedController {
   @UserTypes(["graduated"])
   @ApiErrors({
     400: "id가 UUID 형식이 아님",
-    403: "가입을 마치지 않음, 현업자가 아님",
+    403: "가입을 마치지 않음, 현업자가 아님, 명함 인증이 취소됨",
     404: "요청이 없거나 내가 받은 요청이 아님",
     409: "수락하지 않은 요청이거나, 내 연락 설정이 희망하지 않음이라 공유할 연락처가 없음",
     410: "재학생이 탈퇴했거나 탈퇴 유예기간 중",

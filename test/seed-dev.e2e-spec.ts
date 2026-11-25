@@ -207,7 +207,7 @@ describe("개발용 seed (가짜 S3)", () => {
     const expected: [string, ReturnType<typeof calculateNextStep>][] = [
       ["dev-student-01", null],
       ["dev-graduated-01", null],
-      ["dev-graduated-cancelled-01", null],
+      ["dev-graduated-cancelled-01", "verify"],
       ["dev-pending-student-consent", "consent"],
       ["dev-pending-student-verify", "verify"],
       ["dev-pending-student-profile", "profile"],

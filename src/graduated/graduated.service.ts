@@ -147,6 +147,8 @@ export class GraduatedService {
 
       if (user.status === "active") return null;
       await this.userRepository.activate(userPk, tx);
+      // 가입 중에는 명함 단계가 없고, 가입을 마치면 명함 없이 자동 인증 (CRB-107). 이후 어드민이 인증을 취소하면 명함을 다시 올려야 함
+      await this.graduatedRepository.markVerifiedIfNull(found.graduated.pk, tx);
       // 기존 refresh token은 폐기하지 않음 (갱신 때 DB의 status로 클레임을 다시 만듦)
       return this.authService.issueTokens({ ...user, status: "active" }, tx);
     });

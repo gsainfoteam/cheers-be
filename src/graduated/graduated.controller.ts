@@ -39,12 +39,12 @@ export class GraduatedController {
     return this.graduatedService.checkNickname(query.nickname);
   }
 
-  /** 업로드한 명함 제출 (선택. 가입 중에는 추가 정보 입력 단계에서, 가입 후에는 교체) */
+  /** 업로드한 명함 제출 (가입 후에는 교체) */
   @Post("/verify/business-card")
-  @SignupStep({ step: "profile", allowActive: true })
+  @SignupStep({ step: "verify", allowActive: true })
   @ApiErrors({
     400: "요청 형식 오류, 내가 발급받은 key가 아님, 업로드되지 않음, 허용 범위를 벗어난 파일",
-    403: "현업자가 아님, 가입 중인데 next_step이 profile이 아님",
+    403: "현업자가 아님, 가입 중인데 next_step이 verify가 아님",
   })
   async verifyBusinessCard(
     @Body() req: VerifyBusinessCardRequestDto,
