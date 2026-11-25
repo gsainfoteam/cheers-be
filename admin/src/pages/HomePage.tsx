@@ -184,14 +184,9 @@ function CoffeeChatSection({ range }: { range: DashboardRange }) {
               sub={`요청 대비 ${formatPercent(funnel.rates.viewed)} · 평균 ${formatHours(funnel.avg_hours.to_viewed)}`}
             />
             <Stat
-              label="수락"
-              value={formatCount(funnel.accepted)}
-              sub={`확인 대비 ${formatPercent(funnel.rates.accepted)} · 평균 ${formatHours(funnel.avg_hours.to_accepted)}`}
-            />
-            <Stat
               label="연락처 공유"
               value={formatCount(funnel.contact_shared)}
-              sub={`수락 대비 ${formatPercent(funnel.rates.contact_shared)} · 평균 ${formatHours(funnel.avg_hours.to_shared)}`}
+              sub={`확인 대비 ${formatPercent(funnel.rates.contact_shared)} · 평균 ${formatHours(funnel.avg_hours.to_shared)}`}
             />
             <Stat
               label="재학생 확인"
@@ -206,8 +201,8 @@ function CoffeeChatSection({ range }: { range: DashboardRange }) {
               warn
             />
             <TodoStat
-              label="확인 후 3일 넘게 미수락 (현재)"
-              value={funnel.stale.unaccepted_3d}
+              label="확인 후 3일 넘게 연락처 미공유 (현재)"
+              value={funnel.stale.unshared_3d}
               to="/coffee-chats"
               warn
             />

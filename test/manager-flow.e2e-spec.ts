@@ -206,9 +206,6 @@ describe("어드민 종합 시나리오", () => {
       })
       .expect(201);
     await app(graduatedSession)
-      .post(`/api/v1/cheers/received/${request.body.id}/accept`)
-      .expect(200);
-    await app(graduatedSession)
       .post(`/api/v1/cheers/received/${request.body.id}/share-contact`)
       .expect(200);
     await waitUntil(

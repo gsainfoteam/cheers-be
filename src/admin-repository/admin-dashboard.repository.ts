@@ -5,18 +5,16 @@ import { DatabaseService } from "@src/database/database.service";
 export type AdminDashboardFunnel = {
   requested: number;
   graduatedViewed: number;
-  accepted: number;
   contactShared: number;
   studentViewed: number;
   // 단계 사이 평균 소요시간(시간). 해당 단계에 도달한 요청이 없으면 null
   hoursToViewed: number | null;
-  hoursToAccepted: number | null;
   hoursToShared: number | null;
 };
 
 export type AdminDashboardStale = {
   unviewed: number;
-  unaccepted: number;
+  unshared: number;
 };
 
 export type AdminDashboardMonthlyRequest = { month: string; count: number };
@@ -53,30 +51,26 @@ export class AdminDashboardRepository {
   constructor(private readonly dbService: DatabaseService) {}
 
   /*
-  SELECT count(*), count(graduated_viewed_at), count(accepted_at), count(contact_shared_at), count(student_viewed_at),
-    avg(graduated_viewed_at - created_at), avg(accepted_at - graduated_viewed_at), avg(contact_shared_at - accepted_at)
+  SELECT count(*), count(graduated_viewed_at), count(contact_shared_at), count(student_viewed_at),
+    avg(graduated_viewed_at - created_at), avg(contact_shared_at - graduated_viewed_at)
   FROM coffee_chat_request WHERE created_at >= ?1;
    */
   async coffeeChatFunnel(from: Date): Promise<AdminDashboardFunnel> {
     const result = await this.dbService.db.execute<{
       requested: number;
       graduated_viewed: number;
-      accepted: number;
       contact_shared: number;
       student_viewed: number;
       hours_to_viewed: number | null;
-      hours_to_accepted: number | null;
       hours_to_shared: number | null;
     }>(sql`
       SELECT
         COUNT(*)::int AS requested,
         COUNT(graduated_viewed_at)::int AS graduated_viewed,
-        COUNT(accepted_at)::int AS accepted,
         COUNT(contact_shared_at)::int AS contact_shared,
         COUNT(student_viewed_at)::int AS student_viewed,
         (AVG(EXTRACT(EPOCH FROM graduated_viewed_at - created_at)) / 3600)::float8 AS hours_to_viewed,
-        (AVG(EXTRACT(EPOCH FROM accepted_at - graduated_viewed_at)) / 3600)::float8 AS hours_to_accepted,
-        (AVG(EXTRACT(EPOCH FROM contact_shared_at - accepted_at)) / 3600)::float8 AS hours_to_shared
+        (AVG(EXTRACT(EPOCH FROM contact_shared_at - graduated_viewed_at)) / 3600)::float8 AS hours_to_shared
       FROM coffee_chat_request
       WHERE created_at >= ${from}
     `);
@@ -85,28 +79,26 @@ export class AdminDashboardRepository {
     return {
       requested: row.requested,
       graduatedViewed: row.graduated_viewed,
-      accepted: row.accepted,
       contactShared: row.contact_shared,
       studentViewed: row.student_viewed,
       hoursToViewed: row.hours_to_viewed,
-      hoursToAccepted: row.hours_to_accepted,
       hoursToShared: row.hours_to_shared,
     };
   }
 
   /*
   SELECT count(*) FILTER (WHERE graduated_viewed_at IS NULL AND created_at < ?1),
-         count(*) FILTER (WHERE graduated_viewed_at < ?1 AND accepted_at IS NULL)
+         count(*) FILTER (WHERE graduated_viewed_at < ?1 AND contact_shared_at IS NULL)
   FROM coffee_chat_request;
    */
   async staleRequests(staleBefore: Date): Promise<AdminDashboardStale> {
     const result = await this.dbService.db.execute<{
       unviewed: number;
-      unaccepted: number;
+      unshared: number;
     }>(sql`
       SELECT
         COUNT(*) FILTER (WHERE graduated_viewed_at IS NULL AND created_at < ${staleBefore})::int AS unviewed,
-        COUNT(*) FILTER (WHERE graduated_viewed_at < ${staleBefore} AND accepted_at IS NULL)::int AS unaccepted
+        COUNT(*) FILTER (WHERE graduated_viewed_at < ${staleBefore} AND contact_shared_at IS NULL)::int AS unshared
       FROM coffee_chat_request
     `);
 

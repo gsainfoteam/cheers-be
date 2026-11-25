@@ -24,29 +24,25 @@ export class DashboardNameCountDto {
 export class DashboardFunnelRatesDto {
   /** 현업자 확인 / 요청. 요청이 없으면 null */
   viewed: number | null;
-  /** 수락 / 현업자 확인 */
-  accepted: number | null;
-  /** 연락처 공유 / 수락 */
+  /** 연락처 공유 / 현업자 확인 */
   contact_shared: number | null;
 }
 
 export class DashboardFunnelAvgHoursDto {
   to_viewed: number | null;
-  to_accepted: number | null;
   to_shared: number | null;
 }
 
 export class DashboardFunnelStaleDto {
   /** 3일이 넘도록 현업자가 확인하지 않은 요청 (기간과 무관, 현재 시점) */
   unviewed_3d: number;
-  /** 확인한 지 3일이 넘도록 수락하지 않은 요청 */
-  unaccepted_3d: number;
+  /** 확인한 지 3일이 넘도록 연락처를 공유하지 않은 요청 */
+  unshared_3d: number;
 }
 
 export class DashboardFunnelDto {
   requested: number;
   graduated_viewed: number;
-  accepted: number;
   contact_shared: number;
   student_viewed: number;
   rates: DashboardFunnelRatesDto;

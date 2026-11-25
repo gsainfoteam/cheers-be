@@ -55,11 +55,9 @@ describe("ManagerDashboardService", () => {
     const funnel = (overrides: object = {}) => ({
       requested: 10,
       graduatedViewed: 8,
-      accepted: 4,
       contactShared: 2,
       studentViewed: 1,
       hoursToViewed: 3.5,
-      hoursToAccepted: null,
       hoursToShared: null,
       ...overrides,
     });
@@ -68,7 +66,7 @@ describe("ManagerDashboardService", () => {
       repository.coffeeChatFunnel.mockResolvedValue(funnel());
       repository.staleRequests.mockResolvedValue({
         unviewed: 2,
-        unaccepted: 1,
+        unshared: 1,
       });
       repository.monthlyRequests.mockResolvedValue([]);
 
@@ -83,18 +81,17 @@ describe("ManagerDashboardService", () => {
       expect(result.range).toBe("7d");
       expect(result.funnel.rates).toEqual({
         viewed: 0.8,
-        accepted: 0.5,
-        contact_shared: 0.5,
+        contact_shared: 0.25,
       });
       expect(result.funnel.avg_hours.to_viewed).toBe(3.5);
-      expect(result.funnel.stale).toEqual({ unviewed_3d: 2, unaccepted_3d: 1 });
+      expect(result.funnel.stale).toEqual({ unviewed_3d: 2, unshared_3d: 1 });
     });
 
     it("range를 생략하면 30d로 조회한다", async () => {
       repository.coffeeChatFunnel.mockResolvedValue(funnel());
       repository.staleRequests.mockResolvedValue({
         unviewed: 0,
-        unaccepted: 0,
+        unshared: 0,
       });
       repository.monthlyRequests.mockResolvedValue([]);
 
@@ -111,13 +108,12 @@ describe("ManagerDashboardService", () => {
         funnel({
           requested: 0,
           graduatedViewed: 0,
-          accepted: 0,
           contactShared: 0,
         }),
       );
       repository.staleRequests.mockResolvedValue({
         unviewed: 0,
-        unaccepted: 0,
+        unshared: 0,
       });
       repository.monthlyRequests.mockResolvedValue([]);
 
@@ -125,7 +121,6 @@ describe("ManagerDashboardService", () => {
 
       expect(result.funnel.rates).toEqual({
         viewed: null,
-        accepted: null,
         contact_shared: null,
       });
     });
@@ -134,7 +129,7 @@ describe("ManagerDashboardService", () => {
       repository.coffeeChatFunnel.mockResolvedValue(funnel());
       repository.staleRequests.mockResolvedValue({
         unviewed: 0,
-        unaccepted: 0,
+        unshared: 0,
       });
       repository.monthlyRequests.mockResolvedValue([
         { month: "2026-09", count: 3 },

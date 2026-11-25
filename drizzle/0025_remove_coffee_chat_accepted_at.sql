@@ -1,0 +1,1 @@
+ALTER TABLE "coffee_chat_request" DROP COLUMN "accepted_at";

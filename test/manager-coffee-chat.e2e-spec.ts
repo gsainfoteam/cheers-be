@@ -71,17 +71,11 @@ describe("어드민 커피챗 요청 관리", () => {
       .set("Authorization", bearer(graduatedSession))
       .expect(200);
 
-  // 수락과 공유는 따로 진행 (CRB-88): 수락해야 공유할 수 있음
-  const shareContact = async (graduatedSession: Session, id: string) => {
-    await http(ctx)
-      .post(`/api/v1/cheers/received/${id}/accept`)
-      .set("Authorization", bearer(graduatedSession))
-      .expect(200);
-    return http(ctx)
+  const shareContact = (graduatedSession: Session, id: string) =>
+    http(ctx)
       .post(`/api/v1/cheers/received/${id}/share-contact`)
       .set("Authorization", bearer(graduatedSession))
       .expect(200);
-  };
 
   const listRequests = async (query: Record<string, string | number> = {}) =>
     (

@@ -63,7 +63,6 @@ erDiagram
   text message
   varchar_20_ shared_phone
   varchar_255_ shared_email
-  timestamp_with_time_zone accepted_at
 }
 "public.student_email_verification" {
   uuid student_pk FK

@@ -20,10 +20,9 @@ import {
   STUDENT_FALLBACK_NAME,
   WITHDRAWN_STUDENT_REQUEST_LABEL,
 } from "./cheers.constants";
-import { toOffset, toReceivedStatus } from "./cheers.utils";
+import { toOffset, toRequestStatus } from "./cheers.utils";
 import { PageResponseDto, PaginationQueryDto } from "./dto/pagination.dto";
 import {
-  AcceptResponseDto,
   ReceivedRequestDetailDto,
   ReceivedRequestDto,
   ShareContactResponseDto,
@@ -76,7 +75,7 @@ export class CheersGraduatedService {
         interests: row.interests,
         activities: row.activities ?? [],
         student_withdrawn: !row.studentActive,
-        status: toReceivedStatus(row),
+        status: toRequestStatus(row),
         created_at: row.createdAt.toISOString(),
       })),
       page: query.page,
@@ -133,9 +132,8 @@ export class CheersGraduatedService {
       id: row.pk,
       message: row.message ?? "",
       // 이 호출로 확인 처리되므로 "requested"는 내려가지 않음
-      status: toReceivedStatus({ ...row, graduatedViewedAt: new Date() }),
+      status: toRequestStatus({ ...row, graduatedViewedAt: new Date() }),
       created_at: row.createdAt.toISOString(),
-      accepted_at: row.acceptedAt?.toISOString() ?? null,
       contact_shared_at: row.contactSharedAt?.toISOString() ?? null,
       student: {
         name: row.studentName ?? STUDENT_FALLBACK_NAME,
@@ -143,46 +141,10 @@ export class CheersGraduatedService {
         interests: row.interests,
         activities: row.activities ?? [],
         attachments,
-        // 수락해야 재학생 연락처가 보임 (CRB-88)
-        ...(row.acceptedAt
-          ? toStudentContact(contact)
-          : { email: null, phone: null }),
+        // 수락 단계가 없어 처음 열람부터 재학생 연락처가 보임 (CRB-106)
+        ...toStudentContact(contact),
       },
     };
-  }
-
-  async accept(userPk: string, requestPk: string): Promise<AcceptResponseDto> {
-    await this.assertVerified(userPk);
-    // 알림 없음. 재학생에게는 수락 사실이 전달되지 않음
-    return this.dbService.db.transaction(async (tx) => {
-      const row = await this.coffeeChatRequestRepository.findReceivedForAccept(
-        requestPk,
-        userPk,
-        tx,
-      );
-      if (!row) {
-        throw new NotFoundException("Coffee chat request not found");
-      }
-      // 처음 수락한 결과를 그대로 반환. 쓰기 없음
-      if (row.acceptedAt) {
-        return {
-          accepted_at: row.acceptedAt.toISOString(),
-          student: toStudentContact(row.studentContact),
-        };
-      }
-      if (!row.studentActive) {
-        throw new GoneException("Student has withdrawn");
-      }
-
-      const acceptedAt = await this.coffeeChatRequestRepository.markAccepted(
-        row.pk,
-        tx,
-      );
-      return {
-        accepted_at: acceptedAt.toISOString(),
-        student: toStudentContact(row.studentContact),
-      };
-    });
   }
 
   async shareContact(
@@ -218,10 +180,6 @@ export class CheersGraduatedService {
             },
             notification: null,
           };
-        }
-        // 수락과 연락처 공유는 따로 진행 (CRB-88)
-        if (!row.acceptedAt) {
-          throw new ConflictException("Coffee chat is not accepted");
         }
         if (!row.studentActive) {
           throw new GoneException("Student has withdrawn");

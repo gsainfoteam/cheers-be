@@ -24,7 +24,7 @@ FK는 모두 `ON DELETE NO ACTION`입니다. 부모 행을 지우기 전에 백�
 | Name | Columns | Comment | Type |
 | ---- | ------- | ------- | ---- |
 | [public.coffee_chat_contact](public.coffee_chat_contact.md) | 7 | 커피챗 연락수단 (재학생 · 현업자 공통). 희망하지 않음 = 두 플래그 모두 false | BASE TABLE |
-| [public.coffee_chat_request](public.coffee_chat_request.md) | 13 | 커피챗 요청. 같은 현업자에게 중복 요청 가능. 진행 단계(현업자 확인 → 연락처 공유 → 재학생 확인)는 처음 했을 때 시각만 기록 | BASE TABLE |
+| [public.coffee_chat_request](public.coffee_chat_request.md) | 12 | 커피챗 요청. 같은 현업자에게 중복 요청 가능. 진행 단계(현업자 확인 → 연락처 공유 → 재학생 확인)는 처음 했을 때 시각만 기록 | BASE TABLE |
 | [public.consent](public.consent.md) | 5 | 약관 버전 기준 데이터. 새 버전은 행을 수정하지 말고 어드민에서 새로 등록 (POST /api/manager/v1/consent) | BASE TABLE |
 | [public.department](public.department.md) | 4 | 학과 기준 데이터. 어드민에서 추가 · 수정. 학과명이 바뀌면 같은 행의 name만 수정 (버전 관리 안 함). 학생 프로필이 참조하므로 지우지 않고 비활성화함 | BASE TABLE |
 | [public.graduated_profile](public.graduated_profile.md) | 9 | 현업자 추가 정보. 알림 수단 · 공유할 연락처는 coffee_chat_contact | BASE TABLE |
@@ -152,7 +152,6 @@ erDiagram
   text message
   varchar_20_ shared_phone
   varchar_255_ shared_email
-  timestamp_with_time_zone accepted_at
 }
 "public.consent" {
   varchar_64_ type
