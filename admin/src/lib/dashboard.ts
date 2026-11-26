@@ -30,6 +30,41 @@ export type DashboardCoffeeChat = {
   monthly_requests: { month: string; count: number }[];
 };
 
+export type DashboardCoffeeChatTrendPoint = {
+  // 일별은 날짜, 주별은 그 주 월요일 (Asia/Seoul)
+  date: string;
+  requested: number;
+  contact_shared: number;
+  // 신청이 없으면 null. 100%를 넘을 수 있음
+  share_rate: number | null;
+};
+
+export type DashboardCoffeeChatTrend = {
+  generated_at: string;
+  daily: DashboardCoffeeChatTrendPoint[];
+  weekly: DashboardCoffeeChatTrendPoint[];
+};
+
+export type DashboardCoffeeChatMessage = {
+  range: DashboardRange;
+  generated_at: string;
+  count: number;
+  avg_length: number | null;
+  histogram: { label: string; min: number; max: number; count: number }[];
+};
+
+export type DashboardSignupTrendPoint = {
+  date: string;
+  student: number;
+  graduated: number;
+};
+
+export type DashboardSignupTrend = {
+  generated_at: string;
+  daily: DashboardSignupTrendPoint[];
+  weekly: DashboardSignupTrendPoint[];
+};
+
 export type DashboardMemberType = {
   active: number;
   pending: number;

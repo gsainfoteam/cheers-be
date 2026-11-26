@@ -31,7 +31,10 @@ const ROUTES: Route[] = [
   route("GET", "/access-log", true),
 
   route("GET", "/dashboard/coffee-chat"),
+  route("GET", "/dashboard/coffee-chat/trend"),
+  route("GET", "/dashboard/coffee-chat/message"),
   route("GET", "/dashboard/member"),
+  route("GET", "/dashboard/member/signup-trend"),
   route("GET", "/dashboard/demand"),
   route("GET", "/dashboard/todo"),
 

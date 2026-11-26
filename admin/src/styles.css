@@ -960,3 +960,32 @@ select {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+
+.dashboard-table-wrap {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.dashboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.dashboard-table th,
+.dashboard-table td {
+  padding: 4px 8px;
+  text-align: right;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+}
+
+.dashboard-table th:first-child,
+.dashboard-table td:first-child {
+  text-align: left;
+}
+
+.dashboard-table th {
+  position: sticky;
+  top: 0;
+  background: var(--surface, #fff);
+}

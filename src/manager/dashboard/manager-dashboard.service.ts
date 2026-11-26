@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import {
+  AdminDashboardBucketCount,
   AdminDashboardMemberRow,
   AdminDashboardMonthlyRequest,
   AdminDashboardRepository,
@@ -9,8 +10,11 @@ import {
   DashboardRange,
   DEFAULT_DASHBOARD_RANGE,
   ManagerDashboardCoffeeChatDto,
+  ManagerDashboardCoffeeChatMessageDto,
+  ManagerDashboardCoffeeChatTrendDto,
   ManagerDashboardDemandDto,
   ManagerDashboardMemberDto,
+  ManagerDashboardSignupTrendDto,
   ManagerDashboardTodoDto,
 } from "@src/manager/dashboard/dto/manager-dashboard.dto";
 
@@ -26,6 +30,15 @@ const STALE_DAYS = 3;
 const TOP_LIMIT = 5;
 const MONTHLY_TREND_MONTHS = 6;
 const NOTIFICATION_DAYS = 7;
+const TREND_DAYS = 30;
+const TREND_WEEKS = 12;
+// 신청 메시지 글자 수 구간 (최대 200자)
+const MESSAGE_BUCKETS = [
+  { label: "0-50", min: 0, max: 50 },
+  { label: "51-100", min: 51, max: 100 },
+  { label: "101-150", min: 101, max: 150 },
+  { label: "151-200", min: 151, max: 200 },
+] as const;
 
 // 분모가 0이면 0%가 아니라 null
 const ratio = (numerator: number, denominator: number): number | null =>
@@ -51,6 +64,47 @@ const monthStart = (month: string): Date => {
   const [year, m] = month.split("-").map(Number);
   return new Date(Date.UTC(year, m - 1, 1) - KST_OFFSET_MS);
 };
+
+const dateKey = (utcDate: Date): string =>
+  `${utcDate.getUTCFullYear()}-${String(utcDate.getUTCMonth() + 1).padStart(2, "0")}-${String(utcDate.getUTCDate()).padStart(2, "0")}`;
+
+// Asia/Seoul 기준 최근 n일의 "YYYY-MM-DD" (오래된 순, 오늘 포함)
+export const recentDays = (now: Date, count: number): string[] => {
+  const kst = new Date(now.getTime() + KST_OFFSET_MS);
+  const today = Date.UTC(
+    kst.getUTCFullYear(),
+    kst.getUTCMonth(),
+    kst.getUTCDate(),
+  );
+
+  return Array.from({ length: count }, (_, i) =>
+    dateKey(new Date(today - (count - 1 - i) * DAY_MS)),
+  );
+};
+
+// Asia/Seoul 기준 최근 n주의 월요일 "YYYY-MM-DD" (오래된 순, 이번 주 포함)
+export const recentWeeks = (now: Date, count: number): string[] => {
+  const kst = new Date(now.getTime() + KST_OFFSET_MS);
+  const today = Date.UTC(
+    kst.getUTCFullYear(),
+    kst.getUTCMonth(),
+    kst.getUTCDate(),
+  );
+  const thisMonday = today - ((kst.getUTCDay() + 6) % 7) * DAY_MS;
+
+  return Array.from({ length: count }, (_, i) =>
+    dateKey(new Date(thisMonday - (count - 1 - i) * 7 * DAY_MS)),
+  );
+};
+
+// "YYYY-MM-DD"의 Asia/Seoul 0시 (UTC Date)
+const dayStart = (key: string): Date => {
+  const [year, m, d] = key.split("-").map(Number);
+  return new Date(Date.UTC(year, m - 1, d) - KST_OFFSET_MS);
+};
+
+const countMap = (rows: AdminDashboardBucketCount[]) =>
+  new Map(rows.map((r) => [r.key, r.count]));
 
 const emptyMember = (): DashboardMemberTypeDto => ({
   active: 0,
@@ -193,6 +247,92 @@ export class ManagerDashboardService {
         retry_waiting: notification.retryWaiting,
         delivery_unknown: notification.deliveryUnknown,
       },
+    };
+  }
+
+  async getCoffeeChatTrend(): Promise<ManagerDashboardCoffeeChatTrendDto> {
+    const now = new Date();
+    const days = recentDays(now, TREND_DAYS);
+    const weeks = recentWeeks(now, TREND_WEEKS);
+    const dayFrom = dayStart(days[0]);
+    const weekFrom = dayStart(weeks[0]);
+    const [dayRequested, dayShared, weekRequested, weekShared] =
+      await Promise.all([
+        this.dashboard.requestedBuckets("day", dayFrom),
+        this.dashboard.sharedBuckets("day", dayFrom),
+        this.dashboard.requestedBuckets("week", weekFrom),
+        this.dashboard.sharedBuckets("week", weekFrom),
+      ]);
+
+    const toPoints = (
+      keys: string[],
+      requestedRows: AdminDashboardBucketCount[],
+      sharedRows: AdminDashboardBucketCount[],
+    ) => {
+      const requested = countMap(requestedRows);
+      const shared = countMap(sharedRows);
+      return keys.map((date) => {
+        const r = requested.get(date) ?? 0;
+        const c = shared.get(date) ?? 0;
+        return {
+          date,
+          requested: r,
+          contact_shared: c,
+          share_rate: ratio(c, r),
+        };
+      });
+    };
+
+    return {
+      generated_at: now.toISOString(),
+      daily: toPoints(days, dayRequested, dayShared),
+      weekly: toPoints(weeks, weekRequested, weekShared),
+    };
+  }
+
+  async getCoffeeChatMessage(
+    range: DashboardRange = DEFAULT_DASHBOARD_RANGE,
+  ): Promise<ManagerDashboardCoffeeChatMessageDto> {
+    const now = new Date();
+    const stats = await this.dashboard.messageLength(
+      daysAgo(now, RANGE_DAYS[range]),
+    );
+
+    return {
+      range,
+      generated_at: now.toISOString(),
+      count: stats.count,
+      avg_length: stats.avgLength,
+      histogram: MESSAGE_BUCKETS.map((bucket, i) => ({
+        ...bucket,
+        count: stats.buckets[i],
+      })),
+    };
+  }
+
+  async getSignupTrend(): Promise<ManagerDashboardSignupTrendDto> {
+    const now = new Date();
+    const days = recentDays(now, TREND_DAYS);
+    const weeks = recentWeeks(now, TREND_WEEKS);
+    const [dayRows, weekRows] = await Promise.all([
+      this.dashboard.signupBuckets("day", dayStart(days[0])),
+      this.dashboard.signupBuckets("week", dayStart(weeks[0])),
+    ]);
+
+    const toPoints = (keys: string[], rows: typeof dayRows) =>
+      keys.map((date) => ({
+        date,
+        student:
+          rows.find((r) => r.key === date && r.type === "student")?.count ?? 0,
+        graduated:
+          rows.find((r) => r.key === date && r.type === "graduated")?.count ??
+          0,
+      }));
+
+    return {
+      generated_at: now.toISOString(),
+      daily: toPoints(days, dayRows),
+      weekly: toPoints(weeks, weekRows),
     };
   }
 }

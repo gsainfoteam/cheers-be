@@ -19,6 +19,22 @@ export type AdminDashboardStale = {
 
 export type AdminDashboardMonthlyRequest = { month: string; count: number };
 
+// Asia/Seoul 기준 일 · 주(월요일 시작) 버킷. key는 버킷 시작일 "YYYY-MM-DD"
+export type AdminDashboardBucketUnit = "day" | "week";
+export type AdminDashboardBucketCount = { key: string; count: number };
+export type AdminDashboardSignupBucket = {
+  key: string;
+  type: "student" | "graduated";
+  count: number;
+};
+
+export type AdminDashboardMessageLength = {
+  count: number;
+  avgLength: number | null;
+  // 구간별 개수: 0~50, 51~100, 101~150, 151~
+  buckets: [number, number, number, number];
+};
+
 export type AdminDashboardMemberRow = {
   type: "student" | "graduated";
   active: number;
@@ -122,6 +138,112 @@ export class AdminDashboardRepository {
         ORDER BY 1
       `,
       );
+
+    return result.rows;
+  }
+
+  /*
+  SELECT to_char(date_trunc(?unit, created_at AT TIME ZONE 'Asia/Seoul'), 'YYYY-MM-DD') AS key, count(*)
+  FROM coffee_chat_request WHERE created_at >= ?1 GROUP BY 1 ORDER BY 1;
+   */
+  async requestedBuckets(
+    unit: AdminDashboardBucketUnit,
+    from: Date,
+  ): Promise<AdminDashboardBucketCount[]> {
+    const result = await this.dbService.db.execute<AdminDashboardBucketCount>(
+      sql`
+        SELECT
+          to_char(date_trunc(${unit}, created_at AT TIME ZONE 'Asia/Seoul'), 'YYYY-MM-DD') AS key,
+          COUNT(*)::int AS count
+        FROM coffee_chat_request
+        WHERE created_at >= ${from}
+        GROUP BY 1
+        ORDER BY 1
+      `,
+    );
+
+    return result.rows;
+  }
+
+  /*
+  SELECT to_char(date_trunc(?unit, contact_shared_at AT TIME ZONE 'Asia/Seoul'), 'YYYY-MM-DD') AS key, count(*)
+  FROM coffee_chat_request WHERE contact_shared_at >= ?1 GROUP BY 1 ORDER BY 1;
+   */
+  async sharedBuckets(
+    unit: AdminDashboardBucketUnit,
+    from: Date,
+  ): Promise<AdminDashboardBucketCount[]> {
+    const result = await this.dbService.db.execute<AdminDashboardBucketCount>(
+      sql`
+        SELECT
+          to_char(date_trunc(${unit}, contact_shared_at AT TIME ZONE 'Asia/Seoul'), 'YYYY-MM-DD') AS key,
+          COUNT(*)::int AS count
+        FROM coffee_chat_request
+        WHERE contact_shared_at >= ${from}
+        GROUP BY 1
+        ORDER BY 1
+      `,
+    );
+
+    return result.rows;
+  }
+
+  /*
+  SELECT count(*), avg(char_length(message)),
+    count(*) FILTER (WHERE char_length(message) <= 50),
+    count(*) FILTER (WHERE char_length(message) BETWEEN 51 AND 100),
+    count(*) FILTER (WHERE char_length(message) BETWEEN 101 AND 150),
+    count(*) FILTER (WHERE char_length(message) > 150)
+  FROM coffee_chat_request WHERE created_at >= ?1 AND message IS NOT NULL;
+   */
+  async messageLength(from: Date): Promise<AdminDashboardMessageLength> {
+    const result = await this.dbService.db.execute<{
+      count: number;
+      avg_length: number | null;
+      b1: number;
+      b2: number;
+      b3: number;
+      b4: number;
+    }>(sql`
+      SELECT
+        COUNT(*)::int AS count,
+        AVG(char_length(message))::float8 AS avg_length,
+        COUNT(*) FILTER (WHERE char_length(message) <= 50)::int AS b1,
+        COUNT(*) FILTER (WHERE char_length(message) BETWEEN 51 AND 100)::int AS b2,
+        COUNT(*) FILTER (WHERE char_length(message) BETWEEN 101 AND 150)::int AS b3,
+        COUNT(*) FILTER (WHERE char_length(message) > 150)::int AS b4
+      FROM coffee_chat_request
+      WHERE created_at >= ${from} AND message IS NOT NULL
+    `);
+    const row = result.rows[0];
+
+    return {
+      count: row.count,
+      avgLength: row.avg_length,
+      buckets: [row.b1, row.b2, row.b3, row.b4],
+    };
+  }
+
+  /*
+  SELECT to_char(date_trunc(?unit, created_at AT TIME ZONE 'Asia/Seoul'), 'YYYY-MM-DD') AS key, type, count(*)
+  FROM users WHERE status = 'active' AND NOT is_deleted AND created_at >= ?1 GROUP BY 1, 2 ORDER BY 1;
+   */
+  async signupBuckets(
+    unit: AdminDashboardBucketUnit,
+    from: Date,
+  ): Promise<AdminDashboardSignupBucket[]> {
+    const result = await this.dbService.db.execute<AdminDashboardSignupBucket>(
+      sql`
+        SELECT
+          to_char(date_trunc(${unit}, created_at AT TIME ZONE 'Asia/Seoul'), 'YYYY-MM-DD') AS key,
+          type,
+          COUNT(*)::int AS count
+        FROM users
+        WHERE status = 'active' AND NOT is_deleted AND created_at >= ${from}
+        GROUP BY 1, 2
+        ORDER BY 1
+      `,
+    );
 
     return result.rows;
   }
