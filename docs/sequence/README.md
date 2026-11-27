@@ -65,6 +65,9 @@
 | [manager/get-dashboard-member.puml](manager/get-dashboard-member.puml)                                                                 | `GET /api/manager/v1/dashboard/member`                                   |
 | [manager/get-dashboard-demand.puml](manager/get-dashboard-demand.puml)                                                                 | `GET /api/manager/v1/dashboard/demand`                                   |
 | [manager/get-dashboard-todo.puml](manager/get-dashboard-todo.puml)                                                                     | `GET /api/manager/v1/dashboard/todo`                                     |
+| [manager/get-dashboard-coffee-chat-trend.puml](manager/get-dashboard-coffee-chat-trend.puml)                                           | `GET /api/manager/v1/dashboard/coffee-chat/trend`                        |
+| [manager/get-dashboard-coffee-chat-message.puml](manager/get-dashboard-coffee-chat-message.puml)                                       | `GET /api/manager/v1/dashboard/coffee-chat/message`                      |
+| [manager/get-dashboard-member-signup-trend.puml](manager/get-dashboard-member-signup-trend.puml)                                       | `GET /api/manager/v1/dashboard/member/signup-trend`                      |
 | [manager/get-access-log.puml](manager/get-access-log.puml)                                                                             | `GET /api/manager/v1/access-log`                                         |
 | [manager/get-user.puml](manager/get-user.puml)                                                                                         | `GET /api/manager/v1/user`                                               |
 | [manager/get-user-pk.puml](manager/get-user-pk.puml)                                                                                   | `GET /api/manager/v1/user/{pk}`                                          |

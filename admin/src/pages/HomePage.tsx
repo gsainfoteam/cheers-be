@@ -6,11 +6,16 @@ import {
   DASHBOARD_RANGE_LABELS,
   DASHBOARD_RANGES,
   DashboardCoffeeChat,
+  DashboardCoffeeChatMessage,
+  DashboardCoffeeChatTrend,
+  DashboardCoffeeChatTrendPoint,
   DashboardDemand,
   DashboardMember,
   DashboardMemberType,
   DashboardNameCount,
   DashboardRange,
+  DashboardSignupTrend,
+  DashboardSignupTrendPoint,
   DashboardTodo,
   formatCount,
   formatHours,
@@ -220,6 +225,160 @@ function CoffeeChatSection({ range }: { range: DashboardRange }) {
   );
 }
 
+function TrendTable({
+  title,
+  unitLabel,
+  points,
+}: {
+  title: string;
+  unitLabel: string;
+  points: DashboardCoffeeChatTrendPoint[];
+}) {
+  // 최신이 위로 오게 뒤집어서 보여줌
+  const rows = [...points].reverse();
+  return (
+    <div>
+      <h4>{title}</h4>
+      <div className="dashboard-table-wrap">
+        <table className="dashboard-table">
+          <thead>
+            <tr>
+              <th>{unitLabel}</th>
+              <th>신청</th>
+              <th>공유</th>
+              <th>공유율</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((p) => (
+              <tr key={p.date}>
+                <td>{p.date}</td>
+                <td>{formatCount(p.requested)}</td>
+                <td>{formatCount(p.contact_shared)}</td>
+                <td>{formatPercent(p.share_rate)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function CoffeeChatTrendSection() {
+  const state = useDashboard<DashboardCoffeeChatTrend>(
+    `${DASHBOARD_BASE_PATH}/coffee-chat/trend`,
+  );
+
+  return (
+    <Section
+      title="커피챗 신청 · 공유 추이"
+      hint="일별 최근 30일 · 주별 최근 12주(월요일 시작) · 공유는 공유한 날 기준이라 공유율이 100%를 넘을 수 있음"
+      state={state}
+    >
+      {({ daily, weekly }) => (
+        <div className="dashboard-columns">
+          <TrendTable title="일별" unitLabel="날짜" points={daily} />
+          <TrendTable title="주별" unitLabel="주 시작일" points={weekly} />
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function MessageSection({ range }: { range: DashboardRange }) {
+  const state = useDashboard<DashboardCoffeeChatMessage>(
+    `${DASHBOARD_BASE_PATH}/coffee-chat/message?range=${range}`,
+  );
+
+  return (
+    <Section
+      title="신청 메시지 길이"
+      hint={DASHBOARD_RANGE_LABELS[range]}
+      state={state}
+    >
+      {(data) => (
+        <>
+          <div className="dashboard-stats">
+            <Stat label="메시지가 있는 신청" value={formatCount(data.count)} />
+            <Stat
+              label="평균 글자 수"
+              value={
+                data.avg_length === null ? "-" : data.avg_length.toFixed(1)
+              }
+            />
+          </div>
+          <h4>글자 수 분포</h4>
+          <Bars
+            items={data.histogram.map((b) => ({
+              label: `${b.label}자`,
+              count: b.count,
+            }))}
+          />
+        </>
+      )}
+    </Section>
+  );
+}
+
+function SignupTable({
+  title,
+  unitLabel,
+  points,
+}: {
+  title: string;
+  unitLabel: string;
+  points: DashboardSignupTrendPoint[];
+}) {
+  const rows = [...points].reverse();
+  return (
+    <div>
+      <h4>{title}</h4>
+      <div className="dashboard-table-wrap">
+        <table className="dashboard-table">
+          <thead>
+            <tr>
+              <th>{unitLabel}</th>
+              <th>재학생</th>
+              <th>현업자</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((p) => (
+              <tr key={p.date}>
+                <td>{p.date}</td>
+                <td>{formatCount(p.student)}</td>
+                <td>{formatCount(p.graduated)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function SignupTrendSection() {
+  const state = useDashboard<DashboardSignupTrend>(
+    `${DASHBOARD_BASE_PATH}/member/signup-trend`,
+  );
+
+  return (
+    <Section
+      title="신규 가입 추이"
+      hint="가입 완료한 회원을 가입 시작일 기준으로 집계 · 일별 최근 30일 · 주별 최근 12주"
+      state={state}
+    >
+      {({ daily, weekly }) => (
+        <div className="dashboard-columns">
+          <SignupTable title="일별" unitLabel="날짜" points={daily} />
+          <SignupTable title="주별" unitLabel="주 시작일" points={weekly} />
+        </div>
+      )}
+    </Section>
+  );
+}
+
 function MemberColumn({
   title,
   member,
@@ -375,7 +534,10 @@ export function HomePage() {
       </div>
       <TodoSection />
       <CoffeeChatSection range={range} />
+      <CoffeeChatTrendSection />
+      <MessageSection range={range} />
       <MemberSection range={range} />
+      <SignupTrendSection />
       <DemandSection range={range} />
     </>
   );

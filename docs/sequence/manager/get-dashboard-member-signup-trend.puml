@@ -1,0 +1,44 @@
+@startuml get-manager-dashboard-member-signup-trend
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/manager/v1/dashboard/member/signup-trend
+caption CRB-108 · 어드민 홈 대시보드 — 가입 완료 수 일별 · 주별 추이 (재학생 · 현업자). 읽기 전용, 신규 테이블 · 컬럼 없음. 가입 완료 시각 전용 컬럼이 없어 users.created_at(가입 시작) 기준으로 status = active인 회원만 셈 (기존 회원 현황의 신규 가입과 같은 정의). 개인정보 없음 → access-log 없음
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "ManagerDashboardController" as Controller
+participant "ManagerDashboardService" as Service
+participant "AdminDashboardRepository" as Repository
+database PostgreSQL
+
+Client -> Guard: GET /api/manager/v1/dashboard/member/signup-trend\nAuthorization: Bearer <manager token>
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Controller: 통과 (admin · superadmin 모두 조회 가능, query 없음)
+Controller -> Service: getSignupTrend()
+note right of Service
+  기간 고정: 일별 최근 30일, 주별 최근 12주. Asia/Seoul 자정, 주는 월요일 시작
+end note
+Service -> Repository: signupBuckets(day, 30일 시작), signupBuckets(week, 12주 시작)
+par 동시에 조회
+  Repository -> PostgreSQL: SELECT bucket(date_trunc('day', created_at AT TIME ZONE 'Asia/Seoul')), type, count(*)\nFROM users WHERE status = 'active' AND NOT is_deleted AND created_at >= from GROUP BY 1, 2
+else
+  Repository -> PostgreSQL: 주별도 같은 쿼리를 date_trunc('week', ...)로
+end
+PostgreSQL --> Repository: 버킷 · 유형별 집계
+Repository --> Service: 원시 집계값
+note right of Service
+  가입 없는 날 · 주도 0으로 채워 30일 · 12주를 모두 내려줌
+  탈퇴한 회원(is_deleted)은 제외. 가입을 시작했지만 아직 끝내지 않은 사람(pending)은 셈하지 않음
+end note
+Service --> Controller: ManagerDashboardSignupTrendDto
+Controller --> Client: 200 {\n  generated_at,\n  daily: [{ date, student, graduated }] (30개),\n  weekly: [{ week_start, student, graduated }] (12개)\n}
+
+@enduml

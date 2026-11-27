@@ -112,3 +112,55 @@ export class ManagerDashboardTodoDto {
   company_needs_review: number;
   notification: DashboardNotificationDto;
 }
+
+export class DashboardCoffeeChatTrendPointDto {
+  /** 일별은 Asia/Seoul 날짜, 주별은 그 주 월요일 (YYYY-MM-DD) */
+  date: string;
+  /** 그 날 · 주에 들어온 신청 수 */
+  requested: number;
+  /** 그 날 · 주에 연락처를 공유한 수 (신청 시점과 무관) */
+  contact_shared: number;
+  /** contact_shared / requested. 신청이 없으면 null, 100%를 넘을 수 있음 */
+  share_rate: number | null;
+}
+
+export class ManagerDashboardCoffeeChatTrendDto {
+  generated_at: string;
+  /** 최근 30일. 없는 날은 0 */
+  daily: DashboardCoffeeChatTrendPointDto[];
+  /** 최근 12주 (월요일 시작). 없는 주는 0 */
+  weekly: DashboardCoffeeChatTrendPointDto[];
+}
+
+export class DashboardMessageBucketDto {
+  label: string;
+  min: number;
+  max: number;
+  count: number;
+}
+
+export class ManagerDashboardCoffeeChatMessageDto {
+  range: DashboardRange;
+  generated_at: string;
+  /** 메시지가 있는 신청 수 */
+  count: number;
+  /** 메시지 글자 수 평균. 메시지가 없으면 null */
+  avg_length: number | null;
+  /** 0~50, 51~100, 101~150, 151~200 */
+  histogram: DashboardMessageBucketDto[];
+}
+
+export class DashboardSignupTrendPointDto {
+  /** 일별은 Asia/Seoul 날짜, 주별은 그 주 월요일 (YYYY-MM-DD) */
+  date: string;
+  student: number;
+  graduated: number;
+}
+
+export class ManagerDashboardSignupTrendDto {
+  generated_at: string;
+  /** 최근 30일. 없는 날은 0 */
+  daily: DashboardSignupTrendPointDto[];
+  /** 최근 12주 (월요일 시작). 없는 주는 0 */
+  weekly: DashboardSignupTrendPointDto[];
+}

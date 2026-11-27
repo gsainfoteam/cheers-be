@@ -1,0 +1,48 @@
+@startuml get-manager-dashboard-coffee-chat-trend
+skinparam defaultFontName "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam BoxPadding 8
+skinparam shadowing false
+autonumber
+hide footbox
+
+title GET /api/manager/v1/dashboard/coffee-chat/trend
+caption CRB-108 · 어드민 홈 대시보드 — 커피챗 신청 · 연락처 공유 일별 · 주별 총량과 공유율 (앰플리튜드에서 이전). 읽기 전용, 기존 테이블만 집계 (신규 테이블 · 컬럼 없음). 기존 /dashboard/coffee-chat 응답은 그대로. 개인정보 없음 → access-log 없음
+
+actor Client
+participant "ManagerGuard" as Guard
+participant "ValidationPipe" as Pipe
+participant "ManagerDashboardController" as Controller
+participant "ManagerDashboardService" as Service
+participant "AdminDashboardRepository" as Repository
+database PostgreSQL
+
+Client -> Guard: GET /api/manager/v1/dashboard/coffee-chat/trend\nAuthorization: Bearer <manager token>
+ref over Client, Guard: ManagerGuard — flow/manager-guards.puml\n401 Missing access token / Token expired / Invalid token / Manager not found
+Guard -> Controller: 통과 (admin · superadmin 모두 조회 가능, query 없음)
+Controller -> Service: getCoffeeChatTrend()
+note right of Service
+  기간은 range와 무관하게 고정: 일별 최근 30일, 주별 최근 12주 (현재 진행 중인 날 · 주 포함)
+  날짜 경계는 Asia/Seoul 자정, 주는 월요일 시작. 버킷 키는 일 "YYYY-MM-DD", 주 "YYYY-MM-DD"(그 주 월요일)
+end note
+Service -> Repository: requestedBuckets(day · week), sharedBuckets(day · week) — 일별은 30일 시작, 주별은 12주 시작부터
+par 동시에 조회
+  Repository -> PostgreSQL: 신청 수 (created_at 기준)\nSELECT to_char(date_trunc('day', created_at AT TIME ZONE 'Asia/Seoul'), 'YYYY-MM-DD') AS bucket, count(*)\nFROM coffee_chat_request WHERE created_at >= from GROUP BY 1
+else
+  Repository -> PostgreSQL: 연락처 공유 수 (contact_shared_at 기준)\nSELECT date_trunc('day', contact_shared_at AT TIME ZONE 'Asia/Seoul') ... count(*)\nFROM coffee_chat_request WHERE contact_shared_at >= from GROUP BY 1
+else
+  Repository -> PostgreSQL: 주별도 같은 쿼리를 date_trunc('week', ...)로 (신청 · 공유 각 1개, 총 4개 쿼리)
+end
+PostgreSQL --> Repository: 버킷별 집계
+Repository --> Service: 원시 집계값
+note right of Service
+  요청이 없는 날 · 주도 0으로 채워 30일 · 12주를 모두 내려줌
+  공유율 = 그 버킷의 공유 수 ÷ 신청 수 (분모 0이면 null, 0%로 내리지 않음)
+  공유는 "공유한 날" 기준이라 신청 시점이 다른 요청이 섞여 100%를 넘을 수 있음 (코호트 전환율 아님)
+end note
+Service --> Controller: ManagerDashboardCoffeeChatTrendDto
+Controller --> Client: 200 {\n  generated_at,\n  daily: [{ date, requested, contact_shared, share_rate }] (30개),\n  weekly: [{ week_start, requested, contact_shared, share_rate }] (12개)\n}
+
+@enduml
