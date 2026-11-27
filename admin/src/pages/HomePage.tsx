@@ -1,5 +1,15 @@
 import { ReactNode, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { api } from "../lib/api";
 import {
   DASHBOARD_BASE_PATH,
@@ -225,41 +235,47 @@ function CoffeeChatSection({ range }: { range: DashboardRange }) {
   );
 }
 
-function TrendTable({
+// 날짜 축 라벨은 MM-DD만 보여주고, 툴팁에서 전체 날짜를 보여줌
+const shortDate = (date: string) => date.slice(5);
+
+function TrendChart({
   title,
-  unitLabel,
   points,
 }: {
   title: string;
-  unitLabel: string;
   points: DashboardCoffeeChatTrendPoint[];
 }) {
-  // 최신이 위로 오게 뒤집어서 보여줌
-  const rows = [...points].reverse();
   return (
     <div>
       <h4>{title}</h4>
-      <div className="dashboard-table-wrap">
-        <table className="dashboard-table">
-          <thead>
-            <tr>
-              <th>{unitLabel}</th>
-              <th>신청</th>
-              <th>공유</th>
-              <th>공유율</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((p) => (
-              <tr key={p.date}>
-                <td>{p.date}</td>
-                <td>{formatCount(p.requested)}</td>
-                <td>{formatCount(p.contact_shared)}</td>
-                <td>{formatPercent(p.share_rate)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="dashboard-chart">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={points}
+            margin={{ top: 8, right: 8, bottom: 0, left: -16 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+            <XAxis
+              dataKey="date"
+              tickFormatter={shortDate}
+              fontSize={11}
+              minTickGap={12}
+            />
+            <YAxis allowDecimals={false} fontSize={11} />
+            <Tooltip
+              formatter={(value) => formatCount(Number(value))}
+              labelFormatter={(label, payload) => {
+                const rate = payload?.[0]?.payload?.share_rate;
+                return `${label} · 공유율 ${formatPercent(
+                  typeof rate === "number" ? rate : null,
+                )}`;
+              }}
+            />
+            <Legend />
+            <Bar dataKey="requested" name="신청" fill="#2f6fed" />
+            <Bar dataKey="contact_shared" name="공유" fill="#2e9e6b" />
+          </BarChart>
+        </ResponsiveContainer>
       </div>
     </div>
   );
@@ -278,8 +294,8 @@ function CoffeeChatTrendSection() {
     >
       {({ daily, weekly }) => (
         <div className="dashboard-columns">
-          <TrendTable title="일별" unitLabel="날짜" points={daily} />
-          <TrendTable title="주별" unitLabel="주 시작일" points={weekly} />
+          <TrendChart title="일별" points={daily} />
+          <TrendChart title="주별" points={weekly} />
         </div>
       )}
     </Section>
@@ -321,38 +337,46 @@ function MessageSection({ range }: { range: DashboardRange }) {
   );
 }
 
-function SignupTable({
+function SignupChart({
   title,
-  unitLabel,
   points,
 }: {
   title: string;
-  unitLabel: string;
   points: DashboardSignupTrendPoint[];
 }) {
-  const rows = [...points].reverse();
   return (
     <div>
       <h4>{title}</h4>
-      <div className="dashboard-table-wrap">
-        <table className="dashboard-table">
-          <thead>
-            <tr>
-              <th>{unitLabel}</th>
-              <th>재학생</th>
-              <th>현업자</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((p) => (
-              <tr key={p.date}>
-                <td>{p.date}</td>
-                <td>{formatCount(p.student)}</td>
-                <td>{formatCount(p.graduated)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="dashboard-chart">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={points}
+            margin={{ top: 8, right: 8, bottom: 0, left: -16 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+            <XAxis
+              dataKey="date"
+              tickFormatter={shortDate}
+              fontSize={11}
+              minTickGap={12}
+            />
+            <YAxis allowDecimals={false} fontSize={11} />
+            <Tooltip formatter={(value) => formatCount(Number(value))} />
+            <Legend />
+            <Bar
+              dataKey="student"
+              name="재학생"
+              stackId="signup"
+              fill="#2f6fed"
+            />
+            <Bar
+              dataKey="graduated"
+              name="현업자"
+              stackId="signup"
+              fill="#2e9e6b"
+            />
+          </BarChart>
+        </ResponsiveContainer>
       </div>
     </div>
   );
@@ -371,8 +395,8 @@ function SignupTrendSection() {
     >
       {({ daily, weekly }) => (
         <div className="dashboard-columns">
-          <SignupTable title="일별" unitLabel="날짜" points={daily} />
-          <SignupTable title="주별" unitLabel="주 시작일" points={weekly} />
+          <SignupChart title="일별" points={daily} />
+          <SignupChart title="주별" points={weekly} />
         </div>
       )}
     </Section>
